@@ -1,0 +1,41 @@
+.card.goal {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  align-items: center;
+  padding: 28px 36px;
+}
+.goal__text { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.goal__kicker { font-size: 14px; }
+.goal__title { font-size: 22px; font-weight: var(--weight-medium); line-height: 28px; text-wrap: pretty; }
+.goal__bar { margin-top: 4px; }
+.goal__stat { display: flex; flex-direction: column; gap: 6px; border-left: 1px solid var(--color-dark); padding-left: 20px; min-width: 0; }
+.goal__value { font-size: 36px; font-weight: var(--weight-medium); line-height: 1; }
+.goal__label { font-size: 15px; }
+@media (max-width: 759px) {
+  .card.goal { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 22px 20px; }
+  .goal__text { grid-column: 1 / -1; }
+  .goal__stat { padding-left: 10px; }
+  .goal__value { font-size: 24px; }
+}
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 28px; }
+.tile {
+  text-align: left; min-width: 0;
+  border: 1px solid var(--color-dark); border-radius: var(--radius-card); box-shadow: var(--shadow-card);
+  padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 14px;
+  transition: transform 120ms ease;
+}
+.tile:hover { transform: translateY(-2px); }
+.tile--grey { background: var(--color-grey); color: var(--color-black); }
+.tile--white { background: var(--color-white); color: var(--color-black); }
+.tile--dark { background: var(--color-dark); color: var(--color-white); }
+.tile__head { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tile__name { font-size: 20px; font-weight: var(--weight-medium); }
+.tile__meta { display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 19px; }
+.tile__error { border-top: 1px solid currentColor; padding-top: 8px; }
+@media (max-width: 759px) {
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .tile { border-radius: 24px; padding: 10px 10px 14px; gap: 10px; }
+  .tile__name { font-size: 16px; }
+}

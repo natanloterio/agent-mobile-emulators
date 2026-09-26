@@ -1,0 +1,30 @@
+.newgoal { max-width: 1100px; gap: 32px; }
+.newgoal__composer { gap: 20px; }
+.newgoal__textarea {
+  width: 100%; resize: vertical; font-size: 20px; line-height: 28px; padding: 18px 24px;
+  border-radius: var(--radius-control); border: 1px solid var(--color-black); background: var(--color-white); outline: none;
+}
+.newgoal__textarea::placeholder { color: var(--color-placeholder); }
+.newgoal__examples { display: flex; gap: 8px; flex-wrap: wrap; }
+.plan { display: flex; flex-direction: column; gap: 24px; }
+.plan__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 24px; }
+.plan__card { padding: 30px; gap: 10px; border-radius: var(--radius-card); }
+.plan__kicker { font-size: 14px; }
+.plan__card--dark .plan__kicker { color: var(--color-green); }
+.plan__pattern { font-size: 28px; font-weight: var(--weight-medium); }
+.plan__body { font-size: 15px; line-height: 21px; }
+.plan__est { display: flex; justify-content: space-between; font-size: 16px; border-bottom: 1px solid var(--color-white); padding-bottom: 8px; }
+.plan__task {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: 16px;
+  padding: 12px 0; border-top: 1px solid var(--color-dark); align-items: center; font-size: 15px;
+}
+.plan__task-name { font-weight: var(--weight-medium); }
+.plan__task-handle { font-weight: var(--weight-regular); }
+.plan__signals { display: flex; gap: 4px; align-items: center; }
+.plan__dot { width: 14px; height: 14px; border-radius: 7px; border: 1px solid var(--color-dark); background: var(--color-dark); }
+.plan__dot--ok { background: var(--color-green); }
+.plan__ready { margin-left: 8px; font-size: 13px; min-width: 120px; }
+.plan__actions { display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 759px) {
+  .plan__task { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+}

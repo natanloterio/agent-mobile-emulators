@@ -1,0 +1,41 @@
+.device__grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 36px; align-items: start; }
+.device__left { display: flex; flex-direction: column; gap: 16px; width: 100%; margin: 0 auto; }
+.device__right { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.device__controls { display: flex; gap: 10px; flex-wrap: wrap; }
+.device__back {
+  border: 1px solid var(--color-dark); background: var(--color-white); border-radius: var(--radius-control);
+  padding: 12px 18px; font-size: 18px;
+}
+.device__back:hover { background: var(--color-grey); }
+.device__sub { font-size: 18px; }
+
+.needs { gap: 14px; }
+.needs__kicker { font-size: 14px; color: var(--color-green); }
+.needs__error { font-size: 22px; font-weight: var(--weight-medium); line-height: 28px; }
+.needs__body { font-size: 16px; line-height: 22px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
+.stat {
+  background: var(--color-grey); border: 1px solid var(--color-dark); border-radius: var(--radius-control);
+  padding: 18px 20px; display: flex; flex-direction: column; gap: 6px;
+}
+.stat__value { font-size: 28px; font-weight: var(--weight-medium); }
+.stat__label { font-size: 14px; }
+
+.log { gap: 6px; }
+.log__head { margin-bottom: 10px; }
+.log__row {
+  display: grid; grid-template-columns: 48px minmax(0, 1.4fr) minmax(0, 2fr) 90px 80px; gap: 12px;
+  padding: 12px 0; border-top: 1px solid var(--color-dark); font-size: 15px; align-items: center;
+}
+.log__tool { font-family: var(--font-mono); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log__desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log__tag { padding: 2px 8px; border-radius: 7px; text-align: center; background: var(--color-grey); }
+.log__tag--gate { background: var(--color-dark); color: var(--color-green); }
+@media (max-width: 759px) {
+  .device__grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .device__left { max-width: 300px; }
+  .log__row { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 10px; font-size: 14px; }
+  .log__desc { white-space: normal; line-height: 19px; }
+  .log__tool { font-size: 11px; }
+}

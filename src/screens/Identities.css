@@ -1,0 +1,34 @@
+.ids__cycle { display: flex; gap: 6px; flex-wrap: wrap; font-size: 14px; align-items: center; }
+.ids__cycle-label { margin-right: 6px; }
+.ids__table { padding: 16px 32px 24px; overflow-x: auto; }
+.idrow {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.3fr) 120px minmax(150px, 1fr) 150px minmax(140px, 1fr) 110px 150px;
+  gap: 14px; padding: 14px 0; font-size: 15px; align-items: center; min-width: 980px;
+}
+.idrow--head { font-size: 13px; }
+.idrow--body { border-top: 1px solid var(--color-dark); }
+.idrow--dimmed { opacity: 0.6; }
+.idrow__id { display: flex; flex-direction: column; gap: 3px; }
+.idrow__name { font-weight: var(--weight-medium); font-size: 17px; }
+.idrow__handle { font-size: 13px; }
+.idrow__version { font-size: 13px; }
+.idrow__disk { display: flex; flex-direction: column; gap: 5px; }
+.idrow__disk-label { font-size: 13px; }
+.idrow__ports { font-family: var(--font-mono); font-size: 12px; line-height: 17px; }
+.disk-bar { height: 8px; border-radius: 4px; background: var(--color-grey); border: 1px solid var(--color-dark); overflow: hidden; }
+.disk-bar__fill { height: 100%; background: var(--color-green); }
+.disk-bar__fill--high { background: var(--color-dark); }
+
+.idcard { border: 1px solid var(--color-dark); border-radius: 28px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.idcard--dimmed { opacity: 0.6; }
+.idcard__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.idcard__name { font-weight: var(--weight-medium); font-size: 18px; }
+.idcard__grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px;
+  font-size: 14px; line-height: 19px; border-top: 1px solid var(--color-dark); padding-top: 12px;
+}
+.idcard__cell { display: flex; flex-direction: column; gap: 2px; }
+.idcard__cell-label { font-size: 12px; }
+.idcard__action { min-height: 44px; }
+.ids__cards { display: flex; flex-direction: column; gap: 14px; }

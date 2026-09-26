@@ -1,0 +1,33 @@
+.report { gap: 32px; }
+.report__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 28px; }
+.report__card { padding: 30px; gap: 8px; }
+.report__big { font-size: 44px; font-weight: var(--weight-medium); line-height: 1; }
+.report__label { font-size: 16px; }
+.report__two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+.report__list { gap: 4px; }
+.report__list-head { margin-bottom: 12px; }
+.needrow { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--color-white); }
+.needrow__text { display: flex; flex-direction: column; gap: 4px; }
+.needrow__name { font-size: 18px; font-weight: var(--weight-medium); }
+.needrow__handle { font-weight: var(--weight-regular); font-size: 15px; }
+.needrow__error { font-size: 15px; line-height: 20px; }
+.needrow__btn { border: none; background: var(--color-green); border-radius: var(--radius-control); padding: 10px 16px; font-size: 15px; white-space: nowrap; }
+.report__empty { font-size: 16px; padding-top: 14px; border-top: 1px solid var(--color-white); }
+.costrow { display: grid; grid-template-columns: 90px minmax(0, 1fr) 70px; gap: 12px; align-items: center; padding: 7px 0; font-size: 15px; }
+.costrow__bar { height: 12px; border-radius: 6px; background: var(--color-grey); border: 1px solid var(--color-dark); overflow: hidden; }
+.costrow__fill { height: 100%; background: var(--color-green); }
+.costrow__value { text-align: right; }
+.report__note { font-size: 13px; margin-top: 10px; }
+.pastrow {
+  display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr) 90px; gap: 16px;
+  padding: 14px 0; border-top: 1px solid var(--color-dark); font-size: 16px; align-items: center;
+}
+.pastrow__cost { text-align: right; }
+@media (max-width: 759px) {
+  .report__cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .report__card { padding: 20px; }
+  .report__big { font-size: 30px; }
+  .report__two { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .pastrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 8px; }
+  .pastrow__text { grid-column: 1 / -1; font-weight: var(--weight-medium); }
+}

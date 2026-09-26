@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/positivus-design-system-d1d8c26a-e023-486f-9571-634a1da6f931/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/positivus-design-system-d1d8c26a-e023-486f-9571-634a1da6f931/tokens/colors.css">
+<link rel="stylesheet" href="_ds/positivus-design-system-d1d8c26a-e023-486f-9571-634a1da6f931/tokens/typography.css">
+<link rel="stylesheet" href="_ds/positivus-design-system-d1d8c26a-e023-486f-9571-634a1da6f931/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/positivus-design-system-d1d8c26a-e023-486f-9571-634a1da6f931/tokens/base.css">
+<link rel="stylesheet" href="_ds/positivus-design-system-d1d8c26a-e023-486f-9571-634a1da6f931/styles.css">
+<script src="_ds/positivus-design-system-d1d8c26a-e023-486f-9571-634a1da6f931/_ds_bundle.js"></script>
+<style>body{margin:0;background:#fff;font-family:var(--font-sans),'Space Grotesk',sans-serif}a{color:#000}a:hover{color:#191A23}*{box-sizing:border-box}</style>
+</helmet>
+<div style="display:flex;flex-direction:{{ rootDir }};min-height:100vh;font-family:var(--font-sans);color:#000;background:#fff;max-width:{{ rootMax }};margin:0 auto;width:100%">
+  <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:250px;flex-shrink:0;background:#191A23;color:#fff;display:flex;flex-direction:column;padding:28px 18px;gap:28px;position:sticky;top:0;height:100vh">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 10px">
+      <svg viewBox="0 0 35.252 35.252" width="28" height="28"><path d="M 17.651 5.186 L 35.252 0 L 30.116 17.651 L 35.252 35.252 L 17.651 30.116 L 0 35.252 L 5.186 17.651 L 0 0 L 17.651 5.186 Z" fill="#B9FF66"></path></svg>
+      <span style="font-size:26px;font-weight:500;letter-spacing:-0.5px">Enxame</span>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:6px">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="5">
+        <button onClick="{{ n.go }}" style="display:flex;justify-content:space-between;align-items:center;text-align:left;border:none;cursor:pointer;padding:14px 16px;border-radius:14px;font-family:var(--font-sans);font-size:18px;background:{{ n.bg }};color:{{ n.color }}" style-hover="outline:1px solid #B9FF66">
+          <span>{{ n.label }}</span>
+          <sc-if value="{{ n.badge }}" hint-placeholder-val="{{ false }}"><span style="min-width:26px;height:26px;border-radius:13px;background:#B9FF66;color:#000;font-size:14px;display:flex;align-items:center;justify-content:center;padding:0 7px">{{ n.badge }}</span></sc-if>
+        </button>
+      </sc-for>
+    </nav>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:14px;background:#292A32;border-radius:14px;padding:18px">
+      <div style="font-size:14px;color:#B9FF66">Recursos do host</div>
+      <sc-for list="{{ meters }}" as="m" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;font-size:13px"><span>{{ m.label }}</span><span>{{ m.value }}</span></div>
+          <div style="height:8px;border-radius:4px;background:#191A23;border:1px solid #fff;overflow:hidden"><div style="height:100%;background:#B9FF66;width:{{ m.pct }}"></div></div>
+        </div>
+      </sc-for>
+      <div style="font-size:12px;line-height:16px;color:#fff">Teto: 8 por CPU · 16 pelo adb</div>
+    </div>
+  </aside>
+  </sc-if>
+  <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+  <header style="position:sticky;top:0;z-index:5;background:#191A23;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px">
+    <div style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 35.252 35.252" width="24" height="24"><path d="M 17.651 5.186 L 35.252 0 L 30.116 17.651 L 35.252 35.252 L 17.651 30.116 L 0 35.252 L 5.186 17.651 L 0 0 L 17.651 5.186 Z" fill="#B9FF66"></path></svg><span style="font-size:22px;font-weight:500;letter-spacing:-0.5px">Enxame</span></div>
+    <div style="display:flex;gap:6px">
+      <sc-for list="{{ meters }}" as="m" hint-placeholder-count="3"><span style="font-size:12px;padding:4px 8px;border-radius:7px;background:#292A32;color:#fff;display:flex;gap:4px"><span style="color:#B9FF66">{{ m.label }}</span><span>{{ m.pct }}</span></span></sc-for>
+    </div>
+  </header>
+  <nav style="position:fixed;bottom:0;left:0;right:0;max-width:{{ rootMax }};margin:0 auto;z-index:6;background:#191A23;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:8px 8px 16px;border-radius:28px 28px 0 0">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="5">
+      <button onClick="{{ n.go }}" style="position:relative;border:none;cursor:pointer;min-height:52px;border-radius:14px;font-family:var(--font-sans);font-size:12px;padding:6px 2px;background:{{ n.bg }};color:{{ n.color }};display:flex;align-items:center;justify-content:center">
+        <span>{{ n.short }}</span>
+        <sc-if value="{{ n.badge }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:3px;right:5px;min-width:18px;height:18px;border-radius:9px;background:#B9FF66;color:#000;font-size:11px;display:flex;align-items:center;justify-content:center;border:1px solid #191A23;padding:0 4px">{{ n.badge }}</span></sc-if>
+      </button>
+    </sc-for>
+  </nav>
+  </sc-if>
+
+  <main style="flex:1;min-width:0;padding:{{ mainPad }};display:flex;flex-direction:column;gap:{{ mainGap }}">
+    <sc-if value="{{ killed }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;background:#191A23;color:#fff;border-radius:14px;padding:16px 24px;flex-wrap:wrap">
+        <span style="font-size:18px"><span style="color:#B9FF66">Kill switch acionado.</span> Frota parada; devices preservados como estão para inspeção, sem reverter snapshot.</span>
+        <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Button" variant="tertiary" on-click="{{ resume }}" style="padding:12px 24px;font-size:18px" hint-size="auto,52px">Retomar frota</x-import>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isCockpit }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:28px">
+        <header style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+            <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="{{ hSize }}" hint-size="200px,40px">Cockpit</x-import>
+            <p style="margin:0;font-size:18px;max-width:420px;line-height:24px">Clique num device para ampliar e assumir o controle.</p>
+          </div>
+          <div style="display:flex;gap:12px">
+            <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Button" variant="secondary" on-click="{{ killAll }}" style="padding:14px 26px;font-size:18px" hint-size="auto,56px">Kill switch</x-import>
+            <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Button" on-click="{{ goNew }}" style="padding:14px 26px;font-size:18px" hint-size="auto,56px">Novo objetivo</x-import>
+          </div>
+        </header>
+
+        <section style="display:grid;grid-template-columns:{{ goalCols }};gap:20px;background:#F3F3F3;border:1px solid #191A23;box-shadow:0 5px 0 #191A23;border-radius:{{ cardRadius }};padding:{{ goalPad }};align-items:center">
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0;grid-column:{{ goalSpan }}">
+            <span style="font-size:14px">Objetivo em execução · fan-out replicado</span>
+            <span style="font-size:22px;font-weight:500;line-height:28px;text-wrap:pretty">Responder comentários das últimas 24 h nas contas das lojas</span>
+            <div style="height:10px;border-radius:5px;background:#fff;border:1px solid #191A23;overflow:hidden;margin-top:4px"><div style="height:100%;background:#191A23;width:{{ goalPct }}"></div></div>
+          </div>
+          <sc-for list="{{ goalStats }}" as="s" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:6px;border-left:1px solid #191A23;padding-left:{{ statPadL }};min-width:0">
+              <span style="font-size:{{ statSize }};font-weight:500;line-height:100%">{{ s.value }}</span>
+              <span style="font-size:15px">{{ s.label }}</span>
+            </div>
+          </sc-for>
+        </section>
+
+        <section style="display:grid;grid-template-columns:{{ tileCols }};gap:{{ tileGap }}">
+          <sc-for list="{{ tiles }}" as="t" hint-placeholder-count="8">
+            <button onClick="{{ t.open }}" style="text-align:left;cursor:pointer;font-family:var(--font-sans);background:{{ t.cardBg }};color:{{ t.cardFg }};border:1px solid #191A23;box-shadow:0 5px 0 #191A23;border-radius:{{ tileRadius }};padding:{{ tilePad }};display:flex;flex-direction:column;gap:{{ tileInner }};min-width:0" style-hover="transform:translateY(-2px)">
+              <div style="aspect-ratio:9/16;max-height:{{ screenH }};width:100%;border-radius:14px;background:#191A23;border:1px solid #191A23;display:flex;flex-direction:column;padding:12px;gap:8px;position:relative;overflow:hidden">
+                <div style="display:flex;justify-content:space-between;gap:6px;font-size:11px;color:#fff;white-space:nowrap;overflow:hidden"><span>{{ t.handle }}</span><span>320p · 4 fps</span></div>
+                <div style="height:22px;border-radius:7px;background:#292A32"></div>
+                <div style="display:flex;gap:6px"><div style="width:26px;height:26px;border-radius:13px;background:#292A32"></div><div style="flex:1;display:flex;flex-direction:column;gap:5px;justify-content:center"><div style="height:6px;border-radius:3px;background:#292A32;width:80%"></div><div style="height:6px;border-radius:3px;background:#292A32;width:55%"></div></div></div>
+                <div style="flex:1;border-radius:7px;background:#292A32"></div>
+                <div style="display:flex;gap:6px"><div style="width:26px;height:26px;border-radius:13px;background:#292A32"></div><div style="flex:1;display:flex;flex-direction:column;gap:5px;justify-content:center"><div style="height:6px;border-radius:3px;background:#292A32;width:70%"></div><div style="height:6px;border-radius:3px;background:#292A32;width:40%"></div></div></div>
+                <sc-if value="{{ t.overlay }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute;inset:0;background:#191A23;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-size:14px;line-height:19px;color:#B9FF66">{{ t.overlay }}</div>
+                </sc-if>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="font-size:{{ tileNameSize }};font-weight:500">{{ t.name }}</span>
+                <span style="font-size:13px;padding:3px 9px;border-radius:7px;white-space:nowrap;background:{{ t.pillBg }};color:{{ t.pillFg }};border:1px solid {{ t.pillBorder }}">{{ t.stateLabel }}</span>
+              </div>
+              <sc-if value="{{ full }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:19px">
+                  <span>{{ t.app }} · {{ t.task }}</span>
+                  <div style="display:flex;justify-content:space-between"><span>Passo {{ t.steps }}/{{ t.budget }}</span><sc-if value="{{ showCost }}" hint-placeholder-val="{{ true }}"><span>{{ t.costFmt }}</span></sc-if></div>
+                  <sc-if value="{{ t.error }}" hint-placeholder-val="{{ false }}"><span style="border-top:1px solid {{ t.cardFg }};padding-top:8px">{{ t.error }}</span></sc-if>
+                </div>
+              </sc-if>
+            </button>
+          </sc-for>
+        </section>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isDevice }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:28px">
+        <header style="display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+            <button onClick="{{ goCockpit }}" style="border:1px solid #191A23;background:#fff;border-radius:14px;padding:12px 18px;font-family:var(--font-sans);font-size:18px;cursor:pointer" style-hover="background:#F3F3F3">← Cockpit</button>
+            <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="{{ hSize }}" children="{{ sel.name }}" hint-size="200px,40px"></x-import>
+            <span style="font-size:18px">{{ sel.handle }} · {{ sel.app }} {{ sel.version }}</span>
+          </div>
+          <span style="font-size:15px;padding:6px 12px;border-radius:7px;background:{{ sel.pillBg }};color:{{ sel.pillFg }};border:1px solid {{ sel.pillBorder }}">{{ sel.stateLabel }}</span>
+        </header>
+        <div style="display:grid;grid-template-columns:{{ devCols }};gap:{{ devGap }};align-items:start">
+          <div style="display:flex;flex-direction:column;gap:16px;width:100%;max-width:{{ phoneMax }};margin:0 auto">
+            <div style="aspect-ratio:9/19;width:100%;border-radius:45px;background:#191A23;border:1px solid #191A23;box-shadow:0 5px 0 #191A23;padding:22px 16px;display:flex;flex-direction:column;gap:12px;position:relative;outline:{{ controlOutline }};outline-offset:6px">
+              <div style="display:flex;justify-content:space-between;font-size:13px;color:#fff;padding:0 6px"><span>{{ sel.handle }}</span><span>{{ streamLabel }}</span></div>
+              <div style="height:38px;border-radius:14px;background:#292A32"></div>
+              <sc-for list="{{ phoneRows }}" as="r" hint-placeholder-count="4">
+                <div style="display:flex;gap:10px;align-items:center;padding:6px"><div style="width:38px;height:38px;border-radius:19px;background:#292A32;flex-shrink:0"></div><div style="flex:1;display:flex;flex-direction:column;gap:7px"><div style="height:8px;border-radius:4px;background:#292A32;width:{{ r.a }}"></div><div style="height:8px;border-radius:4px;background:#292A32;width:{{ r.b }}"></div></div></div>
+              </sc-for>
+              <div style="flex:1;border-radius:14px;background:#292A32"></div>
+              <div style="height:44px;border-radius:14px;border:1px solid #B9FF66;color:#B9FF66;font-size:14px;display:flex;align-items:center;padding:0 14px">{{ sel.replyDraft }}</div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Button" variant="{{ controlVariant }}" on-click="{{ toggleControl }}" style="padding:14px 22px;font-size:17px;flex:1" hint-size="auto,56px">{{ controlLabel }}</x-import>
+              <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Button" variant="secondary" on-click="{{ pauseSel }}" style="padding:14px 22px;font-size:17px" hint-size="auto,56px">{{ pauseLabel }}</x-import>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:24px;min-width:0">
+            <sc-if value="{{ sel.needs }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#191A23;color:#fff;border-radius:{{ cardRadius }};padding:{{ cardPad }};display:flex;flex-direction:column;gap:14px">
+                <span style="font-size:14px;color:#B9FF66">Precisa de atenção humana</span>
+                <span style="font-size:22px;font-weight:500;line-height:28px">{{ sel.error }}</span>
+                <span style="font-size:16px;line-height:22px">Identidade parada, sem retry automático. Retry em bloqueio de plataforma transforma bloqueio leve em banimento.</span>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                  <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Button" variant="tertiary" on-click="{{ resolveSel }}" style="padding:12px 22px;font-size:17px" hint-size="auto,52px">Resolvi, devolver à fila</x-import>
+                </div>
+              </div>
+            </sc-if>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px">
+              <sc-for list="{{ selStats }}" as="s" hint-placeholder-count="4">
+                <div style="background:#F3F3F3;border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:6px;border:1px solid #191A23"><span style="font-size:28px;font-weight:500">{{ s.value }}</span><span style="font-size:14px">{{ s.label }}</span></div>
+              </sc-for>
+            </div>
+            <div style="border:1px solid #191A23;border-radius:{{ cardRadius }};padding:{{ cardPad }};display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:12px;flex-wrap:wrap">
+                <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="h4" hint-size="160px,20px">Passos recentes</x-import>
+                <span style="font-size:14px">histórico podado: modelo vê só os 2 últimos estados</span>
+              </div>
+              <sc-for list="{{ log }}" as="l" hint-placeholder-count="6">
+<sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}"><div style="display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:10px;padding:12px 0;border-top:1px solid #191A23;align-items:center;font-size:14px"><span>#{{ l.i }}</span><div style="display:flex;flex-direction:column;gap:3px;min-width:0"><span style="line-height:19px">{{ l.desc }}</span><span style="font-family:ui-monospace,monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.tool }} · {{ l.tokens }}</span></div><span style="padding:2px 8px;border-radius:7px;background:{{ l.tagBg }};color:{{ l.tagFg }}">{{ l.tag }}</span></div></sc-if>
+<sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid;grid-template-columns:48px minmax(0,1.4fr) minmax(0,2fr) 90px 80px;gap:12px;padding:12px 0;border-top:1px solid #191A23;font-size:15px;align-items:center">
+                  <span>#{{ l.i }}</span>
+                  <span style="font-family:ui-monospace,monospace;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.tool }}</span>
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.desc }}</span>
+                  <span>{{ l.tokens }}</span>
+                  <span style="padding:2px 8px;border-radius:7px;text-align:center;background:{{ l.tagBg }};color:{{ l.tagFg }}">{{ l.tag }}</span>
+                </div></sc-if>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isNew }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:32px;max-width:1100px">
+        <header style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+          <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="{{ hSize }}" hint-size="300px,40px">Novo objetivo</x-import>
+          <p style="margin:0;font-size:18px;line-height:24px;max-width:460px">Descreva o que quer em linguagem natural. O líder decompõe, distribui e executa sem supervisão.</p>
+        </header>
+        <div style="background:#F3F3F3;border:1px solid #191A23;box-shadow:0 5px 0 #191A23;border-radius:{{ cardRadius }};padding:{{ cardPad }};display:flex;flex-direction:column;gap:20px">
+          <textarea value="{{ goalText }}" onChange="{{ setGoal }}" rows="3" placeholder="Ex.: Responder os comentários das últimas 24 h em todas as contas das lojas" style="width:100%;resize:vertical;font-family:var(--font-sans);font-size:20px;line-height:28px;padding:18px 24px;border-radius:14px;border:1px solid #000;background:#fff;outline:none"></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <sc-for list="{{ examples }}" as="e" hint-placeholder-count="3">
+                <button onClick="{{ e.pick }}" style="border:1px solid #191A23;background:#fff;border-radius:14px;padding:8px 14px;font-family:var(--font-sans);font-size:15px;cursor:pointer" style-hover="background:#B9FF66">{{ e.label }}</button>
+              </sc-for>
+            </div>
+            <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Button" on-click="{{ decompose }}" style="padding:16px 30px;font-size:18px" hint-size="auto,60px">{{ decomposeLabel }}</x-import>
+          </div>
+        </div>
+        <sc-if value="{{ planReady }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:24px">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:24px">
+              <div style="background:#B9FF66;border:1px solid #191A23;box-shadow:0 5px 0 #191A23;border-radius:45px;padding:30px;display:flex;flex-direction:column;gap:10px">
+                <span style="font-size:14px">Padrão escolhido pelo líder</span>
+                <span style="font-size:28px;font-weight:500">Fan-out replicado</span>
+                <span style="font-size:15px;line-height:21px">O trabalho pertence à conta: cada identidade responde a própria caixa. Uma tarefa por identidade.</span>
+              </div>
+              <div style="background:#191A23;color:#fff;border:1px solid #191A23;box-shadow:0 5px 0 #191A23;border-radius:45px;padding:30px;display:flex;flex-direction:column;gap:12px">
+                <span style="font-size:14px;color:#B9FF66">Estimativa</span>
+                <sc-for list="{{ estimate }}" as="e" hint-placeholder-count="4">
+                  <div style="display:flex;justify-content:space-between;font-size:16px;border-bottom:1px solid #fff;padding-bottom:8px"><span>{{ e.label }}</span><span>{{ e.value }}</span></div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="border:1px solid #191A23;border-radius:{{ cardRadius }};padding:{{ cardPad }};display:flex;flex-direction:column">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+                <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="h4" hint-size="160px,20px">Tarefas e sonda de prontidão</x-import>
+                <span style="font-size:14px">boot · accessibility · initialize · tools · versionName</span>
+              </div>
+              <sc-for list="{{ planTasks }}" as="p" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:{{ planCols }};gap:{{ planGap }};padding:12px 0;border-top:1px solid #191A23;align-items:center;font-size:15px">
+                  <span style="font-weight:500">{{ p.name }} <span style="font-weight:400">{{ p.handle }}</span></span>
+                  <span>{{ p.instr }}</span>
+                  <div style="display:flex;gap:4px;align-items:center">
+                    <sc-for list="{{ p.signals }}" as="g" hint-placeholder-count="5"><span style="width:14px;height:14px;border-radius:7px;border:1px solid #191A23;background:{{ g.bg }}"></span></sc-for>
+                    <span style="margin-left:8px;font-size:13px;min-width:120px">{{ p.readyLabel }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap">
+              <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Button" variant="secondary" on-click="{{ resetPlan }}" style="padding:16px 28px;font-size:18px" hint-size="auto,60px">Editar objetivo</x-import>
+              <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Button" variant="tertiary" on-click="{{ launch }}" style="padding:16px 28px;font-size:18px;border:1px solid #191A23" hint-size="auto,60px">Iniciar e sair de perto</x-import>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isReport }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:32px">
+        <header style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+          <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="{{ hSize }}" hint-size="240px,40px">Relatório</x-import>
+          <p style="margin:0;font-size:18px;line-height:24px;max-width:460px">O que aconteceu enquanto você estava fora: resultado, custo e o que precisa de você.</p>
+        </header>
+        <div style="display:grid;grid-template-columns:{{ reportCols }};gap:{{ tileGap }}">
+          <sc-for list="{{ reportCards }}" as="c" hint-placeholder-count="4">
+            <div style="background:{{ c.bg }};color:{{ c.fg }};border:1px solid #191A23;box-shadow:0 5px 0 #191A23;border-radius:{{ cardRadius }};padding:{{ reportPad }};display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:{{ bigNum }};font-weight:500;line-height:100%">{{ c.value }}</span>
+              <span style="font-size:16px">{{ c.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:{{ twoCols }};gap:{{ tileGap }}">
+          <div style="background:#191A23;color:#fff;border-radius:{{ cardRadius }};padding:{{ cardPad }};display:flex;flex-direction:column;gap:4px">
+            <div style="margin-bottom:12px"><x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="h4" hint-size="200px,20px">Precisa de você</x-import></div>
+            <sc-for list="{{ needsList }}" as="n" hint-placeholder-count="2">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-top:1px solid #fff">
+                <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:18px;font-weight:500">{{ n.name }} <span style="font-weight:400;font-size:15px">{{ n.handle }}</span></span><span style="font-size:15px;line-height:20px">{{ n.error }}</span></div>
+                <button onClick="{{ n.open }}" style="border:none;background:#B9FF66;border-radius:14px;padding:10px 16px;font-family:var(--font-sans);font-size:15px;cursor:pointer;white-space:nowrap">Abrir device</button>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noNeeds }}" hint-placeholder-val="{{ false }}"><span style="font-size:16px;padding-top:14px;border-top:1px solid #fff">Nada pendente. Todas as identidades seguem sozinhas.</span></sc-if>
+          </div>
+          <div style="border:1px solid #191A23;border-radius:{{ cardRadius }};padding:{{ cardPad }};display:flex;flex-direction:column;gap:4px">
+            <div style="margin-bottom:12px"><x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="h4" hint-size="200px,20px">Custo por identidade</x-import></div>
+            <sc-for list="{{ costRows }}" as="r" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:90px minmax(0,1fr) 70px;gap:12px;align-items:center;padding:7px 0;font-size:15px">
+                <span>{{ r.name }}</span>
+                <div style="height:12px;border-radius:6px;background:#F3F3F3;border:1px solid #191A23;overflow:hidden"><div style="height:100%;background:#B9FF66;width:{{ r.pct }}"></div></div>
+                <span style="text-align:right">{{ r.costFmt }}</span>
+              </div>
+            </sc-for>
+            <span style="font-size:13px;margin-top:10px">Nuvem em US$ e tokens · local em tokens e segundos de GPU</span>
+          </div>
+        </div>
+        <div style="border:1px solid #191A23;border-radius:{{ cardRadius }};padding:{{ cardPad }};display:flex;flex-direction:column">
+          <div style="margin-bottom:12px"><x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="h4" hint-size="200px,20px">Objetivos anteriores</x-import></div>
+          <sc-for list="{{ pastGoals }}" as="g" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:{{ pastCols }};gap:{{ planGap }};padding:14px 0;border-top:1px solid #191A23;font-size:16px;align-items:center">
+              <span style="grid-column:{{ pastSpan }};font-weight:{{ pastW }}">{{ g.text }}</span><span>{{ g.pattern }}</span><span>{{ g.result }}</span><span style="text-align:right">{{ g.cost }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isIds }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:28px">
+        <header style="display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+            <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="{{ hSize }}" hint-size="260px,40px">Identidades</x-import>
+            <p style="margin:0;font-size:18px;line-height:24px;max-width:420px">Cada identidade é um AVD que pertence a uma conta e envelhece com ela.</p>
+          </div>
+          <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Button" on-click="{{ provision }}" style="padding:14px 26px;font-size:18px" hint-size="auto,56px">Provisionar identidade</x-import>
+        </header>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:14px;align-items:center">
+          <span style="margin-right:6px">Ciclo:</span>
+          <sc-for list="{{ lifecycle }}" as="s" hint-placeholder-count="7"><span style="padding:4px 10px;border-radius:7px;border:1px solid #191A23;background:{{ s.bg }};color:{{ s.fg }}">{{ s.label }}</span></sc-for>
+        </div>
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <sc-for list="{{ idRows }}" as="r" hint-placeholder-count="6">
+            <div style="border:1px solid #191A23;border-radius:28px;padding:18px 20px;display:flex;flex-direction:column;gap:12px;opacity:{{ r.opacity }}">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                <div style="display:flex;flex-direction:column;gap:3px"><span style="font-weight:500;font-size:18px">{{ r.name }}</span><span style="font-size:13px">{{ r.handle }}</span></div>
+                <span style="padding:3px 9px;border-radius:7px;font-size:13px;border:1px solid #191A23;background:{{ r.lcBg }};color:{{ r.lcFg }}">{{ r.lc }}</span>
+              </div>
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;font-size:14px;line-height:19px;border-top:1px solid #191A23;padding-top:12px">
+                <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px">App alvo</span><span>{{ r.app }} {{ r.version }}</span></div>
+                <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px">Snapshot</span><span>{{ r.snap }}</span></div>
+                <div style="display:flex;flex-direction:column;gap:5px"><span style="font-size:12px">Disco · {{ r.disk }}</span><div style="height:8px;border-radius:4px;background:#F3F3F3;border:1px solid #191A23;overflow:hidden"><div style="height:100%;background:{{ r.diskColor }};width:{{ r.diskPct }}"></div></div></div>
+                <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px">Portas</span><span style="font-family:ui-monospace,monospace;font-size:12px">{{ r.ports }}</span></div>
+              </div>
+              <sc-if value="{{ r.action }}" hint-placeholder-val="{{ false }}"><button onClick="{{ r.onAction }}" style="border:1px solid #191A23;background:#fff;border-radius:14px;min-height:44px;padding:10px 14px;font-family:var(--font-sans);font-size:15px;cursor:pointer" style-hover="background:#B9FF66">{{ r.action }}</button></sc-if>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+        <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+        <div style="border:1px solid #191A23;border-radius:45px;padding:16px 32px 24px;overflow-x:auto">
+          <div style="display:grid;grid-template-columns:minmax(150px,1.3fr) 120px minmax(150px,1fr) 150px minmax(140px,1fr) 110px 150px;gap:14px;padding:14px 0;font-size:13px;min-width:980px">
+            <span>Identidade</span><span>Ciclo</span><span>App alvo</span><span>Snapshot</span><span>Disco</span><span>Portas</span><span></span>
+          </div>
+          <sc-for list="{{ idRows }}" as="r" hint-placeholder-count="10">
+            <div style="display:grid;grid-template-columns:minmax(150px,1.3fr) 120px minmax(150px,1fr) 150px minmax(140px,1fr) 110px 150px;gap:14px;padding:14px 0;border-top:1px solid #191A23;font-size:15px;align-items:center;min-width:980px;opacity:{{ r.opacity }}">
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-weight:500;font-size:17px">{{ r.name }}</span><span style="font-size:13px">{{ r.handle }}</span></div>
+              <span style="padding:3px 9px;border-radius:7px;width:fit-content;border:1px solid #191A23;background:{{ r.lcBg }};color:{{ r.lcFg }}">{{ r.lc }}</span>
+              <span>{{ r.app }} <span style="font-size:13px">{{ r.version }}</span></span>
+              <span>{{ r.snap }}</span>
+              <div style="display:flex;flex-direction:column;gap:5px"><span style="font-size:13px">{{ r.disk }}</span><div style="height:8px;border-radius:4px;background:#F3F3F3;border:1px solid #191A23;overflow:hidden"><div style="height:100%;background:{{ r.diskColor }};width:{{ r.diskPct }}"></div></div></div>
+              <span style="font-family:ui-monospace,monospace;font-size:12px;line-height:17px">{{ r.ports }}</span>
+              <sc-if value="{{ r.action }}" hint-placeholder-val="{{ false }}"><button onClick="{{ r.onAction }}" style="border:1px solid #191A23;background:#fff;border-radius:14px;padding:8px 12px;font-family:var(--font-sans);font-size:14px;cursor:pointer" style-hover="background:#B9FF66">{{ r.action }}</button></sc-if>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isProv }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:28px">
+        <header style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+          <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" size="{{ hSize }}" hint-size="260px,40px">Provedores</x-import>
+          <p style="margin:0;font-size:18px;line-height:24px;max-width:460px">Modelo configurado por papel, não global. Local ganha onde há volume: no worker.</p>
+        </header>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:{{ tileGap }}">
+          <sc-for list="{{ roles }}" as="r" hint-placeholder-count="3">
+            <div style="background:{{ r.bg }};color:{{ r.fg }};border:1px solid #191A23;box-shadow:0 5px 0 #191A23;border-radius:{{ cardRadius }};padding:{{ cardPad }};display:flex;flex-direction:column;gap:16px">
+              <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:26px;font-weight:500">{{ r.name }}</span><span style="font-size:15px">{{ r.volume }}</span></div>
+              <div style="display:flex;gap:6px;background:#fff;border:1px solid #191A23;border-radius:14px;padding:4px">
+                <sc-for list="{{ r.modes }}" as="m" hint-placeholder-count="2"><button onClick="{{ m.pick }}" style="flex:1;border:none;border-radius:10px;padding:10px;font-family:var(--font-sans);font-size:15px;cursor:pointer;background:{{ m.bg }};color:{{ m.fg }}">{{ m.label }}</button></sc-for>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;font-size:14px"><span>Modelo</span><div style="background:#fff;color:#000;border:1px solid #000;border-radius:14px;padding:14px 18px;font-size:17px">{{ r.model }}</div></div>
+              <div style="display:flex;flex-direction:column;gap:6px;font-size:14px"><span>Endpoint</span><div style="background:#fff;color:#000;border:1px solid #000;border-radius:14px;padding:14px 18px;font-size:15px;font-family:ui-monospace,monospace">{{ r.endpoint }}</div></div>
+              <button onClick="{{ r.test }}" style="border:1px solid #191A23;background:{{ r.btnBg }};color:{{ r.btnFg }};border-radius:14px;padding:14px;font-family:var(--font-sans);font-size:17px;cursor:pointer">{{ r.testLabel }}</button>
+              <sc-if value="{{ r.result }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid {{ r.fg }};padding-top:14px">
+                  <sc-for list="{{ r.result }}" as="x" hint-placeholder-count="4"><div style="display:flex;justify-content:space-between;font-size:15px"><span>{{ x.label }}</span><span style="font-weight:500">{{ x.value }}</span></div></sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background:#F3F3F3;border-radius:{{ cardRadius }};padding:{{ cardPad }};display:flex;flex-direction:column;gap:18px;border:1px solid #191A23">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <x-import component-from-global-scope="PositivusDesignSystem_d1d8c2.Heading" variant="black" size="h4" hint-size="200px,20px">VRAM disputada · 32 GB</x-import>
+            <span style="font-size:15px">KV cache restante: <b>{{ kvLeft }}</b> para {{ fleetN }} sequências de ~13k tokens</span>
+          </div>
+          <div style="display:flex;height:40px;border-radius:14px;overflow:hidden;border:1px solid #191A23;font-size:13px">
+            <div style="background:#191A23;color:#fff;display:flex;align-items:center;padding:0 10px;overflow:hidden;white-space:nowrap;min-width:0;width:{{ vramEmu }}">Emuladores</div>
+            <div style="background:#B9FF66;display:flex;align-items:center;padding:0 10px;overflow:hidden;white-space:nowrap;min-width:0;width:59%">Pesos 30B 4-bit · 19 GiB</div>
+            <div style="background:#fff;display:flex;align-items:center;padding:0 10px;overflow:hidden;white-space:nowrap;min-width:0;flex:1">KV</div>
+          </div>
+          <span style="font-size:15px;line-height:21px">Piso de qualidade: 3 erros de tool call numa tarefa → worker escala para nuvem e a tarefa fica marcada como degradada.</span>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;mobile&quot;,&quot;desktop&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;fleetSize&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;8&quot;,&quot;10&quot;],&quot;default&quot;:&quot;8&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Frota&quot;},&quot;tileDetail&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;completo&quot;,&quot;compacto&quot;],&quot;default&quot;:&quot;completo&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Frota&quot;},&quot;showCost&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Frota&quot;}}">
+const IDS = [
+  { name:'conta1', handle:'@aurora.moda', state:'running', task:'Respondendo comentários', steps:34, budget:60, cost:0.41, error:'' },
+  { name:'conta2', handle:'@casa.ipe', state:'running', task:'Respondendo comentários', steps:21, budget:60, cost:0.27, error:'' },
+  { name:'conta3', handle:'@nuvem.cafe', state:'needs', task:'Parada', steps:12, budget:60, cost:0.19, error:'Checkpoint: "Confirme que é você" após o 3º envio' },
+  { name:'conta4', handle:'@lume.studio', state:'running', task:'Respondendo comentários', steps:47, budget:60, cost:0.58, error:'' },
+  { name:'conta5', handle:'@trilha.bike', state:'idle', task:'Concluída · 14 respostas', steps:52, budget:60, cost:0.63, error:'' },
+  { name:'conta6', handle:'@pao.do.bairro', state:'running', task:'Escalou p/ modelo forte', steps:29, budget:60, cost:0.52, error:'Tela inesperada 3× (story aberto)' },
+  { name:'conta7', handle:'@verde.vivo', state:'offline', task:'Sonda falhou', steps:0, budget:60, cost:0, error:'versionName 449.0 ≠ 448.0.0.52.84 registrado' },
+  { name:'conta8', handle:'@mar.azul.surf', state:'running', task:'Respondendo comentários', steps:8, budget:60, cost:0.09, error:'' },
+  { name:'conta9', handle:'@forno.lenha', state:'idle', task:'Aguardando', steps:0, budget:60, cost:0, error:'' },
+  { name:'conta10', handle:'@ateliê.rosa', state:'idle', task:'Aguardando', steps:0, budget:60, cost:0, error:'' },
+];
+const LC = { conta1:'running', conta2:'running', conta3:'dirty', conta4:'running', conta5:'logged-in', conta6:'running', conta7:'logged-in', conta8:'running', conta9:'logged-in', conta10:'restored' };
+const EXTRA = [
+  { name:'conta11', handle:'@loja.norte', lc:'banned', app:'Instagram', version:'448.0.0.52.84', snap:'banida em 12/09', disk:'7,1 / 8 GB presos', diskPct:89, ports:'—', action:'Liberar disco' },
+  { name:'conta12', handle:'sem conta', lc:'provisioned', app:'Instagram', version:'448.0.0.52.84', snap:'—', disk:'3,4 / 8 GB', diskPct:42, ports:'5578 · 8092', action:'Fazer login' },
+];
+const STATE = {
+  running:{ label:'running', bg:'#B9FF66', fg:'#000', border:'#191A23' },
+  idle:{ label:'idle', bg:'#F3F3F3', fg:'#000', border:'#191A23' },
+  needs:{ label:'needs-attention', bg:'#191A23', fg:'#fff', border:'#191A23' },
+  offline:{ label:'offline', bg:'#fff', fg:'#000', border:'#191A23' },
+  paused:{ label:'pausado', bg:'#fff', fg:'#000', border:'#191A23' },
+};
+const TOOLS = [['tap','Toca no comentário de @jufs'],['get_screen_state','Lê a tela · 2,6k tokens'],['type_text','Digita resposta curta'],['tap','Enviar · gate irreversível ok'],['scroll','Próximo comentário'],['get_screen_state','Ledger: item já tratado, pula']];
+const fmt = v => 'US$ ' + v.toFixed(2).replace('.', ',');
+
+class Component extends DCLogic {
+  state = { screen:'cockpit', sel:0, ids: IDS.map(x => ({...x})), killed:false, control:false, goalText:'', planStage:0, tests:{}, modes:{ lider:'nuvem', worker:'local', esc:'nuvem' }, extra: EXTRA.map(x=>({...x})), tick:0, w: window.innerWidth };
+  componentDidMount(){ this.onR = () => this.setState({ w: window.innerWidth }); window.addEventListener('resize', this.onR); this.t = setInterval(() => { if (this.state.killed) return; this.setState(s => ({ tick:s.tick+1, ids: s.ids.map(d => d.state==='running' && d.steps < d.budget ? {...d, steps:d.steps+1, cost:d.cost+0.012} : d) })); }, 2600); }
+  componentWillUnmount(){ clearInterval(this.t); window.removeEventListener('resize', this.onR); }
+  go = screen => this.setState({ screen });
+  upd = (i, patch) => this.setState(s => ({ ids: s.ids.map((d,j) => j===i ? {...d, ...patch} : d) }));
+  renderVals(){
+    const s = this.state, p = this.props;
+    const N = parseInt(p.fleetSize ?? '8', 10);
+    const fleet = s.ids.slice(0, N);
+    const eff = d => s.killed && d.state==='running' ? 'paused' : d.state;
+    const deco = (d,i) => { const st = STATE[eff(d)]; const dark = d.state==='needs';
+      return {...d, stateLabel:st.label, pillBg:st.bg, pillFg:st.fg, pillBorder: dark ? '#B9FF66' : st.border, cardBg: dark ? '#191A23' : d.state==='running' ? '#F3F3F3' : '#fff', cardFg: dark ? '#fff' : '#000', costFmt: fmt(d.cost), app:'Instagram', version:'448.0.0.52.84', needs:d.state==='needs',
+        overlay: d.state==='offline' ? 'Sonda: app atualizou sozinho. Device não entra na frota.' : '', open: () => this.setState({ screen:'device', sel:i, control:false }), replyDraft: d.state==='running' ? 'Obrigada! Já te chamamos no direct' : 'Input do agente desligado' }; };
+    const tiles = fleet.map(deco);
+    const needsN = fleet.filter(d => d.state==='needs').length;
+    const doneSteps = fleet.reduce((a,d)=>a+d.steps,0), totalSteps = fleet.length*50;
+    const totalCost = fleet.reduce((a,d)=>a+d.cost,0);
+    const sel = tiles[Math.min(s.sel, tiles.length-1)];
+    const navDef = [['cockpit','Cockpit','Cockpit'],['new','Novo objetivo','Novo'],['report','Relatório','Relatório'],['ids','Identidades','IDs'],['prov','Provedores','Modelos']];
+    const active = s.screen==='device' ? 'cockpit' : s.screen;
+    const nav = navDef.map(([k,l,sh]) => ({ label:l, short:sh, bg: active===k ? '#B9FF66' : 'transparent', color: active===k ? '#000' : '#fff', badge: k==='report' && needsN ? String(needsN) : '', go: () => this.go(k) }));
+    const ram = (38.3 + N*4.6).toFixed(1).replace('.', ',');
+    const meters = [
+      { label:'RAM', value: ram + ' / 125 GiB', pct: Math.round((38.3+N*4.6)/125.6*100)+'%' },
+      { label:'vCPU', value: (N*4) + ' / 32', pct: Math.min(100, Math.round(N*4/32*100))+'%' },
+      { label:'VRAM', value: (N*0.636).toFixed(1).replace('.', ',') + ' / 32 GB', pct: Math.round((N*0.636+19)/32*100)+'%' },
+    ];
+    const log = TOOLS.map((t,k) => { const i = sel.steps - k; const irr = t[1].startsWith('Enviar');
+      return { i: i>0 ? i : '—', tool:`android_${sel.name}_${t[0]}`, desc:t[1], tokens: t[0]==='get_screen_state' ? '2.6k tok' : '1.9k tok', tag: irr ? 'gate' : k===0 && sel.state==='running' ? 'agora' : 'ok', tagBg: irr ? '#191A23' : '#F3F3F3', tagFg: irr ? '#B9FF66' : '#000' }; });
+    const signals = d => { const ok = d.state==='offline' ? 4 : 5; return Array.from({length:5}, (_,k) => ({ bg: k<ok ? '#B9FF66' : '#191A23' })); };
+    const planTasks = fleet.map(d => ({ name:d.name, handle:d.handle, instr:'Responder comentários da própria caixa, últimas 24 h', signals: signals(d), readyLabel: d.state==='offline' ? 'versão mudou · fora' : 'pronto' }));
+    const readyN = fleet.filter(d=>d.state!=='offline').length;
+    const roleDef = [
+      { k:'lider', name:'Líder', volume:'1× por objetivo · decomposição', bg:'#F3F3F3', fg:'#000' },
+      { k:'worker', name:'Worker por device', volume:'40–60 passos × N contas', bg:'#B9FF66', fg:'#000' },
+      { k:'esc', name:'Escalonamento', volume:'Raro · tela inesperada, orçamento, ação sensível', bg:'#191A23', fg:'#fff' },
+    ];
+    const roles = roleDef.map(r => { const mode = s.modes[r.k]; const local = mode==='local'; const t = s.tests[r.k];
+      return {...r, model: local ? 'Qwen3-30B-A3B · 4-bit' : r.k==='worker' ? 'Claude Haiku' : 'Claude Sonnet', endpoint: local ? 'http://127.0.0.1:8000/v1 (vLLM)' : 'api.anthropic.com',
+        modes: ['nuvem','local'].map(m => ({ label: m==='nuvem' ? 'Nuvem' : 'Local', bg: mode===m ? '#191A23' : 'transparent', fg: mode===m ? '#fff' : '#000', pick: () => this.setState(st => ({ modes:{...st.modes, [r.k]:m}, tests:{...st.tests, [r.k]:null} })) })),
+        btnBg: r.k==='esc' ? '#B9FF66' : '#191A23', btnFg: r.k==='esc' ? '#000' : '#fff',
+        testLabel: t==='run' ? 'Rodando tool-call canônico em conta1…' : 'Testar conexão',
+        result: t==='done' ? [ { label:'Latência', value: local ? '410 ms' : '1,2 s' }, { label:'Tokens/s', value: local ? '88' : '64' }, { label:'Argumentos', value:'estruturados e válidos' }, { label:'Tool', value:'android_conta1_get_screen_state' } ] : null,
+        test: () => { this.setState(st => ({ tests:{...st.tests, [r.k]:'run'} })); setTimeout(() => this.setState(st => ({ tests:{...st.tests, [r.k]:'done'} })), 1400); } }; });
+    const idRows = s.ids.map((d,i) => { const lc = LC[d.name]; const pct = [48,41,72,55,38,60,44,52,30,34][i];
+      return { name:d.name, handle:d.handle, lc, lcBg: lc==='running' ? '#B9FF66' : lc==='dirty' ? '#191A23' : '#fff', lcFg: lc==='dirty' ? '#fff' : '#000', app:'Instagram', version: d.state==='offline' ? '449.0 ≠ registro' : '448.0.0.52.84',
+        snap: i===9 ? '23 dias · restore-unsafe' : i===2 ? 'há 2 dias' : 'hoje, 09:1' + i, disk: (pct*0.08).toFixed(1).replace('.', ',') + ' / 8 GB', diskPct: pct+'%', diskColor: pct>70 ? '#191A23' : '#B9FF66',
+        ports: `${5554+i*2} · ${8080+i}`, opacity:1, action: d.state==='needs' ? 'Abrir device' : i===9 ? 'Confirmar restore' : pct>70 ? 'Re-baseline' : '', onAction: () => { if (i < N) this.setState({ screen:'device', sel:i }); } }; })
+      .concat(s.extra.map((e,k) => ({...e, lcBg: e.lc==='banned' ? '#191A23' : '#F3F3F3', lcFg: e.lc==='banned' ? '#fff' : '#000', diskPct: e.diskPct+'%', diskColor: e.diskPct>70 ? '#191A23' : '#B9FF66', opacity: e.lc==='banned' ? 0.6 : 1,
+        onAction: () => this.setState(st => ({ extra: st.extra.map((x,j) => j!==k ? x : x.lc==='banned' ? {...x, disk:'0 GB · AVD descartado', diskPct:0, action:''} : {...x, lc:'logged-in', handle:'@loja.sul', snap:'agora', action:''}) })) })));
+    const lifecycle = ['blank','provisioned','logged-in','running','dirty','restored','banned'].map(l => ({ label:l, bg: l==='running' ? '#B9FF66' : l==='banned' ? '#191A23' : '#fff', fg: l==='banned' ? '#fff' : '#000' }));
+    const maxCost = Math.max(...fleet.map(d=>d.cost), 0.01);
+    const lay = p.layout ?? 'auto', m = lay==='mobile' || (lay!=='desktop' && s.w < 760), mm = (a,b) => m ? a : b;
+    const ui = { isMobile:m, isDesktop:!m, rootDir:mm('column','row'), rootMax: m && s.w >= 760 ? '430px' : 'none',
+      mainPad:mm('20px 16px 112px','36px 44px 60px'), mainGap:mm('22px','32px'), hSize:mm('h3','h2'),
+      goalCols:mm('repeat(3,minmax(0,1fr))','minmax(0,2fr) repeat(3,minmax(0,1fr))'), goalSpan:mm('1 / -1','auto'), goalPad:mm('22px 20px','28px 36px'), statPadL:mm('10px','20px'), statSize:mm('24px','36px'),
+      tileCols:mm('repeat(2,minmax(0,1fr))','repeat(auto-fill,minmax(230px,1fr))'), tileGap:mm('14px','28px'), tilePad:mm('10px 10px 14px','20px 20px 24px'), tileRadius:mm('24px','45px'), tileInner:mm('10px','14px'), tileNameSize:mm('16px','20px'),
+      devCols:mm('minmax(0,1fr)','minmax(300px,380px) minmax(0,1fr)'), devGap:mm('24px','36px'), phoneMax:mm('300px','none'),
+      cardPad:mm('22px 20px','28px 32px'), cardRadius:mm('30px','45px'), reportPad:mm('20px','30px'), bigNum:mm('30px','44px'),
+      planCols:mm('minmax(0,1fr)','minmax(0,1fr) minmax(0,2fr) auto'), planGap:mm('8px','16px'), reportCols:mm('repeat(2,minmax(0,1fr))','repeat(auto-fit,minmax(200px,1fr))'),
+      twoCols:mm('minmax(0,1fr)','minmax(0,1fr) minmax(0,1fr)'), pastCols:mm('minmax(0,1fr) minmax(0,1.4fr) auto','minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) 90px'), pastSpan:mm('1 / -1','auto'), pastW:mm('500','400') };
+    return {
+      ...ui, nav, meters, killed:s.killed, full:(p.tileDetail ?? 'completo')==='completo', showCost:p.showCost ?? true, screenH:(p.tileDetail ?? 'completo')==='completo' ? '360px' : '260px',
+      isCockpit:s.screen==='cockpit', isDevice:s.screen==='device', isNew:s.screen==='new', isReport:s.screen==='report', isIds:s.screen==='ids', isProv:s.screen==='prov',
+      goNew:()=>this.go('new'), goCockpit:()=>this.go('cockpit'), killAll:()=>this.setState({killed:true}), resume:()=>this.setState({killed:false}),
+      tiles, goalPct: Math.round(doneSteps/totalSteps*100)+'%',
+      goalStats:[ { value: fleet.filter(d=>d.state==='running').length + '/' + N, label:'identidades rodando' }, { value:String(needsN), label:'precisam de você' }, { value: (p.showCost ?? true) ? fmt(totalCost) : '—', label:'custo até agora' } ],
+      sel, streamLabel: s.control ? '1080p · 60 fps · input ligado' : '1080p · 30 fps · input desligado', controlOutline: s.control ? '3px solid #B9FF66' : 'none',
+      controlLabel: s.control ? 'Devolver ao agente' : 'Assumir controle', controlVariant: s.control ? 'tertiary' : 'primary',
+      toggleControl:()=>this.setState(st=>({control:!st.control})),
+      pauseLabel: sel.state==='idle' ? 'Retomar' : 'Pausar identidade', pauseSel:()=>this.upd(s.sel, { state: sel.state==='idle' ? 'running' : 'idle' }),
+      resolveSel:()=>this.upd(s.sel, { state:'running', error:'', task:'Respondendo comentários' }),
+      selStats:[ { value:`${sel.steps}/${sel.budget}`, label:'passos do orçamento' }, { value: String(Math.max(0, Math.floor(sel.steps/3.4))), label:'itens no ledger' }, { value: fmt(sel.cost), label:'custo da tarefa' }, { value:'1,4k', label:'tokens de tools (11)' } ],
+      log, phoneRows:[{a:'70%',b:'45%'},{a:'85%',b:'30%'},{a:'60%',b:'50%'},{a:'75%',b:'35%'}],
+      goalText:s.goalText, setGoal:e=>this.setState({goalText:e.target.value, planStage:0}),
+      examples:['Responder comentários das últimas 24 h','Curtir respostas em stories','Levantar DMs sem resposta'].map(l=>({ label:l, pick:()=>this.setState({goalText:l + ' em todas as contas', planStage:0}) })),
+      decomposeLabel: s.planStage===1 ? 'Líder decompondo…' : 'Decompor',
+      decompose:()=>{ if(!s.goalText) this.setState({goalText:'Responder comentários das últimas 24 h em todas as contas'}); this.setState({planStage:1}); setTimeout(()=>this.setState({planStage:2}),1200); },
+      planReady:s.planStage===2, resetPlan:()=>this.setState({planStage:0}),
+      launch:()=>this.setState(st=>({ screen:'cockpit', planStage:0, killed:false, ids: st.ids.map((d,i)=> i<N && (d.state==='idle') ? {...d, state:'running', steps:0, cost:0, task:'Respondendo comentários'} : d) })),
+      estimate:[ { label:'Tarefas', value:`${readyN} de ${N} (1 fora da sonda)` }, { label:'Passos por conta', value:'40–60' }, { label:'Tokens por conta', value:'~330k (poda + subset)' }, { label:'Frota pronta em', value:'~3 min, starts escalonados' } ],
+      planTasks,
+      reportCards:[ { value:String(fleet.filter(d=>d.state==='idle' && d.steps>0).length + 3), label:'tarefas concluídas', bg:'#F3F3F3', fg:'#000' }, { value:'87', label:'comentários respondidos', bg:'#B9FF66', fg:'#000' }, { value:String(needsN), label:'precisam de você', bg:'#191A23', fg:'#fff' }, { value: fmt(totalCost), label:'custo do objetivo', bg:'#fff', fg:'#000' } ],
+      needsList: fleet.map((d,i)=>({...d, open:()=>this.setState({screen:'device', sel:i})})).filter(d=>d.state==='needs' || d.state==='offline'),
+      noNeeds: !fleet.some(d=>d.state==='needs' || d.state==='offline'),
+      costRows: fleet.map(d=>({ name:d.name, costFmt:fmt(d.cost), pct: Math.round(d.cost/maxCost*100)+'%' })),
+      pastGoals:[ { text:'Responder comentários do fim de semana', pattern:'fan-out', result:'8/8 · 142 respostas', cost:'US$ 4,10' }, { text:'Curtir respostas em stories da campanha', pattern:'fan-out', result:'7/8 · 1 checkpoint', cost:'US$ 2,85' }, { text:'Revisar fila de 300 menções', pattern:'sharding', result:'300/300', cost:'US$ 6,02' } ],
+      provision:()=>this.setState(st=>({ extra: st.extra.concat([{ name:'conta'+(11+st.extra.length), handle:'sem conta', lc:'blank', app:'Instagram', version:'—', snap:'—', disk:'3,4 / 8 GB', diskPct:42, ports:`${5554+(10+st.extra.length)*2} · ${8080+10+st.extra.length}`, action:'Fazer login' }]) })),
+      lifecycle, idRows, roles, fleetN:String(N),
+      kvLeft: (32 - 19 - N*0.636 - 3.2).toFixed(1).replace('.', ',') + ' GiB', vramEmu: Math.round(N*0.636/32*100)+'%',
+    };
+  }
+}
+</script>
+</body>
+</html>

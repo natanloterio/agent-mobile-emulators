@@ -1,0 +1,42 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100vh;
+}
+
+body {
+  background: var(--color-white);
+  color: var(--color-black);
+  font-family: var(--font-sans);
+  font-size: var(--type-p);
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-black);
+}
+a:hover {
+  color: var(--color-dark);
+}
+
+button,
+textarea,
+input {
+  font-family: var(--font-sans);
+}
+
+button {
+  cursor: pointer;
+}
+
+p {
+  margin: 0;
+}

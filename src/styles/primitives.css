@@ -1,0 +1,101 @@
+/* Primitivas Positivus: botão, heading em pill, pill de estado, card, barra. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--color-dark);
+  border-radius: var(--radius-control);
+  padding: 14px 26px;
+  font-size: 18px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: transform 80ms ease;
+}
+.btn:active { transform: translateY(1px); }
+.btn--primary { background: var(--color-dark); color: var(--color-white); }
+.btn--secondary { background: var(--color-white); color: var(--color-black); }
+.btn--secondary:hover { background: var(--color-grey); }
+.btn--tertiary { background: var(--color-green); color: var(--color-black); }
+.btn--ghost { background: var(--color-white); color: var(--color-black); }
+.btn--ghost:hover { background: var(--color-green); }
+.btn--sm { padding: 8px 14px; font-size: 15px; }
+.btn--lg { padding: 16px 30px; }
+.btn--grow { flex: 1; }
+
+.heading {
+  display: inline-block;
+  margin: 0;
+  padding: 0 7px;
+  border-radius: var(--radius-heading);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+}
+.heading--green { background: var(--color-green); color: var(--color-black); }
+.heading--white { background: var(--color-white); color: var(--color-black); }
+.heading--black { background: var(--color-dark); color: var(--color-white); }
+.heading--h2 { font-size: var(--type-h2); }
+.heading--h3 { font-size: var(--type-h3); }
+.heading--h4 { font-size: var(--type-h4); }
+@media (max-width: 759px) {
+  .heading--h2 { font-size: var(--type-h2-mobile); }
+  .heading--h3 { font-size: var(--type-h3-mobile); }
+}
+
+.pill {
+  display: inline-block;
+  padding: 3px 9px;
+  border: 1px solid var(--color-dark);
+  border-radius: var(--radius-heading);
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+  width: fit-content;
+}
+.pill--md { padding: 6px 12px; font-size: 15px; }
+.pill--green { background: var(--color-green); color: var(--color-black); }
+.pill--grey { background: var(--color-grey); color: var(--color-black); }
+.pill--dark { background: var(--color-dark); color: var(--color-white); }
+.pill--white { background: var(--color-white); color: var(--color-black); }
+.pill--green-border { border-color: var(--color-green); }
+
+.card {
+  border: 1px solid var(--color-dark);
+  border-radius: var(--radius-card);
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.card--shadow { box-shadow: var(--shadow-card); }
+.card--grey { background: var(--color-grey); color: var(--color-black); }
+.card--green { background: var(--color-green); color: var(--color-black); }
+.card--dark { background: var(--color-dark); color: var(--color-white); }
+.card--white { background: var(--color-white); color: var(--color-black); }
+@media (max-width: 759px) {
+  .card { border-radius: var(--radius-card-mobile); padding: 22px 20px; }
+}
+
+.bar {
+  height: 10px;
+  border: 1px solid var(--color-dark);
+  border-radius: 5px;
+  background: var(--color-white);
+  overflow: hidden;
+}
+.bar--thin { height: 8px; border-radius: 4px; }
+.bar--grey { background: var(--color-grey); }
+.bar__fill { height: 100%; background: var(--color-dark); }
+.bar__fill--green { background: var(--color-green); }
+
+.muted-14 { font-size: 14px; }
+.muted-15 { font-size: 15px; }
+.mono { font-family: var(--font-mono); }
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.screen { display: flex; flex-direction: column; gap: 28px; }
+.screen__header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.screen__title { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.screen__lede { font-size: 18px; line-height: 24px; max-width: 460px; }
+.screen__actions { display: flex; gap: 12px; flex-wrap: wrap; }
