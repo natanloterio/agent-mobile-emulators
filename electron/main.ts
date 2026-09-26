@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { connectSnapshots, ensureDaemon, post, waitForInfo } from './daemon-bridge.js';
+import { connectSnapshots, ensureDaemon, post, request, waitForInfo } from './daemon-bridge.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -48,6 +48,8 @@ app.whenReady().then(() => {
     connectSnapshots(info, (data) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('enxame:snapshot', data); });
     ipcMain.handle('enxame:startGoal', (_e, text: string) => post(info, '/goals', { text }));
     ipcMain.handle('enxame:kill', () => post(info, '/kill'));
+    ipcMain.handle('enxame:setProvider', (_e, role: string, patch: unknown) => request(info, 'PUT', `/providers/${role}`, patch));
+    ipcMain.handle('enxame:testProvider', (_e, role: string) => request(info, 'POST', `/providers/${role}/test`));
   }).catch((e) => console.error('[enxame] sem daemon:', e.message));
 });
 

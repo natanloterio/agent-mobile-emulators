@@ -10,4 +10,6 @@ contextBridge.exposeInMainWorld('enxame', {
   },
   startGoal: (text: string) => ipcRenderer.invoke('enxame:startGoal', text),
   kill: () => ipcRenderer.invoke('enxame:kill'),
+  setProvider: (role: string, patch: unknown) => ipcRenderer.invoke('enxame:setProvider', role, patch),
+  testProvider: (role: string) => ipcRenderer.invoke('enxame:testProvider', role),
 });

@@ -4,7 +4,7 @@ import { MobileBottomNav, MobileTopbar } from './components/MobileChrome';
 import { Sidebar } from './components/Sidebar';
 import { hostMeters, kvCacheLeftGiB, vramEmulatorShare } from './lib/resources';
 import { useIsMobile } from './lib/useIsMobile';
-import { liveLogFor, mergeLive } from './live/merge';
+import { liveLogFor, liveRoles, mergeLive } from './live/merge';
 import { useLiveFleet } from './live/useLiveFleet';
 import { Cockpit } from './screens/Cockpit';
 import { Device } from './screens/Device';
@@ -102,7 +102,7 @@ export function App() {
       case 'prov':
         return (
           <Providers
-            roles={selectRoles(state)}
+            roles={liveRoles(selectRoles(state), live)}
             fleetSize={FLEET_SIZE}
             kvLeft={kvCacheLeftGiB(FLEET_SIZE)}
             vramEmuShare={vramEmulatorShare(FLEET_SIZE)}

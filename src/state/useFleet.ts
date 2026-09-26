@@ -55,7 +55,7 @@ export function useFleet(): UseFleet {
   const runningTests = (Object.keys(state.tests) as RoleKey[]).filter((k) => state.tests[k] === 'run');
   const runningKey = runningTests.join(',');
   useEffect(() => {
-    if (!runningKey) return;
+    if (!runningKey || window.enxame?.testProvider) return;
     const timers = runningKey
       .split(',')
       .map((role) => window.setTimeout(() => dispatch({ type: 'testDone', role: role as RoleKey }), TEST_MS));
@@ -75,8 +75,14 @@ export function useFleet(): UseFleet {
       decompose: () => dispatch({ type: 'decomposeStart', fallbackText: DEFAULT_GOAL_TEXT }),
       resetPlan: () => dispatch({ type: 'resetPlan' }),
       launch: (fleetSize) => dispatch({ type: 'launch', fleetSize }),
-      pickMode: (role, mode) => dispatch({ type: 'pickMode', role, mode }),
-      testConnection: (role) => dispatch({ type: 'testStart', role }),
+      // Com daemon: persiste no registro e o teste é real; sem daemon (Vite no browser) segue o mock com timer.
+      pickMode: (role, mode) => { window.enxame?.setProvider?.(role, { mode }).catch(() => undefined); dispatch({ type: 'pickMode', role, mode }); },
+      testConnection: (role) => {
+        dispatch({ type: 'testStart', role });
+        const test = window.enxame?.testProvider;
+        if (!test) return;
+        test(role).catch(() => undefined).finally(() => dispatch({ type: 'testDone', role }));
+      },
       provision: () => dispatch({ type: 'provision' }),
       extraAction: (index) => dispatch({ type: 'extraAction', index }),
     }),
