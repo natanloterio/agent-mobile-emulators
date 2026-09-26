@@ -58,7 +58,7 @@ describe('rotas plugáveis', () => {
   it('rota extra trata antes do 404; GET /goals lista', async () => {
     const db = openDb(':memory:'); upsertIdentity(db, row); createGoalAndTask(db, 'conta1', 'um');
     const s = await startServer({
-      db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); },
+      db, port: 0, token: 'seg', onGoal: async () => ({ goalId: 'g0', done: Promise.resolve() }), onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); },
       routes: [async (c) => { if (c.method !== 'POST' || c.url.pathname !== '/eco') return false; c.send(200, { got: await c.body() }); return true; }],
     }); stop = s.close;
     const h = { authorization: 'Bearer seg', 'content-type': 'application/json' };
