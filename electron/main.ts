@@ -11,6 +11,10 @@ const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 // Deixamos o Chromium escolher a plataforma; o spike de 10 decoders decide o resto.
 app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
 
+// O daemon manda um snapshot ao conectar e depois só em eventos; guardamos o último para
+// reenviar a cada carga da janela (abertura e Ctrl+R), senão a tela fica no mock até o próximo evento.
+let lastSnapshot: unknown = null;
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1440,
@@ -21,11 +25,15 @@ function createWindow(): void {
     backgroundColor: '#ffffff',
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(here, 'preload.js'),
+      preload: path.join(here, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+
+  win.webContents.on('did-finish-load', () => {
+    if (lastSnapshot !== null) win.webContents.send('enxame:snapshot', lastSnapshot);
   });
 
   if (devServerUrl) {
@@ -46,7 +54,7 @@ app.whenReady().then(() => {
   const projectRoot = path.join(here, '..');
   ensureDaemon(projectRoot);
   waitForInfo().then((info) => {
-    connectSnapshots(info, (data) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('enxame:snapshot', data); });
+    connectSnapshots(info, (data) => { lastSnapshot = data; for (const w of BrowserWindow.getAllWindows()) w.webContents.send('enxame:snapshot', data); });
     ipcMain.handle('enxame:startGoal', (_e, text: string) => post(info, '/goals', { text }));
     ipcMain.handle('enxame:kill', () => post(info, '/kill'));
     ipcMain.handle('enxame:setProvider', (_e, role: string, patch: unknown) => request(info, 'PUT', providerRoute(role, 'put'), patch));
