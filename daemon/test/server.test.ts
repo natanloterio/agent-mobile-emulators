@@ -202,6 +202,15 @@ describe('ws — quadros e vídeo (incremento 4)', () => {
     ws.close(); await new Promise((r) => setTimeout(r, 100));
     expect(screen.active).toEqual([true, false]); expect(video.active).toEqual([true, false]);
   });
+  it('GET /state traz o estado do stream por identidade (videoState); sem o getter, idle', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const base = { db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async (): Promise<never> => { throw new Error('n/a'); } };
+    const get = async (port: number) => (await (await fetch(`http://127.0.0.1:${port}/state`, { headers: { authorization: 'Bearer seg' } })).json()) as { identities: { video: string }[] };
+    const s1 = await startServer({ ...base, videoState: () => 'streaming' });
+    try { expect((await get(s1.port)).identities[0].video).toBe('streaming'); } finally { await s1.close(); }
+    const s2 = await startServer(base); stop = s2.close;
+    expect((await get(s2.port)).identities[0].video).toBe('idle');
+  });
   it('sem screen/video o servidor continua igual (só snapshot ao conectar)', async () => {
     const db = openDb(':memory:'); upsertIdentity(db, row);
     const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;

@@ -3,6 +3,8 @@ export interface LiveIdentity {
   readonly id: string; readonly name: string; readonly handle: string; readonly state: string; readonly task: string;
   readonly steps: number; readonly budget: number; readonly costUsd: number; readonly error: string; readonly lastTools: readonly LiveToolRow[];
   readonly degraded?: boolean; readonly genMs?: number; readonly earlyStopRemaining?: number;
+  /** Estado do stream de vídeo no daemon ('idle' | 'starting' | 'streaming' | 'retrying'). */
+  readonly video?: string;
 }
 export type LiveRoleKey = 'lider' | 'worker' | 'esc';
 export interface LiveProviderTest { readonly role: LiveRoleKey; readonly model: string; readonly latencyMs: number; readonly tokensPerSec: number | null; readonly argsValid: boolean; readonly warning: string | null; readonly error: string | null; readonly at: string }

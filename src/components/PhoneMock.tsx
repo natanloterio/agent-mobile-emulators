@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { frameAgeLabel } from '../live/frameAge';
+import { phoneLabel } from '../live/frameAge';
 import { createH264Sink } from '../live/h264Sink';
 import { useNow } from '../live/useNow';
 import type { VideoBus } from '../live/videoBus';
+import type { Identity } from '../types/fleet';
 import './PhoneMock.css';
 
 interface Row { readonly a: string; readonly b: string }
@@ -22,6 +23,7 @@ interface PhoneMockProps {
   readonly videoId?: string;
   readonly bus?: VideoBus | null;
   readonly screen?: { readonly dataUrl: string; readonly at: string };
+  readonly video?: Identity['video'];
 }
 
 /** Esqueleto da tela (sem dados vivos), mantido idêntico ao anterior. */
@@ -54,7 +56,7 @@ function Skeleton({ variant }: { readonly variant: 'tile' | 'full' }) {
 }
 
 /** Tela de celular: vídeo ao vivo (WebCodecs) quando há pacotes, senão o poster PNG, senão o esqueleto. */
-export function PhoneMock({ handle, streamLabel, variant, overlay, draft, controlled = false, maxHeight, videoId, bus, screen }: PhoneMockProps) {
+export function PhoneMock({ handle, streamLabel, variant, overlay, draft, controlled = false, maxHeight, videoId, bus, screen, video }: PhoneMockProps) {
   const cls = ['phone', `phone--${variant}`, controlled ? 'phone--controlled' : ''].filter(Boolean).join(' ');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [videoAt, setVideoAt] = useState<number | null>(null);
@@ -73,7 +75,7 @@ export function PhoneMock({ handle, streamLabel, variant, overlay, draft, contro
     return () => { off(); sink.close(); lastSetRef.current = null; setVideoAt(null); };
   }, [videoId, bus]);
   const hasVideo = videoAt !== null;
-  const label = hasVideo ? frameAgeLabel(videoAt, now) : screen ? frameAgeLabel(screen.at, now) : streamLabel;
+  const label = phoneLabel({ video, videoAt, screenAt: screen?.at, now, fallback: streamLabel });
   return (
     <div className={cls} style={maxHeight ? { maxHeight } : undefined}>
       <div className="phone__meta"><span>{handle}</span><span>{label}</span></div>

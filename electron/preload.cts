@@ -18,7 +18,8 @@ const gops = new Map<string, Packet[]>();
 ipcRenderer.on('enxame:video', (_e, p: Packet) => {
   if (p.key) { gops.set(p.id, [p]); return; }
   const g = gops.get(p.id); if (!g) return;
-  gops.set(p.id, g.length >= MAX_GOP ? [g[0], ...g.slice(2), p] : [...g, p]);
+  if (g.length >= MAX_GOP) { gops.delete(p.id); return; } // GOP truncado não decodifica: descarta até o próximo key
+  gops.set(p.id, [...g, p]);
 });
 
 contextBridge.exposeInMainWorld('enxame', {

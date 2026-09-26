@@ -29,6 +29,10 @@ describe('mergeLive — incremento 3', () => {
     expect(out[0]).toMatchObject({ degraded: true, genMs: 33900, earlyStopRemaining: 13 });
     expect(out[0].task).toMatch(/· degradada$/);
   });
+  it('copia o estado do stream de vídeo (valores desconhecidos viram undefined)', () => {
+    const v = (video: string | undefined) => mergeLive(IDENTITIES, { ...live, identities: [{ ...live.identities[0], video }] })[0].video;
+    expect(v('streaming')).toBe('streaming'); expect(v('retrying')).toBe('retrying'); expect(v(undefined)).toBeUndefined(); expect(v('lixo')).toBeUndefined();
+  });
   it('liveLogFor mostra o provedor curto por linha', () => {
     const rows = liveLogFor({ ...live, identities: [{ ...live.identities[0], lastTools: [{ idx: 1, tool: 't', excerpt: 'x', tokens: 1000, gate: false, provider: 'local:gpt-oss:20b' }] }] }, 'conta1');
     expect(rows?.[0].desc).toMatch(/^\[local\] /);

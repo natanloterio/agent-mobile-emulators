@@ -61,6 +61,7 @@ export function Cockpit({ tiles, goalStats, goalPct, showCost, fullTiles, isMobi
               videoId={t.id}
               bus={bus}
               screen={t.screen}
+              video={t.video}
             />
             <div className="tile__head">
               <span className="tile__name">{t.name}</span>

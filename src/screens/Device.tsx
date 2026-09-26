@@ -34,7 +34,7 @@ export function Device({ sel, log, stats, control, isMobile, onBack, onToggleCon
 
       <div className="device__grid">
         <div className="device__left">
-          <PhoneMock variant="full" handle={sel.handle} streamLabel={streamLabel} draft={sel.replyDraft} controlled={control} videoId={sel.id} bus={bus} screen={sel.screen} />
+          <PhoneMock variant="full" handle={sel.handle} streamLabel={streamLabel} draft={sel.replyDraft} controlled={control} videoId={sel.id} bus={bus} screen={sel.screen} video={sel.video} />
           <div className="device__controls">
             <Button variant={control ? 'tertiary' : 'primary'} grow onClick={onToggleControl}>
               {control ? 'Devolver ao agente' : 'Assumir controle'}

@@ -3,14 +3,14 @@ import type { LiveVideoPacket } from './types';
 type Sub = (p: LiveVideoPacket) => void;
 export interface VideoBus { publish(p: LiveVideoPacket): void; subscribe(id: string, cb: Sub): () => void }
 
-/** ~13 s a 30 fps; o servidor manda IDR a cada ~10 s (mesma regra de electron/gop-buffer.ts). */
+/** ~13 s a 30 fps; com IDR a cada 2 s o GOP tem ~60 pacotes, o limite é só rede de segurança (mesma regra de electron/gop-buffer.ts). */
 const DEFAULT_MAX_GOP = 400;
 
-/** Key reinicia o GOP; delta sem key anterior é ignorado; no limite mantém o key e descarta o delta mais antigo. */
+/** Key reinicia o GOP; delta sem key anterior é ignorado; no limite o GOP inteiro é descartado (truncado não decodifica). */
 function nextGop(g: readonly LiveVideoPacket[] | undefined, p: LiveVideoPacket, maxGop: number): readonly LiveVideoPacket[] | undefined {
   if (p.key) return [p];
   if (!g) return undefined;
-  return g.length >= maxGop ? [g[0], ...g.slice(2), p] : [...g, p];
+  return g.length >= maxGop ? undefined : [...g, p];
 }
 
 /**
@@ -22,7 +22,8 @@ export function createVideoBus(maxGop = DEFAULT_MAX_GOP): VideoBus {
   const gops = new Map<string, readonly LiveVideoPacket[]>();
   return {
     publish: (p) => {
-      const g = nextGop(gops.get(p.id), p, maxGop); if (g) gops.set(p.id, g);
+      const g = nextGop(gops.get(p.id), p, maxGop);
+      if (g) gops.set(p.id, g); else gops.delete(p.id);
       for (const cb of subs.get(p.id) ?? []) cb(p);
     },
     subscribe: (id, cb) => {

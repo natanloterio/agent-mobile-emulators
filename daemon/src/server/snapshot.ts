@@ -2,12 +2,15 @@ import type { DatabaseSync } from 'node:sqlite';
 import { listIdentities } from '../db/identities.js';
 import { readProviderConfig, type ProviderRow, type RoleKey } from '../provider/config.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
+import type { VideoState } from '../device/video.js';
 
 export interface ToolRow { readonly idx: number; readonly tool: string; readonly excerpt: string; readonly tokens: number; readonly gate: boolean; readonly provider: string | null }
 export interface IdentitySnapshot {
   readonly id: string; readonly name: string; readonly handle: string; readonly state: string; readonly task: string;
   readonly steps: number; readonly budget: number; readonly costUsd: number; readonly error: string; readonly lastTools: readonly ToolRow[];
   readonly degraded: boolean; readonly genMs: number; readonly earlyStopRemaining: number;
+  /** Estado do stream de vídeo do daemon: a UI mostra "ao vivo" por ele, não pela chegada de pacotes (tela parada não gera pacote). */
+  readonly video: VideoState;
 }
 export type ProviderSnapshot = ProviderRow & { readonly lastTest: ProviderTest | null };
 export interface FleetSnapshot {
@@ -17,7 +20,7 @@ export interface FleetSnapshot {
 
 const BUDGET = Number(process.env.ENXAME_STEP_BUDGET ?? 30);
 
-export function buildSnapshot(db: DatabaseSync, killed: boolean): FleetSnapshot {
+export function buildSnapshot(db: DatabaseSync, killed: boolean, videoState?: (id: string) => VideoState): FleetSnapshot {
   const identities = listIdentities(db).map((id) => {
     const task = db.prepare('select id, instruction, state, cost_usd, degraded, early_stop_remaining from task where identity_id=? order by created_at desc limit 1').get(id.id) as
       { id: string; instruction: string; state: string; cost_usd: number; degraded: number; early_stop_remaining: number | null } | undefined;
@@ -29,6 +32,7 @@ export function buildSnapshot(db: DatabaseSync, killed: boolean): FleetSnapshot 
       id: id.id, name: id.name, handle: id.handle, state: id.state, task: task?.instruction ?? 'Aguardando',
       steps: agg.n, budget: BUDGET, costUsd: task?.cost_usd ?? 0, error: id.lastError ?? '', lastTools,
       degraded: (task?.degraded ?? 0) === 1, genMs: agg.g, earlyStopRemaining: task?.early_stop_remaining ?? 0,
+      video: videoState?.(id.id) ?? 'idle',
     };
   });
   const cfg = readProviderConfig(db); const tests = lastProviderTests(db);

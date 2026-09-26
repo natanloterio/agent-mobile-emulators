@@ -33,14 +33,19 @@ upsertIdentity(db, {
 const targets = listIdentities(db).map(({ id, serial }) => ({ id, serial }));
 const screen = createScreenCapture({ adb }); screen.start(targets);
 // Vídeo é a fonte principal; o screencap só corre enquanto o vídeo daquela identidade não está no ar (poster/fallback).
-const video = createVideoStreams({ adb, onState: (id, s) => { if (s === 'streaming') screen.pause(id); else screen.resume(id); } });
+// O servidor nasce depois do vídeo: mudança de estado antes dele existir só pula o broadcast.
+let broadcast: (() => void) | null = null;
+const video = createVideoStreams({ adb, onState: (id, s) => {
+  if (s === 'streaming') screen.pause(id); else screen.resume(id);
+  broadcast?.(); // o snapshot carrega o estado do stream ("ao vivo" na UI)
+} });
 video.start(targets);
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { video.stop(); screen.stop(); ollama.stop(); process.exit(0); });
 process.on('exit', () => { video.stop(); screen.stop(); ollama.stop(); });
 
 const daemonToken = randomUUID();
 const server = await startServer({
-  db, token: daemonToken, screen, video,
+  db, token: daemonToken, screen, video, videoState: (id) => video.state(id),
   // Kill switch derruba o Ollama que é nosso (spec §4.3); /resume + próximo objetivo o sobem de novo.
   onKill: () => { ollama.stop(); server.broadcast(); },
   onGoal: async (text) => {
@@ -59,5 +64,6 @@ const server = await startServer({
     server.broadcast(); return t;
   },
 });
+broadcast = () => server.broadcast();
 writeFileSync(CONFIG.daemonInfoPath, JSON.stringify({ port: server.port, token: daemonToken, pid: process.pid }));
 console.log(`[enxame-daemon] http://127.0.0.1:${server.port} · info em ${CONFIG.daemonInfoPath}`);

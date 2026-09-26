@@ -30,7 +30,7 @@ describe('scidFor / serverArgs', () => {
     for (const id of ['conta1', 'probe', 'B']) { expect(scidFor(id)).toMatch(/^[0-9a-f]{8}$/); expect(parseInt(scidFor(id), 16)).toBeLessThanOrEqual(0x7fffffff); }
     const a = serverArgs('0000abcd').join(' ');
     expect(a).toMatch(/^CLASSPATH=\/data\/local\/tmp\/enxame-scrcpy-server\.jar app_process \/ com\.genymobile\.scrcpy\.Server 4\.1 /);
-    for (const kv of ['scid=0000abcd', 'tunnel_forward=true', 'video=true', 'audio=false', 'control=false', 'raw_stream=true', 'cleanup=true', 'max_size=720', 'max_fps=30', 'video_bit_rate=2000000']) expect(a).toContain(kv);
+    for (const kv of ['scid=0000abcd', 'tunnel_forward=true', 'video=true', 'audio=false', 'control=false', 'raw_stream=true', 'cleanup=true', 'max_size=720', 'max_fps=30', 'video_bit_rate=2000000', 'video_codec_options=i-frame-interval:int=2']) expect(a).toContain(kv);
   });
 });
 
@@ -56,7 +56,7 @@ describe('createVideoStreams', () => {
     expect(h.v.state('A')).toBe('retrying'); expect(h.v.state('B')).toBe('starting');
     expect(h.children[0].killed).toBe(true); expect(h.calls).toContain('forwardRemove a 27183'); expect(h.children[1].killed).toBe(false);
     h.waits.shift()?.(); await h.settle();                       // retryMs passou
-    expect(h.children.filter((c) => c.serial === 'a')).toHaveLength(2); expect(h.calls.filter((c) => c === 'push a /repo/daemon/vendor/scrcpy-server-v4.1→/data/local/tmp/enxame-scrcpy-server.jar')).toHaveLength(1); // push só uma vez por serial
+    expect(h.children.filter((c) => c.serial === 'a')).toHaveLength(2); expect(h.calls.filter((c) => c === 'push a /repo/daemon/vendor/scrcpy-server-v4.1→/data/local/tmp/enxame-scrcpy-server.jar')).toHaveLength(2); // push a cada sessão (o servidor apaga o jar)
     h.v.stop();
   });
   it('setActive(false) mata os processos e remove os forwards; setActive(true) sobe de novo', async () => {

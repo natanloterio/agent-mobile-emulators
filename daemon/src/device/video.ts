@@ -31,7 +31,8 @@ export const scidFor = (id: string): string =>
 export function serverArgs(scid: string): readonly string[] {
   return [`CLASSPATH=${S.devicePath}`, 'app_process', '/', 'com.genymobile.scrcpy.Server', S.version,
     `scid=${scid}`, 'tunnel_forward=true', 'video=true', 'audio=false', 'control=false', 'raw_stream=true', 'cleanup=true',
-    `max_size=${S.maxSize}`, `max_fps=${S.maxFps}`, `video_bit_rate=${S.bitRate}`, 'log_level=warn'];
+    `max_size=${S.maxSize}`, `max_fps=${S.maxFps}`, `video_bit_rate=${S.bitRate}`,
+    'video_codec_options=i-frame-interval:int=2', 'log_level=warn']; // quadro-chave a cada 2 s (KEY_I_FRAME_INTERVAL)
 }
 
 /** O `adb shell` padrão tem stdout/stderr em pipe: drena para o servidor nunca bloquear; stderr vai para o log. */
@@ -54,7 +55,6 @@ export function createVideoStreams(deps: VideoDeps): VideoStreams {
   const connect = deps.connect ?? ((port: number) => connectTunnel(port, { timeoutMs: connectTimeoutMs, sleep }));
   const listeners = new Set<(p: VideoPacket) => void>();
   const states = new Map<string, VideoState>();
-  const pushed = new Set<string>();
   /** Encerradores das sessões vivas: `setActive(false)`/`stop()` chamam todos. Síncronos (matam o processo na hora), pois o SIGINT sai logo em seguida. */
   const live = new Map<string, () => void>();
   /** Loops ociosos ou em espera de retry acordam quando `active` muda ou no `stop()`. */
@@ -90,7 +90,8 @@ export function createVideoStreams(deps: VideoDeps): VideoStreams {
     let ender: (() => void) | null = null;
     try {
       setState(t.id, 'starting');
-      if (!pushed.has(t.serial)) { await deps.adb.push(t.serial, serverPath, S.devicePath); pushed.add(t.serial); }
+      // O scrcpy-server apaga o próprio jar ao iniciar: o push precisa acontecer a cada sessão (~2 ms).
+      await deps.adb.push(t.serial, serverPath, S.devicePath);
       await deps.adb.forward(t.serial, port, `localabstract:scrcpy_${scid}`);
       const spawned = deps.adb.shellSpawn(t.serial, serverArgs(scid)); child = spawned; drain(spawned, t.id);
       let endSession = () => {};
@@ -125,7 +126,7 @@ export function createVideoStreams(deps: VideoDeps): VideoStreams {
 
   return {
     start: (targets) => {
-      generation += 1; endLive(); wake(); states.clear(); pushed.clear();
+      generation += 1; endLive(); wake(); states.clear();
       targets.forEach((t, i) => { states.set(t.id, 'idle'); void loop(t, portFrom + i, generation); });
     },
     stop: () => { generation += 1; active = false; endLive(); wake(); },
