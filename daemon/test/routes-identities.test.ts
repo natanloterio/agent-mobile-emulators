@@ -238,3 +238,39 @@ describe('primeiro boot do clone (integrador, spec §4.1: imagem-base sem conta)
     expect(getIdentity(h.db, 'conta2')?.accountClearedAt).toBeNull();
   });
 });
+
+describe('AVD-base em uso sem identidade (integrador)', () => {
+  it('emulador aberto por fora com o AVD-base → 409, perguntando o nome ao próprio emulador', async () => {
+    const h = harness({}, ['emulator-5554', 'emulator-5570']);
+    const ops = { ...h.ops, adb: { ...h.ops.adb, emu: async (s: string, a: readonly string[]) => (a.join(' ') === 'avd name' ? (s === 'emulator-5570' ? 'golden\r\nOK' : 'mcp_test_playstore\nOK') : 'OK') } };
+    const s = await serve(h.db, ops);
+    const r = await s.post('/identities', { name: 'conta9' });
+    expect(r.status).toBe(409); expect(String(r.body?.error)).toMatch(/golden em uso \(emulator-5570\)/);
+    expect(h.log.some((l) => l.startsWith('clone'))).toBe(false);
+  });
+  it('emulador que não responde ao console não bloqueia', async () => {
+    const h = harness({}, ['emulator-5570']);
+    const ops = { ...h.ops, adb: { ...h.ops.adb, emu: async () => { throw new Error('KO'); } } };
+    const s = await serve(h.db, ops);
+    expect((await s.post('/identities', { name: 'conta9' })).status).toBe(201);
+  });
+});
+
+describe('restore espera o device voltar (integrador)', () => {
+  it('snapshot load derruba o adb por uns segundos: a sonda só roda com o serial de volta', async () => {
+    const h = harness();
+    h.db.prepare("update identity set snapshot_taken_at='2026-09-26T11:00:00Z' where id='conta1'").run();
+    let polls = 0;
+    const ops: IdentityOps = {
+      ...h.ops,
+      adb: { ...h.ops.adb, emu: async (sr, a) => { h.log.push(`emu ${sr} ${a.join(' ')}`); if (a.includes('load')) h.devices.splice(0); return 'OK'; } },
+      killSleep: async () => { polls += 1; if (polls === 2) h.devices.push('emulator-5554'); },
+      ensureReady: async (d, id) => { h.log.push(`probe online=${h.devices.includes(id.serial)}`); setIdentityState(d, id.id, 'idle', { lastError: null }); return READY; },
+    };
+    const s = await serve(h.db, ops);
+    expect((await s.post('/identities/conta1/restore', {})).status).toBe(200);
+    await s.settle();
+    expect(h.log).toContain('probe online=true');
+    expect(getIdentity(h.db, 'conta1')?.state).toBe('idle');
+  });
+});

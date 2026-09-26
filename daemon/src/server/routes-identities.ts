@@ -101,7 +101,8 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
       const avdName = `${AVD_PREFIX}${name}`;
       // Copiar o qcow2 de um emulador vivo gera clone inconsistente: o AVD-base precisa estar parado.
       const devices = await ops.adb.devices();
-      const busy = listIdentities(ctx.db).find((i) => i.avdName === base && devices.includes(i.serial));
+      const busy = listIdentities(ctx.db).find((i) => i.avdName === base && devices.includes(i.serial))
+        ?? await runningAvd(devices, base);
       if (busy) return ctx.send(409, { error: `AVD-base ${base} em uso (${busy.serial}): pare esse emulador antes de provisionar` });
       const ports = await ops.leasePorts(ctx.db);
       try { await ops.clone(avdName); } catch (e) { return ctx.send(500, { error: `clone do AVD falhou: ${errMsg(e)}` }); }
@@ -113,6 +114,15 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     });
     provisioning = job.catch(() => undefined);
     await job;
+  }
+
+  /** Emulador aberto por fora (sem identidade no banco) também prende o AVD-base: pergunta o nome ao console de cada um. */
+  async function runningAvd(devices: readonly string[], avd: string): Promise<{ serial: string } | undefined> {
+    for (const serial of devices.filter((d) => d.startsWith('emulator-'))) {
+      const name = await ops.adb.emu(serial, ['avd', 'name']).then((o) => o.split(/\r?\n/)[0].trim()).catch(() => '');
+      if (name === avd) return { serial };
+    }
+    return undefined;
   }
 
   const boot: Action = async (ctx, id) => {
@@ -187,6 +197,13 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     done(ctx, id.id);
   };
 
+  /** Espera o serial reaparecer como `device` no adb (até ~60 s); depois a sonda decide. */
+  async function waitBack(serial: string): Promise<void> {
+    const sleep = ops.killSleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+    await sleep(1000);
+    for (let k = 0; k < 60 && !(await ops.adb.devices().catch(() => [] as readonly string[])).includes(serial); k++) await sleep(1000);
+  }
+
   const restore: Action = async (ctx, id) => {
     const body = await parse(ctx, RestoreBody); if (!body) return;
     if (id.state === 'banned' || id.state === 'running' || id.discardedAt) return ctx.send(409, { error: `restore indisponível em ${id.state}` });
@@ -198,6 +215,8 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     done(ctx, id.id);
     // Restaurar sempre seguido de verificação antes de qualquer tarefa; falha vira needs-human, nunca re-login automático (spec §4.1).
     background(async () => {
+      // O snapshot load derruba o adb do device por alguns segundos (medido 2026-09-26): sondar antes dá "device offline" falso.
+      await waitBack(id.serial);
       const cur = getIdentity(ctx.db, id.id) ?? id;
       const probe = await ops.ensureReady(ctx.db, cur);
       if (!probe.ready) setIdentityState(ctx.db, id.id, 'needs-human', { lastError: `sessão inválida após restore: ${probe.details.join(' · ') || probe.failureClass}` });

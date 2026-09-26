@@ -13,6 +13,7 @@ import { bootEmulator, createEmulatorSupervisor } from './fleet/emulator.js';
 import { ensureIdentityReady } from './fleet/identity.js';
 import { pickTestIdentity } from './fleet/pick.js';
 import { reconcileOnStart } from './fleet/reconcile.js';
+import { clearTargetAccount } from './fleet/account.js';
 import { planGoal, type PlanDeps } from './leader/plan.js';
 import { leasePorts } from './fleet/ports.js';
 import { createHostMetrics } from './host/metrics.js';
@@ -47,12 +48,13 @@ const disk = createDiskUsage();
 // ter sido re-alocadas por lease); num banco novo o token é gerado e a sonda o aplica no device por broadcast.
 const existing = getIdentity(db, 'conta1');
 const seed = {
-  id: 'conta1', name: 'conta1', handle: '@p1t41a.meta.test', avdName: CONFIG.avd.base, serial: 'emulator-5554',
+  // AVD próprio da conta1, independente de `CONFIG.avd.base` (a base de clonagem pode ser trocada por ENXAME_AVD_BASE).
+  id: 'conta1', name: 'conta1', handle: '@p1t41a.meta.test', avdName: 'mcp_test_playstore', serial: 'emulator-5554',
   consolePort: 5554, mcpHostPort: 8080, mcpToken: randomUUID(), deviceSlug: 'conta1',
   appPackage: CONFIG.targetApp.package, appVersionName: CONFIG.targetApp.versionName, state: 'logged-in' as const,
 };
 upsertIdentity(db, existing ? {
-  ...seed, handle: existing.handle, serial: existing.serial, consolePort: existing.consolePort, mcpHostPort: existing.mcpHostPort,
+  ...seed, avdName: existing.avdName, handle: existing.handle, serial: existing.serial, consolePort: existing.consolePort, mcpHostPort: existing.mcpHostPort,
   mcpToken: existing.mcpToken, state: existing.state,
 } : seed);
 
@@ -81,7 +83,7 @@ const identityRoutes = createIdentityRoutes({
   ensureReady: (d, identity) => ensureIdentityReady(d, identity, { adb }),
   // Boot/descarte mudam quem tem device: vídeo e miniatura recomeçam com a lista nova (serial pode ter mudado por lease).
   onIdentitiesChanged: () => { const t = liveTargets(); screen.start(t); video.start(t); },
-  clearAccount: async (identity) => { await adb.shell(identity.serial, ['pm', 'clear', identity.appPackage]); },
+  clearAccount: async (identity) => { await clearTargetAccount(adb, identity.serial, identity.appPackage); },
 });
 
 // Enxame (spec inc. 5 §3.2): líder planeja sobre a frota; scheduler roda um worker por identidade pronta, com pacing.
