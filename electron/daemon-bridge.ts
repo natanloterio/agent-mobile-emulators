@@ -19,7 +19,7 @@ function alive(pid: number): boolean { try { process.kill(pid, 0); return true; 
 export function ensureDaemon(projectRoot: string): ChildProcess | null {
   const info = readInfo();
   if (info && alive(info.pid)) return null;
-  const child = spawn('node', ['--env-file=.env', 'dist-daemon/index.js'], { cwd: projectRoot, stdio: 'inherit', env: process.env });
+  const child = spawn('node', ['--env-file-if-exists=.env', 'dist-daemon/index.js'], { cwd: projectRoot, stdio: 'inherit', env: process.env });
   return child;
 }
 

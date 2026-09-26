@@ -14,11 +14,11 @@
     "start": "electron .",
     "typecheck": "tsc -b --noEmit",
     "daemon:build": "tsc -p tsconfig.daemon.json",
-    "daemon:start": "node --env-file=.env dist-daemon/index.js",
+    "daemon:start": "node --env-file-if-exists=.env dist-daemon/index.js",
     "test": "vitest run",
     "test:integration": "ENXAME_INTEGRATION=1 vitest run --project daemon",
-    "real:run": "npm run daemon:build && node --env-file=.env dist-daemon/cli/run-real.js",
-    "bench": "npm run daemon:build && node --env-file=.env dist-daemon/cli/bench.js"
+    "real:run": "npm run daemon:build && node --env-file-if-exists=.env dist-daemon/cli/run-real.js",
+    "bench": "npm run daemon:build && node --env-file-if-exists=.env dist-daemon/cli/bench.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.65",

@@ -55,10 +55,18 @@ export const CONFIG = {
   },
 } as const;
 
-const EnvSchema = z.object({ ANTHROPIC_API_KEY: z.string().min(20, 'ANTHROPIC_API_KEY ausente ou curta') });
+/**
+ * A chave da Anthropic é opcional: com todos os papéis locais (Ollama) o daemon roda sem ela. Papel na nuvem sem chave
+ * falha só na hora de usar, com mensagem clara (líder cai na regra determinística; escalonamento é pulado).
+ * Chave presente mas curta demais é erro de digitação e barra a subida.
+ */
+const EnvSchema = z.object({
+  ANTHROPIC_API_KEY: z.string().trim().optional()
+    .refine((k) => !k || k.length >= 20, 'ANTHROPIC_API_KEY curta demais: confira o valor no .env (ou deixe vazia para usar só modelos locais)'),
+});
 
-export function loadEnv(): { anthropicApiKey: string } {
-  const parsed = EnvSchema.safeParse(process.env);
+export function loadEnv(env: NodeJS.ProcessEnv = process.env): { anthropicApiKey: string } {
+  const parsed = EnvSchema.safeParse(env);
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join('; '));
-  return { anthropicApiKey: parsed.data.ANTHROPIC_API_KEY };
+  return { anthropicApiKey: parsed.data.ANTHROPIC_API_KEY ?? '' };
 }
