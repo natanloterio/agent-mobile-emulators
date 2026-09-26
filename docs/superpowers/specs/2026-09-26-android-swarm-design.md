@@ -40,19 +40,43 @@ Medidas nesta máquina em 2026-09-26, não estimadas:
 | Item | Valor |
 |---|---|
 | Host | i9-14900K (32 threads), 125 GB RAM, RTX 5090 32 GB VRAM, 397 GB disco livre |
-| RSS de um emulador | 4,6 GB |
+| RSS de um emulador | 4,6 GB **com `hw.ramSize=2G` no guest** (pico 5,0 GB; multiplicador host/guest 2,16×) |
+| Baseline do host sem emulador | 38,3 GiB (IDE, navegador, Docker, etc.) |
 | Tamanho de um AVD | 3,4 GB (cresce com dados do app) |
 | Teto por RAM/CPU | 8–12 emuladores responsivos |
 | **Teto duro do protocolo adb** | **16 emuladores** (varredura de portas ímpares 5555–5585) |
 | Boot frio até `sys.boot_completed` | ~40 s |
-| `tools/list` do servidor MCP | 57 tools, ~7,7k tokens (chars/4) |
-| Subset de 11 tools p/ fluxo de comentários | ~1,5k tokens (−80%) |
-| `android_get_screen_state` (tela esparsa) | ~2,3k tokens |
+| `tools/list` do servidor MCP | 57 tools, ~6,4k tokens |
+| Subset de 11 tools p/ fluxo de comentários | ~1,4k tokens (−78%) |
+| `android_get_screen_state` | 2,1k–2,9k tokens (média ~2,6k) |
+| Preâmbulo anti-injeção por dump | ~165 tokens |
 | Laya: primeira carga / inferência | 67 s / 20–47 ms |
 | Laya zero-shot no nosso domínio | 5/9 acertos, com erros de alta confiança |
 
+Contagens de token medidas com tokenizer real (`o200k_base`), não `chars/4`. **Ressalva:** é
+tokenizer de outro fornecedor; a ordem de grandeza vale, o dígito não. A régua `chars/4` foi
+abandonada porque erra em direções opostas: superestima schemas de tool (~chars/4,65) e
+subestima a árvore de acessibilidade em 44–66% (~chars/2,5–2,8, por causa dos `node_<hash>`,
+tabs, `res_id` e tuplas de coordenada).
+
 **Alvo de escala: ≤ 10 identidades simultâneas, tudo local.**
-Consumo projetado: 60–100 GB de disco, ~46 GB de RAM.
+
+`hw.ramSize` é restrição de primeira ordem e precisa ser declarada, não herdada do default:
+
+| n | guest | RAM total com baseline | cabe em 125,6 GiB |
+|---|---|---|---|
+| 8 | 2G | 74,9 GiB | sim |
+| 10 | 2G | 83,6 GiB | sim |
+| 12 | 2G | 92,2 GiB | sim |
+| 10 | **4G** | **126,9 GiB** | **não** |
+
+**Tensão não resolvida:** 2G de guest é apertado para Instagram + Play Services + serviço de
+acessibilidade + app MCP no Android 14, e a seção 4.1 exige que o cache do app **acumule** —
+o que empurra para 4G, onde o alvo de 10 deixa de caber. Decidir por medição na fase 1:
+rodar uma identidade a 2G sob carga real e observar `lowmemorykiller`. Se 2G não servir, o
+alvo cai para ~8.
+
+Consumo de disco projetado: 60–100 GB.
 
 ### Viabilidade do alvo (validada)
 
@@ -73,18 +97,52 @@ Uma identidade é um AVD nomeado mais seu estado de provisionamento. Não é um 
 genérico que recebe login; é um device que pertence a uma conta e envelhece com ela.
 
 **Imagem-base (golden).** Construída uma vez: Play Store API 34 x86_64, app MCP instalado,
-permissões concedidas, servidor configurado (token, `auto_start_on_boot`, `device_slug`),
-nenhuma conta de terceiro. Snapshot.
+permissões concedidas, `auto_start_on_boot` ligado, auto-update da Play Store desligado,
+nenhuma conta de terceiro. **Sem token e sem `device_slug`** — ver abaixo. Snapshot.
 
-**Materialização.** Clonar o AVD-base, novo nome e serial. Login acontece **uma vez**, em
-janela visível, feito por humano — validado na prática: o Instagram foi logado manualmente e
-funcionou. Snapshot vira o ponto de restauração daquela identidade.
+**Materialização.** Clonar o AVD-base, novo nome e serial. **Token e `device_slug` são
+gerados por identidade neste momento, nunca na imagem-base:** o servidor MCP gera o token
+uma vez no primeiro launch e o preserva, então configurá-lo antes de clonar faria todos os
+clones nascerem com o mesmo segredo e o token deixaria de distinguir device algum.
+
+Login acontece **uma vez**, em janela visível, feito por humano — validado na prática: o
+Instagram foi logado manualmente e funcionou. Snapshot vira o ponto de restauração daquela
+identidade, com `snapshot_taken_at` registrado.
+
+**Acesso exclusivo por lease, não por convenção.** Todo device tem um único dono de cada vez:
+`lease_owner` + `lease_expires_at` + heartbeat na tabela `identity`, concedidos pelo daemon.
+Um worker sem lease válido não fala com o device. Isolamento só no prompt — "o worker não
+sabe dos outros devices" — não é controle de acesso: no host, `adb forward` expõe cada
+servidor em `127.0.0.1:<mcp_host_port>` e qualquer processo com o token dirige qualquer
+device. Combinado com um erro de alocação de porta, isso age na conta errada em silêncio, e
+a ação é irreversível.
 
 **Snapshot não é reset por execução.** Numa conta persistente o histórico e o cache do app
 devem se acumular; reverter a cada job descarta continuidade e faz a conta parecer um device
 recém-formatado toda vez. Snapshot é recuperação de desastre.
 
-**Ciclo de vida:** `blank → provisioned → logged-in → running → dirty → restored`.
+**Snapshot tem prazo de validade, e restaurar não é gratuito.** Um snapshot congela o token
+de sessão do app do momento em que foi tirado. Restaurar semanas depois reapresenta uma
+sessão obsoleta, com o relógio do guest vindo do `ram.img`, o que tende a forçar re-login —
+e re-login de uma sessão que reaparece após silêncio é justamente o tipo de sinal
+comportamental que a seção 10 identifica como risco principal. O mecanismo de recuperação é
+também um gatilho do evento que ele deveria curar. Portanto:
+
+- re-snapshot a cada execução bem-sucedida, substituindo o anterior, para que o ponto de
+  restauração nunca fique velho;
+- `snapshot_taken_at` acima de um limite configurável marca a identidade como
+  `restore-unsafe`: restaurar exige confirmação humana, não acontece automaticamente;
+- restauração sempre seguida de verificação de sessão antes de qualquer tarefa; sessão
+  inválida vira `needs-human`, não re-login automático.
+
+**Estado terminal existe.** O ciclo inclui `banned`, com `banned_reason` e `banned_at`.
+Identidade banida sai do scheduler por dado, não por alguém editar o estado à mão, e o
+usuário tem um procedimento explícito: exportar o que houver de artefato, **liberar os 3,4+ GB
+de disco** descartando o AVD, e provisionar uma identidade nova a partir da imagem-base. Sem
+isso, cada banimento deixa disco preso a uma conta morta e o sistema degrada em silêncio.
+
+**Ciclo de vida:** `blank → provisioned → logged-in → running → dirty → restored`, mais o
+terminal `banned`.
 
 **Sonda de prontidão.** Um device entra na frota apenas com os cinco sinais verdes:
 `sys.boot_completed=1`, accessibility service ativo, `initialize` HTTP 200, `tools/list`
@@ -148,9 +206,31 @@ Ao ampliar, o daemon derruba o stream de thumbnail e abre um novo em alta qualid
 scrcpy não renegocia em runtime. Custo permanece constante: N−1 streams baratos + 1 caro.
 
 **scrcpy, não a API gRPC do emulador.** A gRPC seria mais direta mas só serve emulador;
-scrcpy também serve device físico e já traz injeção de input. Requisitos: **scrcpy ≥ 4.x**
-(o 1.25 do apt falha ao injetar toque no Android 14 com `NullPointerException` em
-`Device.injectEvent`) e binário **empacotado no app**, não dependente da máquina.
+scrcpy também serve device físico e já traz injeção de input. Requisito: **scrcpy ≥ 4.x** e
+binário **empacotado no app**, não dependente da máquina. O 1.25 distribuído por apt falha ao
+injetar toque no Android 14 (`AssertionError` sobre `InvocationTargetException` em
+`Device.injectEvent`, com `NullPointerException` na raiz).
+
+**Pendência bloqueante da fase 2, não requisito resolvido:** verificou-se que o 4.1 **renderiza**
+no Android 14; **não** se verificou que ele **injeta toque**. Como a tela ampliada com input é
+a única interface de provisionamento — é assim que o humano loga a conta — a fase 2 depende de
+uma capacidade ainda não demonstrada. Primeiro item da fase 2: injetar um toque pelo 4.1 e
+confirmar o efeito pela árvore de acessibilidade. Se falhar, a alternativa é janela nativa do
+emulador para provisionar e streaming só para visualização.
+
+**Três correções no modelo de custo de vídeo:**
+
+- O encoder é **software dentro do guest** (`c2.android.avc.encoder`). O custo de encode de N
+  streams não é do host: é CPU do guest, competindo com o app sob automação. A conta
+  "N−1 baratos + 1 caro" está no lugar errado e nunca foi medida.
+- O scrcpy liga **áudio** por padrão (`c2.android.opus.encoder`), inútil aqui: `--no-audio`
+  em todos os streams.
+- Dirigir `scrcpy-server` a partir de um daemon Node implica **reimplementar seu protocolo
+  binário privado**, sem garantia de estabilidade entre major versions (o server saltou de
+  41 KB no 1.25 para 734 KB no 4.1). Isso é superfície de manutenção contínua, exatamente o
+  que a seção 2 excluiu. Decisão em aberto, a resolver na fase 2 com spike: usar um cliente
+  scrcpy existente como processo, ou usar a gRPC do emulador para o grid e reservar scrcpy só
+  para a tela com controle.
 
 **Processos.** Um daemon Node é dono de `emulator`, `adb` e um `scrcpy-server` por device,
 e supervisiona: se um stream morre, reinicia e o tile aparece degradado em vez de congelar.
@@ -187,12 +267,31 @@ implementação — não há repo, worktree nem PR; o artefato é ação num app
 a um worker seriam 57×N definições por turno e risco de agir na conta errada. O `device_slug`
 do app deixa o nome da tool inequívoco no log (`android_conta3_tap`).
 
-**Economia de tokens, em ordem de impacto:**
+**Economia de tokens.** Estimativa de referência para responder comentários numa conta:
+**40–60 passos**, não 20. Com ~2,6k por tela e 50 turnos, sem poda são ~3,6 M tokens por
+conta.
 
-1. **Prompt caching** — as ~7,7k de tool definitions são prefixo fixo, candidato ideal a cache.
-2. **Poda de histórico** — o lever real. A ~2,3k por screen state, 20 passos acumulam ~46k de
-   telas que ninguém relê. Manter os últimos 1–2 estados.
-3. **Subset de tools por workload** (−80%) — ajuda na margem e reduz confusão do modelo.
+1. **Poda de histórico** — o maior lever, isolado: corta ~84%, de 3,6 M para ~578 k por conta.
+   Manter os últimos 1–2 estados.
+2. **Subset de tools por workload** — depois da poda, as definições de tool viram **~55% do
+   que sobrou**, e o subset corta ~43% desse restante. Deixa de ser margem e passa a ser o
+   segundo maior item.
+3. **Prompt caching** — real, porém menos somável do que parece, por três tensões que o design
+   precisa resolver em vez de ignorar:
+   - subset por workload **quebra o prefixo exato** de cache: cada variante é uma entrada;
+   - `device_slug` torna os nomes de tool distintos por device (`android_conta3_tap`), o que
+     significa **um cache por identidade**, cada um com seu custo de escrita;
+   - o pacing da seção adiante espaça ações de propósito, e cache com TTL de 5 min expira
+     entre passos. Mitigação: **TTL estendido de 1 h**, e o teto de ações/hora por identidade
+     é definido em conjunto com o TTL, não isoladamente.
+
+**Memória de tarefa é durável, não contextual.** Poda resolve custo e cria um problema de
+correção: um worker que só enxerga os últimos 2 estados não sabe quais comentários já
+respondeu, e responder duas vezes é irreversível e visível para terceiros. Logo o worker
+consulta e grava um **ledger de itens tratados** (tabela `step` mais um índice por
+identidade e item externo) antes de agir, e o teto de contexto é declarado: ao aproximar-se
+dele a tarefa é encerrada e continuada numa sessão nova a partir do ledger, nunca truncada
+em silêncio.
 
 **Escada de escalonamento.** Worker barato tem orçamento de passos. Escala para o modelo forte
 quando: tela inesperada N vezes, orçamento estourado, ou ação marcada como sensível.
@@ -216,7 +315,7 @@ O Claude Agent SDK foi descartado por ser específico de um provedor.
 | Papel | Volume | Perfil |
 |---|---|---|
 | Líder (decomposição) | 1× por objetivo | modelo forte |
-| Worker por device | 20 passos × N contas | barato e rápido — onde local ganha |
+| Worker por device | 40–60 passos × N contas | barato e rápido — onde local ganha |
 | Escalonamento | raro | modelo forte |
 
 **Concorrência é o gargalo local, não o tamanho do modelo.** N workers no mesmo endpoint é
@@ -316,7 +415,8 @@ SQLite, escritor único (daemon).
 
 - **identity** — id, nome, avd_name, system_image, console_port, mcp_host_port (ambas
   **alocadas por lease e persistidas**, não derivadas do índice), app_alvo,
-  app_version_name (comparada pela sonda), handle_da_conta, estado, ultimo_snapshot, notas. Token e credenciais no keychain, referenciados
+  app_version_name (comparada pela sonda), handle_da_conta, estado, snapshot_taken_at,
+  lease_owner, lease_expires_at, banned_reason, banned_at, notas. Token e credenciais no keychain, referenciados
   por handle.
 - **goal** — id, texto, padrao_decomposicao, estado, criado_em, custo_total.
 - **task** — id, goal_id, identity_id (nulo = qualquer), instrucao, estado, tentativas,
@@ -331,7 +431,9 @@ SQLite, escritor único (daemon).
 1. **Fundação** — daemon com adb server isolado e binário pinado, modelo de dados, ciclo de
    vida do AVD, sonda de prontidão de 5 sinais, lease de portas com detecção de colisão.
    Uma identidade, um device.
-2. **Cockpit** — grid, ampliação com input, provisionamento manual assistido.
+2. **Cockpit** — **primeiro item: spike de injeção de toque com scrcpy 4.1 no Android 14**,
+   que é pré-requisito de todo o resto da fase; depois grid, ampliação com input,
+   provisionamento manual assistido. Decidir aqui grid por gRPC × grid por scrcpy.
 3. **Execução** — worker único com LLM, loop de passos, poda de histórico, gate determinístico.
 4. **Enxame** — líder, decomposição, scheduler, pacing, contabilidade de custo.
 5. **Provedores** — tela de configuração por papel, teste de conexão real, piso de qualidade.
@@ -346,5 +448,12 @@ SQLite, escritor único (daemon).
   Decisão do usuário, registrada aqui como restrição conhecida.
 - **Play Integrity em ações.** Validamos launch e sessão; publicação e cadastro não foram
   testados.
+- **Auto-update do app alvo é o evento adverso mais frequente**, não o banimento: o Instagram
+  atualiza cerca de toda semana, e um update invalida fixtures e derruba N identidades ao
+  mesmo tempo. Mitigado pela sonda de 5 sinais, nunca eliminado.
+- **Snapshot envelhecido é risco ativo, não inerte:** restaurar um ponto antigo pode provocar
+  o checkpoint que a restauração tentava resolver. Ver seção 4.1.
+- **Injeção de input pelo scrcpy não está demonstrada** no Android 14 com a versão escolhida.
+  Bloqueia a fase 2 até o spike.
 - **Fine-tune do Laya depende de volume de dados** que só existe depois da fase 3. Se o volume
   não vier, a fase 6 não acontece e o custo por passo fica no patamar do LLM.
