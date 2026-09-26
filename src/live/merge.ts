@@ -14,7 +14,7 @@ const toVideoState = (v: string | undefined): VideoStreamState | undefined =>
 
 const toIdentity = (l: LiveIdentity, f: LiveFrame | undefined): Identity => ({
   id: l.id, name: l.name, handle: l.handle, state: l.paused ? 'paused' : STATE_MAP[l.state] ?? 'offline',
-  task: l.degraded ? `${l.task} · degradada` : l.task, steps: l.steps, budget: l.budget, cost: l.costUsd, error: l.error,
+  task: l.degraded ? `${l.task} · degradada` : l.task, steps: l.steps, budget: l.budget, cost: l.costUsd, error: l.error || (l.bannedReason ? `banida: ${l.bannedReason}` : ''),
   genMs: l.genMs ?? 0, degraded: l.degraded ?? false, earlyStopRemaining: l.earlyStopRemaining ?? 0,
   video: toVideoState(l.video), live: l,
   ...(f ? { screen: { dataUrl: `data:image/png;base64,${f.png}`, at: f.at } } : {}),

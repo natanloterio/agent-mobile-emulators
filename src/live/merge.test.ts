@@ -28,6 +28,10 @@ describe('mergeLive', () => {
     ] });
     expect(out.map((d) => d.id)).toEqual(['b']); expect(out[0].state).toBe('paused');
   });
+  it('banida sem erro mostra o motivo do banimento', () => {
+    const out = mergeLive(IDENTITIES, { ...live, identities: [{ ...live.identities[0], state: 'banned', error: '', bannedReason: 'checkpoint' }] });
+    expect(out[0].error).toBe('banida: checkpoint');
+  });
   it('traduz offline e idle/running/logged-in', () => {
     const st = (s: string) => mergeLive(IDENTITIES, { ...live, identities: [{ ...live.identities[0], state: s }] })[0].state;
     expect(st('offline')).toBe('offline'); expect(st('running')).toBe('running'); expect(st('logged-in')).toBe('idle'); expect(st('idle')).toBe('idle');

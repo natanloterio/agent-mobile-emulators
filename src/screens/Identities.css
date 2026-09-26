@@ -3,7 +3,7 @@
 .ids__table { padding: 16px 32px 24px; overflow-x: auto; }
 .idrow {
   display: grid;
-  grid-template-columns: minmax(150px, 1.3fr) 120px minmax(150px, 1fr) 150px minmax(140px, 1fr) 110px 150px;
+  grid-template-columns: minmax(130px, 1.2fr) 120px minmax(130px, 1fr) 130px minmax(120px, 1fr) 100px 160px;
   gap: 14px; padding: 14px 0; font-size: 15px; align-items: center; min-width: 980px;
 }
 .idrow--head { font-size: 13px; }
@@ -32,10 +32,12 @@
 .idcard__cell-label { font-size: 12px; }
 .idcard__action { min-height: 44px; }
 .ids__cards { display: flex; flex-direction: column; gap: 14px; }
-.idrow__actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.idrow__actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; min-width: 0; }
+.idrow__actions .btn { white-space: normal; text-align: center; padding: 7px 10px; font-size: 14px; line-height: 1.2; }
 .idrow__error { grid-column: 1 / -1; }
-.idrow__login { display: flex; flex-direction: column; gap: 6px; }
-.idrow__login-btns { display: flex; gap: 6px; }
+.idrow__login { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.idrow__login-btns .btn { flex: 1; padding: 7px 8px; font-size: 14px; }
+.idrow__login-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 .idrow__input {
   font: inherit; font-size: 14px; padding: 8px 12px; border: 1px solid var(--color-dark);
   border-radius: var(--radius-control); background: var(--color-white); min-width: 0;
