@@ -49,7 +49,7 @@ Medidas nesta máquina em 2026-09-26, não estimadas:
 | Tamanho de um AVD | 3,4 GB (cresce com dados do app) |
 | Teto por RAM/CPU | 8–12 emuladores responsivos |
 | **Teto duro do protocolo adb** | **16 emuladores** (varredura de portas ímpares 5555–5585) |
-| Boot frio até `sys.boot_completed` | ~40 s |
+| Boot frio até `sys.boot_completed` | ~40 s (não re-medido; **`boot_completed` ≠ pronto**) |
 | `tools/list` do servidor MCP | 57 tools, ~6,4k tokens |
 | Subset de 11 tools p/ fluxo de comentários | ~1,4k tokens (−78%) |
 | `android_get_screen_state` | 2,1k–2,9k tokens (média ~2,6k) |
@@ -69,6 +69,16 @@ tetos independentes são 16 (protocolo adb), 8 (CPU) e 8–10 (RAM, conforme `hw
 o menor.
 
 `hw.ramSize` é restrição de primeira ordem e precisa ser declarada, não herdada do default:
+
+**Duas definições que faltavam, porque sem elas os números não querem dizer nada:**
+
+- **"Responsivo"** é um SLA, não impressão: p95 de `android_get_screen_state` abaixo de um
+  limite declarado, sob carga real. O teto de emuladores é derivado do recurso mais restritivo
+  que ainda cumpre esse SLA — hoje, CPU.
+- **"Tempo de frota pronta"** é requisito de produto, não detalhe de implementação: num sistema
+  "objetivo e sai de perto", é quanto o usuário espera entre mandar o objetivo e a frota estar
+  operando. `sys.boot_completed` é só o primeiro dos cinco sinais; accessibility, servidor MCP e
+  Play Services vêm depois. Medir e declarar, incluindo o efeito dos starts escalonados.
 
 **CPU é teto independente e mais apertado que RAM.** Com `hw.cpu.ncore=4`, dez identidades
 pedem 40 vCPU contra 32 threads: **1,25× de oversubscrição antes de qualquer trabalho**, e um
@@ -134,6 +144,9 @@ genérico que recebe login; é um device que pertence a uma conta e envelhece co
 
 **Imagem-base (golden).** Construída uma vez: Play Store API 34 x86_64, app MCP instalado,
 permissões concedidas, `auto_start_on_boot` ligado, auto-update da Play Store desligado,
+`hw.ramSize`, `dataPartition.size` e a configuração de GPU **fixadas e versionadas** (hoje
+`hw.gpu.enabled=no` no `config.ini` coexiste com `-gpu host` na linha de comando, e o consumo
+de VRAM da seção 3 depende de qual dos dois venceu),
 nenhuma conta de terceiro. **Sem token e sem `device_slug`** — ver abaixo. Snapshot.
 
 **Materialização.** Clonar o AVD-base, novo nome e serial. **Token e `device_slug` são
@@ -182,7 +195,9 @@ terminal `banned`.
 
 **Sonda de prontidão.** Um device entra na frota apenas com os cinco sinais verdes:
 `sys.boot_completed=1`, accessibility service ativo, `initialize` HTTP 200, `tools/list`
-com a contagem esperada, e **`versionName` do app alvo igual ao registrado na identidade**.
+com **as tools que o workload usa presentes** — presença, nunca contagem: o servidor está numa
+versão `-dev` e um tool novo no upstream derrubaria a sonda em todos os devices ao mesmo tempo
+—, e **`versionName` do app alvo igual ao registrado na identidade**.
 Roda a cada subida do device.
 
 O quinto sinal existe porque a imagem Play Store traz auto-update ligado e o app alvo se
@@ -259,6 +274,13 @@ emulador para provisionar e streaming só para visualização.
 - O encoder é **software dentro do guest** (`c2.android.avc.encoder`). O custo de encode de N
   streams não é do host: é CPU do guest, competindo com o app sob automação. A conta
   "N−1 baratos + 1 caro" está no lugar errado e nunca foi medida.
+- A conta "N−1 baratos + 1 caro" **nunca foi medida** e precisa ser, com 4+ streams reais,
+  antes de sustentar o teto de frota.
+- **`WebCodecs` está afirmado como resolvido e é suspeita, não certeza.** Dez `VideoDecoder`
+  num renderer Electron sobre Wayland + NVIDIA é combinação historicamente instável, que cai
+  para decode por software sem avisar. Evidência local: nesta máquina o Claude Desktop roda com
+  `--use-gl=disabled` e o VS Code com `--render-node-override`. Spike de 10 decoders antes da
+  fase 3.
 - O scrcpy liga **áudio** por padrão (`c2.android.opus.encoder`), inútil aqui: `--no-audio`
   em todos os streams.
 - Dirigir `scrcpy-server` a partir de um daemon Node implica **reimplementar seu protocolo
@@ -419,9 +441,16 @@ de worker.
 
 1. Categorias sobrepostas produzem erro que parece do modelo. A tela do Play Store era
    simultaneamente `store` e `consent_dialog`.
-2. **Perguntas computáveis não vão para modelo nenhum.** "Existe campo de texto?" se responde
-   varrendo a árvore por nó editável: exato, grátis, determinístico. Vira regra de
-   arquitetura — separar perguntas computáveis de perguntas de julgamento.
+2. **Perguntas computáveis não vão para modelo nenhum** — mas computável é sobre a
+   **affordance**, não sobre a presença do nó. O exemplo que usei no spike demonstra o modo de
+   falha da própria regra: no launcher não existe nenhum nó editável, e mesmo assim dá para
+   digitar, tocando antes no `FrameLayout` de busca (`desc:Search`, `clk,foc`). A resposta
+   determinística "não há campo de texto" é exata sobre a árvore e enganosa sobre o que o
+   agente consegue fazer — e isso na primeira tela de todo job.
+   A regra correta é: pergunta computável é a que se responde por uma propriedade estável da
+   árvore (existe nó com este `res_id`? este nó está habilitado? a tela mudou?). "Consigo
+   digitar aqui com no máximo um toque?" é julgamento disfarçado de consulta. **Quem classifica
+   cada pergunta em qual balde é decisão de design registrada, não escolha do implementador.**
 
 **Consequência:** Laya sai do caminho crítico e vai para a fase 6 (seção 9), sem uso zero-shot. Sequência:
 workers LLM rodam, cada decisão vira exemplo rotulado, fine-tune, e então ele assume a fração
