@@ -4,6 +4,7 @@ import { Heading } from '../components/Heading';
 import { PhoneMock } from '../components/PhoneMock';
 import { Pill } from '../components/Pill';
 import { CURRENT_GOAL_TEXT } from '../data/goals';
+import type { VideoBus } from '../live/videoBus';
 import type { Stat, TileVM } from '../state/selectors';
 import './Cockpit.css';
 
@@ -17,9 +18,10 @@ interface CockpitProps {
   readonly onOpen: (index: number) => void;
   readonly onKill: () => void;
   readonly onNew: () => void;
+  readonly bus?: VideoBus | null;
 }
 
-export function Cockpit({ tiles, goalStats, goalPct, showCost, fullTiles, isMobile, onOpen, onKill, onNew }: CockpitProps) {
+export function Cockpit({ tiles, goalStats, goalPct, showCost, fullTiles, isMobile, onOpen, onKill, onNew, bus }: CockpitProps) {
   return (
     <div className="screen">
       <header className="screen__header">
@@ -56,6 +58,9 @@ export function Cockpit({ tiles, goalStats, goalPct, showCost, fullTiles, isMobi
               streamLabel="320p · 4 fps"
               overlay={t.overlay || undefined}
               maxHeight={fullTiles ? '360px' : '260px'}
+              videoId={t.id}
+              bus={bus}
+              screen={t.screen}
             />
             <div className="tile__head">
               <span className="tile__name">{t.name}</span>

@@ -1,8 +1,15 @@
+import { useEffect, useRef, useState } from 'react';
+import { frameAgeLabel } from '../live/frameAge';
+import { createH264Sink } from '../live/h264Sink';
+import { useNow } from '../live/useNow';
+import type { VideoBus } from '../live/videoBus';
 import './PhoneMock.css';
 
 interface Row { readonly a: string; readonly b: string }
 const TILE_ROWS: readonly Row[] = [{ a: '80%', b: '55%' }, { a: '70%', b: '40%' }];
 const FULL_ROWS: readonly Row[] = [{ a: '70%', b: '45%' }, { a: '85%', b: '30%' }, { a: '60%', b: '50%' }, { a: '75%', b: '35%' }];
+/** Intervalo mínimo entre atualizações de estado da idade do vídeo: o canvas roda a 30 fps, o React não. */
+const VIDEO_AT_THROTTLE_MS = 500;
 
 interface PhoneMockProps {
   readonly handle: string;
@@ -12,15 +19,16 @@ interface PhoneMockProps {
   readonly draft?: string;
   readonly controlled?: boolean;
   readonly maxHeight?: string;
+  readonly videoId?: string;
+  readonly bus?: VideoBus | null;
+  readonly screen?: { readonly dataUrl: string; readonly at: string };
 }
 
-/** Esqueleto de tela de celular: onde entra o stream do scrcpy quando o daemon existir. */
-export function PhoneMock({ handle, streamLabel, variant, overlay, draft, controlled = false, maxHeight }: PhoneMockProps) {
+/** Esqueleto da tela (sem dados vivos), mantido idêntico ao anterior. */
+function Skeleton({ variant }: { readonly variant: 'tile' | 'full' }) {
   const rows = variant === 'tile' ? TILE_ROWS : FULL_ROWS;
-  const cls = ['phone', `phone--${variant}`, controlled ? 'phone--controlled' : ''].filter(Boolean).join(' ');
   return (
-    <div className={cls} style={maxHeight ? { maxHeight } : undefined}>
-      <div className="phone__meta"><span>{handle}</span><span>{streamLabel}</span></div>
+    <>
       <div className="phone__block phone__block--top" />
       {rows.slice(0, variant === 'tile' ? 1 : rows.length).map((r, i) => (
         <div className="phone__row" key={i}>
@@ -41,6 +49,34 @@ export function PhoneMock({ handle, streamLabel, variant, overlay, draft, contro
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+/** Tela de celular: vídeo ao vivo (WebCodecs) quando há pacotes, senão o poster PNG, senão o esqueleto. */
+export function PhoneMock({ handle, streamLabel, variant, overlay, draft, controlled = false, maxHeight, videoId, bus, screen }: PhoneMockProps) {
+  const cls = ['phone', `phone--${variant}`, controlled ? 'phone--controlled' : ''].filter(Boolean).join(' ');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [videoAt, setVideoAt] = useState<number | null>(null);
+  const now = useNow(1000);
+  useEffect(() => {
+    const canvas = canvasRef.current; if (!videoId || !bus || !canvas) return;
+    const sink = createH264Sink(canvas);
+    const off = bus.subscribe(videoId, (p) => {
+      sink.push(p);
+      const t = sink.lastFrameAt();
+      if (t !== null) setVideoAt((prev) => (prev === null || t - prev > VIDEO_AT_THROTTLE_MS ? t : prev));
+    });
+    return () => { off(); sink.close(); setVideoAt(null); };
+  }, [videoId, bus]);
+  const hasVideo = videoAt !== null;
+  const label = hasVideo ? frameAgeLabel(videoAt, now) : screen ? frameAgeLabel(screen.at, now) : streamLabel;
+  return (
+    <div className={cls} style={maxHeight ? { maxHeight } : undefined}>
+      <div className="phone__meta"><span>{handle}</span><span>{label}</span></div>
+      {videoId && bus && <canvas ref={canvasRef} className="phone__video" style={{ display: hasVideo ? 'block' : 'none' }} aria-label={`vídeo de ${handle}`} />}
+      {!hasVideo && screen && <img className="phone__screen" src={screen.dataUrl} alt={`tela de ${handle}`} draggable={false} />}
+      {!hasVideo && !screen && <Skeleton variant={variant} />}
       {variant === 'full' && draft && <div className="phone__draft">{draft}</div>}
       {overlay && <div className="phone__overlay">{overlay}</div>}
     </div>

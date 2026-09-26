@@ -64,3 +64,20 @@ describe('liveRoles', () => {
     expect(out[1].result).toBeNull();
   });
 });
+
+describe('mergeLive — incremento 4 (várias identidades e posters por id)', () => {
+  const two = { ...live, identities: [{ ...live.identities[0], id: 'conta1', name: 'conta1' }, { ...live.identities[0], id: 'conta2', name: 'conta2', handle: '@segunda', state: 'running' }] };
+  const frames = { conta2: { id: 'conta2', at: '2026-09-26T00:00:02.000Z', png: 'QkJC' }, conta1: { id: 'conta1', at: '2026-09-26T00:00:01.000Z', png: 'QUFB' } };
+  it('sobrepõe a i-ésima identidade viva no i-ésimo tile e casa o poster pelo id, não pela ordem', () => {
+    const out = mergeLive(IDENTITIES, two, frames);
+    expect(out[0]).toMatchObject({ id: 'conta1', screen: { dataUrl: 'data:image/png;base64,QUFB', at: '2026-09-26T00:00:01.000Z' } });
+    expect(out[1]).toMatchObject({ id: 'conta2', handle: '@segunda', state: 'running', screen: { dataUrl: 'data:image/png;base64,QkJC' } });
+    expect(out[2]).toBe(IDENTITIES[2]); expect(out).toHaveLength(IDENTITIES.length);
+  });
+  it('sem poster não põe screen; sem snapshot devolve o mock intacto; identidades vivas extras são acrescentadas', () => {
+    expect(mergeLive(IDENTITIES, two, {})[0].screen).toBeUndefined();
+    expect(mergeLive(IDENTITIES, null, frames)).toBe(IDENTITIES);
+    const many = { ...live, identities: IDENTITIES.map((_, i) => ({ ...live.identities[0], id: `c${i}`, name: `c${i}` })).concat([{ ...live.identities[0], id: 'extra', name: 'extra' }]) };
+    expect(mergeLive(IDENTITIES, many, {})).toHaveLength(IDENTITIES.length + 1);
+  });
+});

@@ -18,6 +18,7 @@ export type PlanStage = 0 | 1 | 2;
 
 /** Identidade ativa na frota: um AVD preso a uma conta. */
 export interface Identity {
+  readonly id?: string;
   readonly name: string;
   readonly handle: string;
   readonly state: DeviceState;
@@ -29,6 +30,7 @@ export interface Identity {
   readonly genMs?: number;
   readonly degraded?: boolean;
   readonly earlyStopRemaining?: number;
+  readonly screen?: { readonly dataUrl: string; readonly at: string };
 }
 
 /** Identidade fora da frota ativa (banida, em provisionamento). */
