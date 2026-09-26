@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { CONFIG } from '../config.js';
 import { setIdentityState, type IdentityRow } from '../db/identities.js';
-import { createGoalAndTask, ledgerHas, ledgerPut, markDegraded, setTaskState, writeIntent } from '../db/tasks.js';
+import { createGoalAndTask, ledgerHas, ledgerPut, markDegraded, setEarlyStop, setTaskState, writeIntent } from '../db/tasks.js';
 import { providerLabel, readProviderConfig, type ProviderConfig, type ProviderRow } from '../provider/config.js';
 import { isLocalInfraError, ProviderError } from '../provider/errors.js';
 import { buildModel as defaultBuildModel, pricingFor, providerOptionsFor } from '../provider/factory.js';
@@ -28,6 +28,7 @@ export interface RunTaskResult {
   readonly costUsd: number; readonly usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number };
   readonly platformBlock: string | null; readonly summary: string;
   readonly degraded: boolean; readonly escalatedAtStep: number | null; readonly provider: string; readonly genMs: number; readonly invalidCalls: number;
+  readonly earlyStopRemaining: number;
 }
 /** Dependências injetáveis para teste: conexão MCP, geração, modelos (worker/esc), supervisor do Ollama e fábrica. */
 export interface RunTaskDeps {
@@ -136,8 +137,10 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     const taskState = outcome === 'platform-block' ? 'needs-human' : outcome === 'failed' || outcome === 'quality-floor' ? 'failed'
       : outcome === 'infra' ? (h?.kind === 'auth' ? 'failed' : 'todo') : 'done';
     setTaskState(db, taskId, taskState);
+    const earlyStopRemaining = outcome === 'done' ? Math.max(0, budget - stepsUsed) : 0;
+    setEarlyStop(db, taskId, earlyStopRemaining);
     return { taskId, outcome, costUsd, usage, platformBlock: h?.kind === 'platform-block' ? h.text : null, summary,
-      degraded, escalatedAtStep, provider: providerLabel(cfg.worker), genMs: genMsTotal, invalidCalls: floor.count() };
+      degraded, escalatedAtStep, provider: providerLabel(cfg.worker), genMs: genMsTotal, invalidCalls: floor.count(), earlyStopRemaining };
   };
 
   /** Um segmento = um generateText sobre `messages` com um papel do registro (spec §5). */
@@ -188,14 +191,15 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
 
     let result = await segment(cfg.worker, model, tools, messages, stopIfHalted, slug, budget);
 
-    if (floor.tripped() && !halt && !o.isKilled()) {
+    const remaining = budget - stepsUsed;
+    if (floor.tripped() && !halt && !o.isKilled() && remaining > 0) {
       const canEscalate = cfg.esc.mode === 'nuvem' && !!o.apiKey;
       if (!canEscalate) return finish('quality-floor', `piso de qualidade: ${floor.count()} tool calls inválidas com ${providerLabel(cfg.worker)}; sem escalonamento na nuvem`);
       degraded = true; escalatedAtStep = stepsUsed; markDegraded(db, taskId, stepsUsed);
       const escModel = depsIn.escModel ?? deps.buildModel(cfg.esc, { anthropicApiKey: o.apiKey });
       // O SDK descarta dos response.messages os passos com tool call inválida; a nota conta ao esc o que aconteceu.
       const continued: ModelMessage[] = [...messages, ...result.response.messages, { role: 'user', content: ESCALATION_NOTE(floor.count(), cfg.worker.model) }];
-      result = await segment(cfg.esc, escModel, tools, continued, stopIfHalted, slug, Math.max(1, budget - stepsUsed));
+      result = await segment(cfg.esc, escModel, tools, continued, stopIfHalted, slug, remaining);
     }
 
     const h = halt as Halt;
@@ -208,7 +212,11 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     const h = halt as Halt;
     if (h?.kind === 'platform-block') return finish('platform-block', String((e as Error).message ?? e));
     if (h) return finish('infra', String((e as Error).message ?? e));
-    if (ProviderError.isInstance(e)) { halt = { kind: e.kind, text: e.message }; return finish(e.kind === 'auth' ? 'failed' : 'infra', e.message); }
+    if (ProviderError.isInstance(e)) {
+      // Chave ausente é falha da tarefa, não do device: identidade volta a idle (spec inc. 3 §4.4).
+      if (e.kind === 'auth') return finish('failed', e.message);
+      halt = { kind: e.kind, text: e.message }; return finish('infra', e.message);
+    }
     // Ollama caiu/recusou/OOM no meio da tarefa: infra-local → tarefa volta a todo, identidade idle (spec §7).
     if (activeMode === 'local' && isLocalInfraError(e)) { const text = String((e as Error).message ?? e).slice(0, 200); halt = { kind: 'infra-local', text }; return finish('infra', text); }
     return finish('failed', String((e as Error).message ?? e));

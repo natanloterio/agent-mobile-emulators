@@ -285,3 +285,26 @@ describe('runTask — revisão final do incremento 2', () => {
     expect(r.outcome).toBe('failed'); expect(taskState(db, r.taskId)).toBe('failed');
   });
 });
+
+describe('runTask — incremento 3', () => {
+  it('parada precoce: done com orçamento sobrando grava early_stop_remaining e sai no resultado', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const m = new MockLanguageModelV4({ doGenerate: [text('nada a fazer')] as never });
+    const r = await runTask({ ...opts(db), providers: providers(), stepBudget: 10 }, { connect: mkMcp(tools()), model: m, ollama: okOllama });
+    expect(r.outcome).toBe('done'); expect(r.earlyStopRemaining).toBe(9);
+    expect((db.prepare('select early_stop_remaining as e from task where id=?').get(r.taskId) as { e: number }).e).toBe(9);
+  });
+  it('piso no último passo do orçamento → sem segmento 2, outcome budget, degraded 0 (Review Focus 5)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const worker = new MockLanguageModelV4({ doGenerate: [invalid('c1'), invalid('c2'), invalid('c3')] as never });
+    const esc = new MockLanguageModelV4({ doGenerate: [text('não')] as never });
+    const r = await runTask({ ...opts(db), providers: providers(), stepBudget: 3 }, { connect: mkMcp(tools()), model: worker, escModel: esc, ollama: okOllama });
+    expect(r.outcome).toBe('budget'); expect(r.degraded).toBe(false); expect(esc.doGenerateCalls).toHaveLength(0); expect(r.earlyStopRemaining).toBe(0);
+  });
+  it('ProviderError auth (sem chave, worker na nuvem) → failed, identidade idle, lastError cita a chave', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const r = await runTask({ ...opts(db), apiKey: '' }, { connect: mkMcp(tools()) });
+    expect(r.outcome).toBe('failed'); expect(taskState(db, r.taskId)).toBe('failed');
+    expect(getIdentity(db, 'conta1')?.state).toBe('idle'); expect(getIdentity(db, 'conta1')?.lastError).toMatch(/ANTHROPIC_API_KEY/);
+  });
+});

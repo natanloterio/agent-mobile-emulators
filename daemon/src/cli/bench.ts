@@ -48,7 +48,7 @@ const winner = pickWinner(rows);
 const summarize = (label: string, r: RunTaskResult, elapsedS: number, vram: number | null): RunSummary => {
   const s = db.prepare('select count(*) n, coalesce(sum(gen_ms),0) g from step where task_id=?').get(r.taskId) as { n: number; g: number };
   return { label, outcome: r.outcome, steps: s.n, elapsedS, genS: Math.round(s.g / 100) / 10, inTok: r.usage.inputTokens, outTok: r.usage.outputTokens, cacheRead: r.usage.cacheReadTokens,
-    invalidCalls: r.invalidCalls, degraded: r.degraded, escalatedAtStep: r.escalatedAtStep, earlyStopRemaining: r.outcome === 'done' ? Math.max(0, CONFIG.worker.stepBudget - s.n) : 0,
+    invalidCalls: r.invalidCalls, degraded: r.degraded, escalatedAtStep: r.escalatedAtStep, earlyStopRemaining: r.earlyStopRemaining,
     costUsd: r.costUsd, vramPeakMiB: vram, platformBlock: r.platformBlock, summary: r.summary };
 };
 const run = async (label: string, local: boolean): Promise<RunSummary> => {

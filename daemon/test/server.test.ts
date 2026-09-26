@@ -104,3 +104,14 @@ describe('servidor — revisão final do incremento 2', () => {
     ws.close();
   });
 });
+
+describe('snapshot — incremento 3', () => {
+  it('identidade traz earlyStopRemaining da última tarefa', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { createGoalAndTask, setEarlyStop } = await import('../src/db/tasks.js');
+    const { taskId } = createGoalAndTask(db, 'conta1', 'g'); setEarlyStop(db, taskId, 13);
+    const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const snap = await (await fetch(`http://127.0.0.1:${s.port}/state`, { headers: { authorization: 'Bearer seg' } })).json() as { identities: { earlyStopRemaining: number }[] };
+    expect(snap.identities[0].earlyStopRemaining).toBe(13);
+  });
+});

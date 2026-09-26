@@ -36,6 +36,10 @@ export function markDegraded(db: DatabaseSync, taskId: string, atStep: number): 
   db.prepare('update task set degraded=1, escalated_at_step=? where id=?').run(atStep, taskId);
 }
 
+export function setEarlyStop(db: DatabaseSync, taskId: string, remaining: number): void {
+  db.prepare('update task set early_stop_remaining=? where id=?').run(remaining, taskId);
+}
+
 export function addTaskCost(db: DatabaseSync, taskId: string, usd: number): void {
   db.prepare('update task set cost_usd = cost_usd + ? where id=?').run(usd, taskId);
   db.prepare('update goal set cost_usd = cost_usd + ? where id = (select goal_id from task where id=?)').run(usd, taskId);
