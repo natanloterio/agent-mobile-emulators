@@ -14,7 +14,8 @@ export function mergeLive(ids: readonly Identity[], live: FleetSnapshot | null):
   if (!l || ids.length === 0) return ids;
   const first: Identity = {
     ...ids[0], name: l.name, handle: l.handle, state: STATE_MAP[l.state] ?? 'offline',
-    task: l.task, steps: l.steps, budget: l.budget, cost: l.costUsd, error: l.error,
+    task: l.degraded ? `${l.task} · degradada` : l.task, steps: l.steps, budget: l.budget, cost: l.costUsd, error: l.error,
+    genMs: l.genMs ?? 0, degraded: l.degraded ?? false, earlyStopRemaining: l.earlyStopRemaining ?? 0,
   };
   return [first, ...ids.slice(1)];
 }
@@ -22,7 +23,7 @@ export function mergeLive(ids: readonly Identity[], live: FleetSnapshot | null):
 export function liveLogFor(live: FleetSnapshot | null, name: string): readonly LogRow[] | null {
   const l = live?.identities.find((i) => i.name === name);
   if (!l || l.lastTools.length === 0) return null;
-  return l.lastTools.map((t) => ({ i: String(t.idx), tool: t.tool, desc: t.excerpt, tokens: `${(t.tokens / 1000).toFixed(1)}k tok`, tag: t.gate ? 'gate' : 'ok' }));
+  return l.lastTools.map((t) => ({ i: String(t.idx), tool: t.tool, desc: t.provider ? `[${t.provider.split(':')[0]}] ${t.excerpt}` : t.excerpt, tokens: `${(t.tokens / 1000).toFixed(1)}k tok`, tag: t.gate ? 'gate' : 'ok' }));
 }
 
 const fmtTps = (n: number | null) => (n === null ? '—' : n.toFixed(1).replace('.', ','));

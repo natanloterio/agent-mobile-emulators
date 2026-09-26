@@ -7,7 +7,7 @@ export interface ToolRow { readonly idx: number; readonly tool: string; readonly
 export interface IdentitySnapshot {
   readonly id: string; readonly name: string; readonly handle: string; readonly state: string; readonly task: string;
   readonly steps: number; readonly budget: number; readonly costUsd: number; readonly error: string; readonly lastTools: readonly ToolRow[];
-  readonly degraded: boolean; readonly genMs: number;
+  readonly degraded: boolean; readonly genMs: number; readonly earlyStopRemaining: number;
 }
 export type ProviderSnapshot = ProviderRow & { readonly lastTest: ProviderTest | null };
 export interface FleetSnapshot {
@@ -19,8 +19,8 @@ const BUDGET = Number(process.env.ENXAME_STEP_BUDGET ?? 30);
 
 export function buildSnapshot(db: DatabaseSync, killed: boolean): FleetSnapshot {
   const identities = listIdentities(db).map((id) => {
-    const task = db.prepare('select id, instruction, state, cost_usd, degraded from task where identity_id=? order by created_at desc limit 1').get(id.id) as
-      { id: string; instruction: string; state: string; cost_usd: number; degraded: number } | undefined;
+    const task = db.prepare('select id, instruction, state, cost_usd, degraded, early_stop_remaining from task where identity_id=? order by created_at desc limit 1').get(id.id) as
+      { id: string; instruction: string; state: string; cost_usd: number; degraded: number; early_stop_remaining: number | null } | undefined;
     const agg = task ? (db.prepare('select count(*) as n, coalesce(sum(gen_ms), 0) as g from step where task_id=?').get(task.id) as { n: number; g: number }) : { n: 0, g: 0 };
     const lastTools = task ? (db.prepare('select idx, tool, result_excerpt, input_tokens, output_tokens, provider from step where task_id=? order by idx desc limit 6').all(task.id) as
       { idx: number; tool: string | null; result_excerpt: string | null; input_tokens: number | null; output_tokens: number | null; provider: string | null }[])
@@ -28,7 +28,7 @@ export function buildSnapshot(db: DatabaseSync, killed: boolean): FleetSnapshot 
     return {
       id: id.id, name: id.name, handle: id.handle, state: id.state, task: task?.instruction ?? 'Aguardando',
       steps: agg.n, budget: BUDGET, costUsd: task?.cost_usd ?? 0, error: id.lastError ?? '', lastTools,
-      degraded: (task?.degraded ?? 0) === 1, genMs: agg.g,
+      degraded: (task?.degraded ?? 0) === 1, genMs: agg.g, earlyStopRemaining: task?.early_stop_remaining ?? 0,
     };
   });
   const cfg = readProviderConfig(db); const tests = lastProviderTests(db);

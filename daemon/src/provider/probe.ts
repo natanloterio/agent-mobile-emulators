@@ -2,12 +2,12 @@ import { generateText, stepCountIs, type LanguageModel, type ToolSet } from 'ai'
 import type { DatabaseSync } from 'node:sqlite';
 import type { IdentityRow } from '../db/identities.js';
 import { connectMcp } from '../device/mcp.js';
+import { textOf } from '../worker/record.js';
 import { toolPrefix } from '../worker/tools.js';
 import { ROLE_KEYS, type ProviderRow, type RoleKey } from './config.js';
 import { ProviderError } from './errors.js';
 import { buildModel as defaultBuildModel } from './factory.js';
 import { createOllamaSupervisor, type OllamaSupervisor } from './ollama.js';
-import { invalidCallIds } from './quality.js';
 
 export interface ProviderTest {
   readonly role: RoleKey; readonly model: string; readonly latencyMs: number; readonly tokensPerSec: number | null;
@@ -20,11 +20,12 @@ export interface ProbeDeps {
 }
 
 const EXTERNAL_WARNING = 'contexto desconhecido (Ollama externo, não subido pelo daemon — garanta OLLAMA_CONTEXT_LENGTH ≥ 32768)';
+const errorText = (e: unknown): string => (e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e) ?? '');
 
 /** Grava um resultado de teste (do probe ou produzido pelo daemon, ex.: identidade não pronta) para o snapshot/tela. */
 export function recordProviderTest(db: DatabaseSync, t: ProviderTest): ProviderTest {
-  db.prepare('insert into provider_test (role, model, latency_ms, tokens_per_sec, args_valid, warning, error) values (?, ?, ?, ?, ?, ?, ?)')
-    .run(t.role, t.model, t.latencyMs, t.tokensPerSec, t.argsValid ? 1 : 0, t.warning, t.error);
+  db.prepare('insert into provider_test (role, model, at, latency_ms, tokens_per_sec, args_valid, warning, error) values (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(t.role, t.model, t.at, t.latencyMs, t.tokensPerSec, t.argsValid ? 1 : 0, t.warning, t.error);
   return t;
 }
 
@@ -48,11 +49,19 @@ export async function testProvider(db: DatabaseSync, row: ProviderRow, identity:
       model, tools: { [name]: screen }, toolChoice: 'required', prompt: 'Leia a tela atual.', stopWhen: stepCountIs(1),
       onLanguageModelCallEnd: (e) => { genMs = (e as { performance?: { responseTimeMs?: number } }).performance?.responseTimeMs ?? 0; },
     });
-    const step = r.steps[0];
-    const invalid = step ? invalidCallIds(step as never).length > 0 : true;
-    const executed = !!step && step.content.some((p) => p.type === 'tool-result');
+    type Part = { type: string; invalid?: boolean; output?: unknown; error?: unknown };
+    const parts = (r.steps[0]?.content ?? []) as readonly Part[];
+    const call = parts.find((p) => p.type === 'tool-call');
+    const result = parts.find((p) => p.type === 'tool-result');
+    const failure = parts.find((p) => p.type === 'tool-error');
     const out = r.usage.outputTokens ?? 0;
-    return recordProviderTest(db, { ...base, latencyMs: Date.now() - t0, tokensPerSec: genMs > 0 ? Math.round((out / (genMs / 1000)) * 10) / 10 : null, argsValid: !invalid && executed, warning });
+    const tps = genMs > 0 ? Math.round((out / (genMs / 1000)) * 10) / 10 : null;
+    const measured = { ...base, latencyMs: Date.now() - t0, tokensPerSec: tps, warning };
+    if (!call || call.invalid) return recordProviderTest(db, measured);                       // argumentos inválidos
+    if (failure) return recordProviderTest(db, { ...measured, error: `infra: ${errorText(failure.error)}`.slice(0, 300) });
+    const isErr = !!result && typeof result.output === 'object' && result.output !== null && (result.output as { isError?: boolean }).isError === true;
+    if (isErr) return recordProviderTest(db, { ...measured, error: `MCP: ${textOf(result!.output)}`.slice(0, 300) });
+    return recordProviderTest(db, { ...measured, argsValid: !!result });
   } catch (e) {
     const msg = ProviderError.isInstance(e) ? `${e.kind}: ${e.message}` : String((e as Error).message ?? e);
     return recordProviderTest(db, { ...base, latencyMs: Date.now() - t0, error: msg.slice(0, 300) });

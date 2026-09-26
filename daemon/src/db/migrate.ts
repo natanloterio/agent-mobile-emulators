@@ -7,6 +7,7 @@ const COLUMNS: readonly { table: string; column: string; ddl: string }[] = [
   { table: 'step', column: 'invalid_call', ddl: 'integer not null default 0' },
   { table: 'task', column: 'degraded', ddl: 'integer not null default 0' },
   { table: 'task', column: 'escalated_at_step', ddl: 'integer' },
+  { table: 'task', column: 'early_stop_remaining', ddl: 'integer' },
 ];
 
 export function applyMigrations(db: DatabaseSync): void {

@@ -6,6 +6,7 @@ import { createAdb } from '../device/adb.js';
 import { openDb } from '../db/open.js';
 import { getIdentity } from '../db/identities.js';
 import { ensureIdentityReady } from '../fleet/identity.js';
+import { daemonAlive } from '../fleet/lock.js';
 import { assertDaemonOllama, median, pickWinner, renderBakeoffTable, renderComparison, type BakeoffRow, type RunSummary } from '../bench/stats.js';
 import { startVramSampler } from '../bench/vram.js';
 import { LOCAL_ENDPOINT_DEFAULT, readProviderConfig, updateProvider } from '../provider/config.js';
@@ -19,7 +20,10 @@ const RUNS = 3;
 const exec = promisify(execFile);
 const nvidia = async () => (await exec('nvidia-smi', ['--query-gpu=memory.used', '--format=csv,noheader,nounits'])).stdout;
 
-const env = loadEnv(); mkdirSync(CONFIG.dataDir, { recursive: true });
+const env = loadEnv();
+const living = daemonAlive(CONFIG.daemonInfoPath);
+if (living) { console.error(`daemon vivo (PID ${living.pid}) disputa device e Ollama; pare-o ou use a API`); process.exit(4); }
+mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath); const adb = createAdb(); const ollama = createOllamaSupervisor();
 const id = () => getIdentity(db, 'conta1')!;
 const probe = await ensureIdentityReady(db, id(), { adb });
@@ -48,7 +52,7 @@ const winner = pickWinner(rows);
 const summarize = (label: string, r: RunTaskResult, elapsedS: number, vram: number | null): RunSummary => {
   const s = db.prepare('select count(*) n, coalesce(sum(gen_ms),0) g from step where task_id=?').get(r.taskId) as { n: number; g: number };
   return { label, outcome: r.outcome, steps: s.n, elapsedS, genS: Math.round(s.g / 100) / 10, inTok: r.usage.inputTokens, outTok: r.usage.outputTokens, cacheRead: r.usage.cacheReadTokens,
-    invalidCalls: r.invalidCalls, degraded: r.degraded, escalatedAtStep: r.escalatedAtStep, earlyStopRemaining: r.outcome === 'done' ? Math.max(0, CONFIG.worker.stepBudget - s.n) : 0,
+    invalidCalls: r.invalidCalls, degraded: r.degraded, escalatedAtStep: r.escalatedAtStep, earlyStopRemaining: r.earlyStopRemaining,
     costUsd: r.costUsd, vramPeakMiB: vram, platformBlock: r.platformBlock, summary: r.summary };
 };
 const run = async (label: string, local: boolean): Promise<RunSummary> => {

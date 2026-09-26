@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { openDb } from '../src/db/open.js';
 import { upsertIdentity } from '../src/db/identities.js';
@@ -102,5 +102,69 @@ describe('servidor — revisão final do incremento 2', () => {
     expect(msgs.length).toBe(2);
     expect((JSON.parse(msgs[1]).data as { providers: { worker: { mode: string; model: string } } }).providers.worker).toMatchObject({ mode: 'nuvem', model: 'claude-haiku-4-5' });
     ws.close();
+  });
+});
+
+describe('snapshot — incremento 3', () => {
+  it('identidade traz earlyStopRemaining da última tarefa', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { createGoalAndTask, setEarlyStop } = await import('../src/db/tasks.js');
+    const { taskId } = createGoalAndTask(db, 'conta1', 'g'); setEarlyStop(db, taskId, 13);
+    const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const snap = await (await fetch(`http://127.0.0.1:${s.port}/state`, { headers: { authorization: 'Bearer seg' } })).json() as { identities: { earlyStopRemaining: number }[] };
+    expect(snap.identities[0].earlyStopRemaining).toBe(13);
+  });
+});
+
+describe('servidor — incremento 3', () => {
+  const h = { authorization: 'Bearer seg', 'content-type': 'application/json' };
+  it('PUT inválido devolve mensagem única; erro interno vira 500 JSON', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const bad = await fetch(`http://127.0.0.1:${s.port}/providers/worker`, { method: 'PUT', headers: h, body: JSON.stringify({ endpoint: 'ftp://x' }) });
+    expect(bad.status).toBe(400); expect(await bad.json()).toEqual({ error: 'endpoint precisa ser http(s)' });
+    db.close();
+    const boom = await fetch(`http://127.0.0.1:${s.port}/providers/worker`, { method: 'PUT', headers: h, body: JSON.stringify({ model: 'x' }) });
+    expect(boom.status).toBe(500); expect(((await boom.json()) as { error: string }).error).toBeTruthy();
+  });
+  it('GET /providers/models: local com Ollama parado → [] + error; local vivo → nomes; nuvem → CLOUD_MODELS (Review Focus 1)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    let up = false;
+    const fetchFn = (async () => { if (!up) throw new Error('ECONNREFUSED'); return new Response(JSON.stringify({ models: [{ name: 'gpt-oss:20b' }, { name: 'gemma4:12b' }] })); }) as unknown as typeof fetch;
+    const s = await startServer({ db, port: 0, token: 'seg', fetch: fetchFn, onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const get = async (role: string) => (await fetch(`http://127.0.0.1:${s.port}/providers/models?role=${role}`, { headers: h })).json() as Promise<{ source: string; models: string[]; error: string | null }>;
+    expect(await get('worker')).toEqual({ source: 'ollama', models: [], error: 'Ollama parado — o próximo teste ou objetivo o sobe' });
+    up = true;
+    expect(await get('worker')).toEqual({ source: 'ollama', models: ['gpt-oss:20b', 'gemma4:12b'], error: null });
+    expect(await get('esc')).toEqual({ source: 'anthropic', models: ['claude-haiku-4-5', 'claude-sonnet-5', 'claude-opus-5'], error: null });
+    expect((await fetch(`http://127.0.0.1:${s.port}/providers/models?role=chefe`, { headers: h })).status).toBe(404);
+  });
+  it('GET /providers/models: Ollama responde não-ok → erro com status; corpo inválido → erro de resposta inválida', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    let mode: 'not-ok' | 'bad-json' = 'not-ok';
+    const fetchFn = (async () => mode === 'not-ok' ? new Response('erro', { status: 500 }) : new Response('não é json')) as unknown as typeof fetch;
+    const s = await startServer({ db, port: 0, token: 'seg', fetch: fetchFn, onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const get = async () => (await fetch(`http://127.0.0.1:${s.port}/providers/models?role=worker`, { headers: h })).json() as Promise<{ source: string; models: string[]; error: string | null }>;
+    expect(await get()).toEqual({ source: 'ollama', models: [], error: 'Ollama respondeu 500 em /api/tags' });
+    mode = 'bad-json';
+    expect(await get()).toEqual({ source: 'ollama', models: [], error: 'resposta inválida do Ollama em /api/tags' });
+  });
+});
+
+describe('servidor — erro depois da resposta enviada', () => {
+  it('broadcast que lança após o 200 do POST /test não tenta um segundo writeHead (só loga)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const test = { role: 'worker', model: 'm', latencyMs: 1, tokensPerSec: null, argsValid: true, warning: null, error: null, at: 'x' };
+    // Fechar o banco faz o buildSnapshot do broadcast lançar depois do send(200).
+    const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { db.close(); return test as never; } });
+    stop = s.close;
+    const errors: unknown[][] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => { errors.push(a); });
+    try {
+      const r = await fetch(`http://127.0.0.1:${s.port}/providers/worker/test`, { method: 'POST', headers: { authorization: 'Bearer seg' } });
+      expect(r.status).toBe(200); expect(await r.json()).toMatchObject({ role: 'worker', argsValid: true });
+      await new Promise((res) => setTimeout(res, 20));
+      expect(errors.some((a) => a[0] === '[daemon] erro após resposta enviada:')).toBe(true);
+    } finally { spy.mockRestore(); }
   });
 });

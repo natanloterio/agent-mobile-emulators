@@ -58,6 +58,28 @@ describe('testProvider', () => {
   });
 });
 
+describe('probe — três desfechos (incremento 3, spec §4.3)', () => {
+  const mcpErr = { isError: true, content: [{ type: 'text', text: 'Error executing tool: accessibility service disabled' }] };
+  const connectWith = (exec: () => Promise<unknown>) => async () => ({ tools: async () => ({
+    android_conta1_get_screen_state: tool({ description: 't', inputSchema: z.object({ include_screenshot: z.boolean().optional() }), execute: exec }),
+  }), close: async () => {} });
+  it('tool executou mas o MCP devolveu isError → argsValid false e error "MCP: …"', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const t = await testProvider(db, LOCAL, row, {}, { connect: connectWith(async () => mcpErr), model: new MockLanguageModelV4({ doGenerate: [screenCall('{}')] as never }), ollama: external() });
+    expect(t.argsValid).toBe(false); expect(t.error).toMatch(/^MCP: .*accessibility/);
+  });
+  it('tool lançou → argsValid false e error "infra: …" (não "argumentos inválidos")', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const t = await testProvider(db, LOCAL, row, {}, { connect: connectWith(async () => { throw new Error("device 'emulator-5554' not found"); }), model: new MockLanguageModelV4({ doGenerate: [screenCall('{}')] as never }), ollama: external() });
+    expect(t.argsValid).toBe(false); expect(t.error).toMatch(/^infra: .*not found/);
+  });
+  it('at gravado é o mesmo ISO devolvido', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const t = await testProvider(db, LOCAL, row, {}, { connect, model: new MockLanguageModelV4({ doGenerate: [screenCall('{}')] as never }), ollama: external() });
+    expect(lastProviderTests(db).worker?.at).toBe(t.at); expect(t.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+});
+
 describe('recordProviderTest (revisão final, Important 5)', () => {
   it('grava um resultado produzido fora do probe (identidade não pronta) e ele aparece em lastProviderTests', () => {
     const db = openDb(':memory:');

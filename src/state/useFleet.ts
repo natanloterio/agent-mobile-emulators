@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useReducer } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { DEFAULT_GOAL_TEXT } from '../data/goals';
 import type { ProviderMode, RoleKey, Screen } from '../types/fleet';
 import { createInitialState, fleetReducer, type FleetState } from './fleetReducer';
+import { createProviderActions } from './providerActions';
+
+export { bridgeMessage } from './providerActions';
 
 const TICK_MS = 2600;
 const DECOMPOSE_MS = 1200;
@@ -28,6 +31,8 @@ export interface FleetActions {
   readonly launch: (fleetSize: number) => void;
   readonly pickMode: (role: RoleKey, mode: ProviderMode) => void;
   readonly testConnection: (role: RoleKey) => void;
+  readonly setProviderField: (role: RoleKey, patch: { model?: string; endpoint?: string }) => void;
+  readonly loadProviderModels: (role: RoleKey) => void;
   readonly provision: () => void;
   readonly extraAction: (index: number) => void;
 }
@@ -62,6 +67,10 @@ export function useFleet(): UseFleet {
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [runningKey]);
 
+  // Lido pela lista mock sem daemon; atualizado no render para o efeito do Providers (filho) já ver o modo novo.
+  const modesRef = useRef(state.modes);
+  modesRef.current = state.modes;
+
   const actions = useMemo<FleetActions>(
     () => ({
       go: (screen) => dispatch({ type: 'go', screen }),
@@ -75,19 +84,7 @@ export function useFleet(): UseFleet {
       decompose: () => dispatch({ type: 'decomposeStart', fallbackText: DEFAULT_GOAL_TEXT }),
       resetPlan: () => dispatch({ type: 'resetPlan' }),
       launch: (fleetSize) => dispatch({ type: 'launch', fleetSize }),
-      // Com daemon: persiste no registro e o teste é real; sem daemon (Vite no browser) segue o mock com timer.
-      pickMode: (role, mode) => {
-        const set = window.enxame?.setProvider;
-        if (!set) { dispatch({ type: 'pickMode', role, mode }); return; }
-        // 409 (frota ocupada) ou 400 não mudam a tela: o snapshot que o daemon emite após o PUT é a verdade.
-        set(role, { mode }).then(() => dispatch({ type: 'pickMode', role, mode })).catch(() => undefined);
-      },
-      testConnection: (role) => {
-        dispatch({ type: 'testStart', role });
-        const test = window.enxame?.testProvider;
-        if (!test) return;
-        test(role).catch(() => undefined).finally(() => dispatch({ type: 'testDone', role }));
-      },
+      ...createProviderActions({ dispatch, getBridge: () => window.enxame, getMode: (role) => modesRef.current[role] }),
       provision: () => dispatch({ type: 'provision' }),
       extraAction: (index) => dispatch({ type: 'extraAction', index }),
     }),

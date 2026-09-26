@@ -1,9 +1,12 @@
 import { spawn as nodeSpawn } from 'node:child_process';
-import { openSync, readdirSync, readFileSync } from 'node:fs';
-import os from 'node:os';
+import { closeSync, mkdirSync, openSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { CONFIG } from '../config.js';
 import { ollamaBase } from './config.js';
 import { ProviderError } from './errors.js';
+
+/** Loopback nas formas usadas por `OLLAMA_HOST`/endpoint: IPv4, IPv6 (com ou sem colchetes) e `localhost`, com porta opcional. */
+export const isLoopbackHost = (host: string): boolean => /^(?:127\.0\.0\.1|localhost|\[::1\]|::1)(?::\d+)?$/i.test(host);
 
 /** Spec §4.3: contexto ≥ 32k (passos chegam a ~19k), modelo fica quente entre passos, um worker por vez neste incremento. */
 export const OLLAMA_ENV = { OLLAMA_CONTEXT_LENGTH: '32768', OLLAMA_KEEP_ALIVE: '30m', OLLAMA_NUM_PARALLEL: '1' } as const;
@@ -21,6 +24,7 @@ export interface OllamaDeps {
   readonly timeoutMs?: number;
   readonly logPath?: string;
   readonly openLog?: (p: string) => unknown;
+  readonly closeLog?: (fd: unknown) => void;
   /** Processos `ollama serve` vivos com o env de cada um (para adotar um órfão nosso). */
   readonly findProcesses?: () => readonly OllamaProcess[];
   readonly kill?: (pid: number, signal: NodeJS.Signals) => void;
@@ -67,14 +71,17 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
   const fetchFn = deps.fetch ?? fetch;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const logPath = deps.logPath ?? path.join(os.homedir(), '.local', 'share', 'enxame', 'ollama.log');
-  const openLog = deps.openLog ?? ((p: string) => openSync(p, 'a'));
+  const logPath = deps.logPath ?? path.join(CONFIG.dataDir, 'ollama.log');
+  const openLog = deps.openLog ?? ((p: string) => { mkdirSync(path.dirname(p), { recursive: true }); return openSync(p, 'a'); });
+  const closeLog = deps.closeLog ?? ((fd: unknown) => { try { closeSync(fd as number); } catch { /* já fechado */ } });
   const findProcesses = deps.findProcesses ?? defaultFindProcesses;
   const killFn = deps.kill ?? ((pid: number, sig: NodeJS.Signals) => { try { process.kill(pid, sig); } catch { /* já morreu */ } });
   const spawnFn = deps.spawn ?? ((cmd, args, opts) => nodeSpawn(cmd, args, { env: opts.env, stdio: opts.stdio as never, detached: false }) as unknown as ChildLike);
   let child: ChildLike | null = null;
   let adopted = false;
   let last: OllamaStatus | null = null;
+  let logFd: unknown = null;
+  const releaseLog = () => { if (logFd !== null) { closeLog(logFd); logFd = null; } };
 
   const checkModel = (models: readonly string[], model: string) => {
     if (!modelListed(models, model)) throw new ProviderError('infra-local', `modelo ${model} não está no disco do Ollama; rode: ollama pull ${model}`);
@@ -84,32 +91,35 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
 
   return {
     status: () => last,
-    stop: () => { if (child) { child.kill('SIGTERM'); child = null; adopted = false; } },
+    stop: () => { if (child) { child.kill('SIGTERM'); child = null; adopted = false; } releaseLog(); },
     unload: async (endpoint, model) => {
       await fetchFn(`${ollamaBase(endpoint)}/api/generate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model, keep_alive: 0 }) }).catch(() => undefined);
     },
     ensure: async (endpoint, model) => {
       const base = ollamaBase(endpoint);
-      const host = base.replace(/^https?:\/\//, '');
+      // Só host:porta: um path no endpoint (`…/ollama/v1`) não pode virar "remoto" nem ir para OLLAMA_HOST.
+      const host = new URL(base).host;
       const alive = await listModels(fetchFn, base);
       if (alive) {
         checkModel(alive, model);
         // Ollama vivo que não é nosso filho: se carrega o nosso env, é um órfão de um daemon anterior — adotamos (spec §4.3 passo 4).
-        if (child === null) {
+        // Um processo local nunca serve um endpoint remoto, então só adotamos quando o host é loopback.
+        if (child === null && isLoopbackHost(host)) {
           const own = findProcesses().find((p) => p.env.includes(CONTEXT_MARKER) && (!/(^|\0)OLLAMA_HOST=/.test(p.env) || p.env.includes(`OLLAMA_HOST=${host}`)));
           if (own) { child = adopt(own.pid); adopted = true; }
         }
         return status(alive);
       }
+      if (!isLoopbackHost(host)) throw new ProviderError('infra-local', `endpoint remoto ${host}: suba o Ollama lá; o daemon só sobe processo local`);
       if (!deps.spawn && process.env.VITEST) throw new ProviderError('infra-local', 'spawn do Ollama desabilitado em teste (injete deps.spawn)');
       let spawnErr: Error | null = null;
       adopted = false;
       try {
-        const log = openLog(logPath);
+        const log = openLog(logPath); logFd = log;
         child = spawnFn('ollama', ['serve'], { env: { ...process.env, ...OLLAMA_ENV, OLLAMA_HOST: host }, stdio: ['ignore', log, log] });
-      } catch (e) { spawnErr = e as Error; child = null; }
-      child?.on('exit', () => { child = null; });
-      child?.on('error', (e) => { spawnErr = e ?? new Error('spawn error'); child = null; });
+      } catch (e) { spawnErr = e as Error; child = null; releaseLog(); }
+      child?.on('exit', () => { child = null; releaseLog(); });
+      child?.on('error', (e) => { spawnErr = e ?? new Error('spawn error'); child = null; releaseLog(); });
       const t0 = Date.now();
       do {
         await sleep(POLL_MS);
@@ -118,6 +128,7 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
         if (models) { checkModel(models, model); return status(models); }
       } while (Date.now() - t0 < timeoutMs);
       child?.kill('SIGTERM'); child = null;
+      releaseLog();
       throw new ProviderError('infra-local', `Ollama não subiu em ${Math.round(timeoutMs / 1000)} s; veja ${logPath}`);
     },
   };
