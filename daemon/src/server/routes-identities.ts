@@ -94,6 +94,10 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
       const name = body.name ?? freeName(ctx.db);
       if (getIdentity(ctx.db, name)) return ctx.send(409, { error: `identidade ${name} já existe` });
       const avdName = `${AVD_PREFIX}${name}`;
+      // Copiar o qcow2 de um emulador vivo gera clone inconsistente: o AVD-base precisa estar parado.
+      const devices = await ops.adb.devices();
+      const busy = listIdentities(ctx.db).find((i) => i.avdName === base && devices.includes(i.serial));
+      if (busy) return ctx.send(409, { error: `AVD-base ${base} em uso (${busy.serial}): pare esse emulador antes de provisionar` });
       const ports = await ops.leasePorts(ctx.db);
       try { await ops.clone(avdName); } catch (e) { return ctx.send(500, { error: `clone do AVD falhou: ${errMsg(e)}` }); }
       upsertIdentity(ctx.db, {

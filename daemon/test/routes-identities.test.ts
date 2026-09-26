@@ -11,8 +11,8 @@ const READY: ProbeResult = { ready: true, signals: { bootCompleted: true, access
 const NOT_READY: ProbeResult = { ready: false, signals: { ...READY.signals, mcpInitialize: false }, details: ['MCP: recusado'], failureClass: 'infra' };
 const NOW = new Date('2026-09-26T12:00:00Z');
 
-let stop: (() => Promise<void>) | null = null;
-afterEach(async () => { await stop?.(); stop = null; });
+const closers: (() => Promise<void>)[] = [];
+afterEach(async () => { await Promise.all(closers.splice(0).map((c) => c())); });
 
 function harness(over: Partial<IdentityOps> = {}, online: string[] = ['emulator-5554']) {
   const db = openDb(':memory:'); upsertIdentity(db, conta1);
@@ -31,7 +31,7 @@ function harness(over: Partial<IdentityOps> = {}, online: string[] = ['emulator-
     disk: { invalidate: (n) => { log.push(`invalidate ${n}`); } },
     supervisor: { stop: (id) => { log.push(`sup-stop ${id}`); } },
     onIdentitiesChanged: () => { log.push('changed'); },
-    now: () => NOW, uuid: () => 'uuid-novo', killSleep: async () => {},
+    now: () => NOW, uuid: () => 'uuid-novo', killSleep: async () => {}, baseAvd: 'golden',
     ...over,
   };
   return { db, ops, log, devices };
@@ -40,7 +40,7 @@ function harness(over: Partial<IdentityOps> = {}, online: string[] = ['emulator-
 async function serve(db: DatabaseSync, ops: IdentityOps) {
   const ir = createIdentityRoutes(ops);
   const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); }, routes: [ir.route] });
-  stop = s.close;
+  closers.push(s.close);
   const post = async (p: string, body?: unknown) => {
     const r = await fetch(`http://127.0.0.1:${s.port}${p}`, { method: 'POST', headers: { authorization: 'Bearer seg', 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
     const text = await r.text();
@@ -74,6 +74,12 @@ describe('POST /identities', () => {
     expect((await s.post('/identities', { name: 'loja_sp' })).status).toBe(409);
     expect((await s.post('/identities', { name: 'a b' })).status).toBe(400);
     expect((await s.post('/identities', { handle: 'x y' })).status).toBe(400);
+  });
+  it('AVD-base com emulador vivo → 409 e nada clonado', async () => {
+    const h = harness({ baseAvd: 'mcp_test_playstore' }); const s = await serve(h.db, h.ops);
+    const r = await s.post('/identities', {});
+    expect(r.status).toBe(409); expect(String(r.body?.error)).toMatch(/em uso \(emulator-5554\)/);
+    expect(h.log.some((l) => l.startsWith('clone'))).toBe(false);
   });
   it('clone falhou → 500 com a mensagem e nada gravado', async () => {
     const h = harness({ clone: async () => { throw new Error('AVD enxame_conta2 já existe'); } }); const s = await serve(h.db, h.ops);
@@ -163,8 +169,10 @@ describe('ciclo de vida', () => {
     expect(h.log.indexOf('emu emulator-5556 kill')).toBeLessThan(h.log.indexOf('delete enxame_conta2'));
     expect(getIdentity(h.db, 'conta2')).toMatchObject({ discardedAt: NOW.toISOString(), diskBytes: 0, state: 'banned' });
     expect((await s.post('/identities/conta2/discard')).status).toBe(409);
-    await s.post('/identities/conta1/ban', { reason: 'x' });
-    expect((await s.post('/identities/conta1/discard')).status).toBe(409);
+    const hb = harness({ baseAvd: 'mcp_test_playstore' }); const sb = await serve(hb.db, hb.ops);
+    await sb.post('/identities/conta1/ban', { reason: 'x' });
+    expect((await sb.post('/identities/conta1/discard')).status).toBe(409);
+    expect(hb.log).not.toContain('delete mcp_test_playstore');
     expect(h.log).not.toContain('delete mcp_test_playstore');
   });
 
