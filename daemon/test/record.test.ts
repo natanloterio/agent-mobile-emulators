@@ -33,8 +33,10 @@ describe('recordStep', () => {
     const { taskId } = createGoalAndTask(db, 'conta1', 'objetivo');
     const step = {
       stepNumber: 0, text: '',
-      toolCalls: [{ toolCallId: 'c1', toolName: 'android_conta1_tap_node', input: { node_id: 'n9' } }],
-      toolResults: [{ toolCallId: 'c1', toolName: 'android_conta1_tap_node', output: { type: 'execution-denied', reason: 'GATE: irreversível' } }],
+      content: [
+        { type: 'tool-call', toolCallId: 'c1', toolName: 'android_conta1_tap_node', input: { node_id: 'n9' } },
+        { type: 'tool-output-denied', toolCallId: 'c1', toolName: 'android_conta1_tap_node' },
+      ],
       usage: { inputTokens: 6000, outputTokens: 80, inputTokenDetails: { cacheReadTokens: 5000 } },
     };
     const { costUsd } = recordStep(db, taskId, step, PRICING);
@@ -51,8 +53,9 @@ describe('recordStep', () => {
     const { taskId } = createGoalAndTask(db, 'conta1', 'objetivo');
     const step = {
       stepNumber: 1, text: '',
-      toolCalls: [{ toolCallId: 'c2', toolName: 'android_conta1_launch_app', input: {} }],
-      toolResults: [{ toolCallId: 'c2', toolName: 'android_conta1_launch_app', output: { type: 'error-text', value: 'NoSuchToolError: android_conta1_launch_app' } }],
+      content: [
+        { type: 'tool-error', toolCallId: 'c2', toolName: 'android_conta1_launch_app', input: {}, error: new Error('NoSuchToolError: android_conta1_launch_app') },
+      ],
       usage: { inputTokens: 10, outputTokens: 2 },
     };
     expect(() => recordStep(db, taskId, step, PRICING)).not.toThrow();

@@ -1,5 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { generateText, stepCountIs, tool, type ModelMessage, type StopCondition, type Tool, type ToolSet } from 'ai';
+import { generateText, stepCountIs, tool, type LanguageModel, type ModelMessage, type StopCondition, type Tool, type ToolSet } from 'ai';
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { CONFIG } from '../config.js';
@@ -11,7 +11,7 @@ import { parseScreen, type ScreenState } from '../screen/parse.js';
 import { buildToolApproval } from './gate.js';
 import { SYSTEM_PROMPT, taskInstruction } from './prompt.js';
 import { isScreenTool, pruneScreens } from './prune.js';
-import { HAIKU_PRICING, readUsage, recordStep, type StepLike } from './record.js';
+import { HAIKU_PRICING, readUsage, recordStep, textOf, type StepLike } from './record.js';
 import { pickWorkerTools } from './tools.js';
 
 export interface RunTaskOpts {
@@ -23,19 +23,14 @@ export interface RunTaskResult {
   readonly costUsd: number; readonly usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number };
   readonly platformBlock: string | null; readonly summary: string;
 }
-/** Dependências injetáveis para teste: conexão MCP e a função de geração. */
+/** Dependências injetáveis para teste: conexão MCP, função de geração e o próprio modelo (para usar o generateText real com um mock). */
 export interface RunTaskDeps {
-  readonly connect: (url: string, token: string) => Promise<{ tools(): Promise<ToolSet>; close(): Promise<void> }>;
-  readonly generate: typeof generateText;
+  readonly connect?: (url: string, token: string) => Promise<{ tools(): Promise<ToolSet>; close(): Promise<void> }>;
+  readonly generate?: typeof generateText;
+  readonly model?: LanguageModel;
 }
 
 type Halt = { kind: 'platform-block'; text: string } | { kind: 'infra'; text: string } | null;
-
-function textOf(result: unknown): string {
-  if (typeof result === 'string') return result;
-  const r = result as { content?: { type: string; text?: string }[] };
-  return r?.content?.filter((c) => c.type === 'text').map((c) => c.text ?? '').join('\n') ?? JSON.stringify(result);
-}
 
 function classify(e: unknown): Halt {
   const msg = String((e as Error)?.message ?? e);
@@ -58,7 +53,8 @@ function wrapTools(tools: ToolSet, onScreen: (s: ScreenState) => void, onHalt: (
   }));
 }
 
-export async function runTask(o: RunTaskOpts, deps: RunTaskDeps = { connect: connectMcp, generate: generateText }): Promise<RunTaskResult> {
+export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise<RunTaskResult> {
+  const deps = { connect: depsIn.connect ?? connectMcp, generate: depsIn.generate ?? generateText };
   const { db, identity } = o;
   const budget = o.stepBudget ?? Number(process.env.ENXAME_STEP_BUDGET ?? CONFIG.worker.stepBudget);
   const { taskId } = createGoalAndTask(db, identity.id, o.goalText);
@@ -73,7 +69,7 @@ export async function runTask(o: RunTaskOpts, deps: RunTaskDeps = { connect: con
     return { taskId, outcome, costUsd, usage, platformBlock: halt?.kind === 'platform-block' ? halt.text : null, summary };
   };
 
-  let client: Awaited<ReturnType<RunTaskDeps['connect']>> | null = null;
+  let client: Awaited<ReturnType<typeof deps.connect>> | null = null;
   try {
     client = await deps.connect(`http://127.0.0.1:${identity.mcpHostPort}/mcp`, identity.mcpToken);
     const slug = identity.deviceSlug || null;
@@ -87,13 +83,12 @@ export async function runTask(o: RunTaskOpts, deps: RunTaskDeps = { connect: con
     });
     const tools: ToolSet = { ...mcpTools, ledger_record: ledgerTool };
     const stopIfHalted: StopCondition<ToolSet> = () => halt !== null || o.isKilled();
-    const anthropic = createAnthropic({ apiKey: o.apiKey });
-    const messages: ModelMessage[] = [
-      { role: 'system', content: SYSTEM_PROMPT, providerOptions: { anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } } } },
-      { role: 'user', content: taskInstruction(o.goalText) },
-    ];
+    const model: LanguageModel = depsIn.model ?? createAnthropic({ apiKey: o.apiKey })(CONFIG.models.worker);
+    // ai@7 rejeita role:'system' dentro de messages (allowSystemInMessages=false); o system vai em `instructions`.
+    const messages: ModelMessage[] = [{ role: 'user', content: taskInstruction(o.goalText) }];
     const result = await deps.generate({
-      model: anthropic(CONFIG.models.worker), messages, tools,
+      model, tools, messages,
+      instructions: { role: 'system', content: SYSTEM_PROMPT, providerOptions: { anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } } } },
       toolApproval: buildToolApproval(slug, () => lastScreen, 'read-only') as never,
       stopWhen: [stepCountIs(budget), stopIfHalted],
       prepareStep: ({ messages: m }) => ({ messages: pruneScreens(m, CONFIG.worker.keepScreens) }),

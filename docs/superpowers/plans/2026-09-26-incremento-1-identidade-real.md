@@ -10,6 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-26-android-swarm-design.md` (§3 restrições medidas, §4.1 identidade, §4.3 orquestração, §4.4 provedores, §6 erros, §7 testes, §8 modelo de dados, §9 faseamento — este plano cobre a **fase 1** e o mínimo da **fase 2**).
 
+> **Errata (revisão final, 2026-09-26):** o código da Task 8 no plano tinha dois erros de contrato com o ai@7 que os
+> testes com fakes não pegavam: (1) `role:'system'` dentro de `messages` é rejeitado (`allowSystemInMessages=false`) — o
+> system vai em `instructions`; (2) `StepResult.toolResults[].output` é o valor cru e erros/negações vêm em
+> `StepResult.content` como `tool-error` e `tool-approval-response{approved:false}` — `recordStep` lê `content`.
+> A correção está em `daemon/test/real-sdk.test.ts` (generateText real + `MockLanguageModelV4`) e no commit da passada de correção.
+
 ## Global Constraints
 
 - Alvo de escala **8 identidades**; teto duro **16** pela varredura de portas do adb (5555–5585). Este incremento roda **1**.

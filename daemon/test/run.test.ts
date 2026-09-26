@@ -10,7 +10,7 @@ const CK = 'screen:1080x2400 density:420 orientation:portrait\n--- window:1 type
 const fakeGenerate = (): RunTaskDeps['generate'] => (async (opts: { tools: Record<string, { execute: (i: unknown, o: unknown) => Promise<unknown> }>; onStepFinish?: (s: unknown) => void | Promise<void> }) => {
   const tool = opts.tools['android_conta1_get_screen_state'];
   const out = await tool.execute({}, { toolCallId: 'x', messages: [] });
-  await opts.onStepFinish?.({ stepNumber: 0, text: '', toolCalls: [{ toolCallId: 'x', toolName: 'android_conta1_get_screen_state', input: {} }], toolResults: [{ toolCallId: 'x', toolName: 'android_conta1_get_screen_state', output: { type: 'text', value: String(out) } }], usage: { inputTokens: 100, outputTokens: 10 } });
+  await opts.onStepFinish?.({ stepNumber: 0, text: '', content: [{ type: 'tool-call', toolCallId: 'x', toolName: 'android_conta1_get_screen_state', input: {} }, { type: 'tool-result', toolCallId: 'x', toolName: 'android_conta1_get_screen_state', input: {}, output: String(out) }], usage: { inputTokens: 100, outputTokens: 10 } });
   return { text: 'resumo', totalUsage: { inputTokens: 100, outputTokens: 10 }, steps: [] };
 }) as unknown as RunTaskDeps['generate'];
 const fakeMcp = (screenText: string, fail?: 'unauthorized' | 'device-missing'): RunTaskDeps['connect'] => async () => ({
