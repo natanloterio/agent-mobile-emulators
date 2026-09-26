@@ -32,3 +32,11 @@
 .idcard__cell-label { font-size: 12px; }
 .idcard__action { min-height: 44px; }
 .ids__cards { display: flex; flex-direction: column; gap: 14px; }
+.idrow__actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.idrow__error { grid-column: 1 / -1; }
+.idrow__login { display: flex; flex-direction: column; gap: 6px; }
+.idrow__login-btns { display: flex; gap: 6px; }
+.idrow__input {
+  font: inherit; font-size: 14px; padding: 8px 12px; border: 1px solid var(--color-dark);
+  border-radius: var(--radius-control); background: var(--color-white); min-width: 0;
+}

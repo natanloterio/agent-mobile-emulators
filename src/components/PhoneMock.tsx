@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { phoneLabel } from '../live/frameAge';
 import { createH264Sink } from '../live/h264Sink';
 import { useNow } from '../live/useNow';
+import type { InputGesture } from '../live/types';
 import type { VideoBus } from '../live/videoBus';
 import type { Identity } from '../types/fleet';
 import './PhoneMock.css';
@@ -24,6 +25,8 @@ interface PhoneMockProps {
   readonly bus?: VideoBus | null;
   readonly screen?: { readonly dataUrl: string; readonly at: string };
   readonly video?: Identity['video'];
+  /** Gesto do operador em modo controle (Frente C implementa a captura). */
+  readonly onInput?: (g: InputGesture) => void;
 }
 
 /** Esqueleto da tela (sem dados vivos), mantido idêntico ao anterior. */

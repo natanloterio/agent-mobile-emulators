@@ -10,6 +10,8 @@ interface ProvidersProps {
   readonly fleetSize: number;
   readonly kvLeft: string;
   readonly vramEmuShare: string;
+  /** VRAM total medida pelo host (vivo) ou a do design. */
+  readonly vramTotal: string;
   readonly isMobile: boolean;
   readonly onPickMode: (role: RoleKey, mode: ProviderMode) => void;
   readonly onTest: (role: RoleKey) => void;
@@ -22,7 +24,7 @@ const MODES: readonly { readonly key: ProviderMode; readonly label: string }[] =
   { key: 'local', label: 'Local' },
 ];
 
-export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, isMobile, onPickMode, onTest, onSetField, onLoadModels }: ProvidersProps) {
+export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, isMobile, onPickMode, onTest, onSetField, onLoadModels }: ProvidersProps) {
   // Recarrega a lista de modelos quando a tela abre e quando algum papel troca de modo.
   const modeKey = roles.map((r) => `${r.key}:${r.mode}`).join('|');
   useEffect(() => { roles.forEach((r) => onLoadModels(r.key)); }, [modeKey]);
@@ -90,7 +92,7 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, isMobile, on
 
       <div className="card card--grey vram">
         <div className="row-between">
-          <Heading size="h4" variant="black">VRAM disputada · 32 GB</Heading>
+          <Heading size="h4" variant="black">VRAM disputada · {vramTotal}</Heading>
           <span className="muted-15">KV cache restante: <b>{kvLeft}</b> para {fleetSize} sequências de ~13k tokens</span>
         </div>
         <div className="vram__stack" aria-label="Distribuição da VRAM">
