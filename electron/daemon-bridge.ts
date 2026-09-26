@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import WebSocket from 'ws';
+import { dispatchWsMessage, type WsHandlers } from './ws-dispatch.js';
 
 const INFO = path.join(os.homedir(), '.local', 'share', 'enxame', 'daemon.json');
 type Info = { port: number; token: string; pid: number };
@@ -30,9 +31,9 @@ export async function waitForInfo(timeoutMs = 15000): Promise<Info> {
   throw new Error('daemon não respondeu em 15 s');
 }
 
-export function connectSnapshots(info: Info, onSnapshot: (data: unknown) => void): () => void {
+export function connectSnapshots(info: Info, h: WsHandlers): () => void {
   const ws = new WebSocket(`ws://127.0.0.1:${info.port}/ws?token=${info.token}`);
-  ws.on('message', (m) => { const msg = JSON.parse(String(m)) as { type: string; data: unknown }; if (msg.type === 'snapshot') onSnapshot(msg.data); });
+  ws.on('message', (m) => dispatchWsMessage(String(m), h));
   return () => ws.close();
 }
 
