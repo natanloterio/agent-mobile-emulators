@@ -66,6 +66,12 @@ describe('runTask — incremento 5', () => {
     expect(r.outcome).toBe('interrupted');
     expect(getIdentity(db, 'conta1')).toMatchObject({ paused: true, state: 'needs-human', lastError: 'humano viu captcha' });
   });
+  it('kill switch no meio: killed e a tarefa volta a todo (não conta como done no objetivo)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row); let killed = false;
+    const model = new MockLanguageModelV4({ doGenerate: screens(4) as never });
+    const r = await runTask({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => killed, providers: PROVIDERS, onStep: () => { killed = true; } }, { connect: mcp, model });
+    expect(r.outcome).toBe('killed'); expect(task(db, r.taskId).state).toBe('todo');
+  });
   it('pacer roda antes de cada passo; stop do pacer tira as tools do passo', async () => {
     const db = openDb(':memory:'); upsertIdentity(db, row);
     const model = new MockLanguageModelV4({ doGenerate: screens(2) as never });

@@ -160,7 +160,8 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       setIdentityState(db, identity.id, idState, { lastError: h?.text ?? (outcome === 'failed' || outcome === 'quality-floor' ? summary.slice(0, 200) : null) });
     }
     const taskState = outcome === 'platform-block' ? 'needs-human' : outcome === 'failed' || outcome === 'quality-floor' ? 'failed'
-      : outcome === 'infra' ? (h?.kind === 'auth' ? 'failed' : 'todo') : outcome === 'interrupted' ? 'todo' : 'done';
+      // Kill switch e pausa/controle não concluem a tarefa: volta a 'todo' (o objetivo do scheduler não conta como done).
+      : outcome === 'infra' ? (h?.kind === 'auth' ? 'failed' : 'todo') : outcome === 'interrupted' || outcome === 'killed' ? 'todo' : 'done';
     setTaskState(db, taskId, taskState);
     if (ownGoalId) finishGoal(db, ownGoalId);
     const earlyStopRemaining = outcome === 'done' ? Math.max(0, budget - stepsUsed) : 0;
