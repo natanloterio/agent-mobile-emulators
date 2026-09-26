@@ -30,4 +30,15 @@ create table if not exists decision_sample (
   id integer primary key autoincrement, step_id integer references step(id), reduced_state text not null,
   question text not null, model_answer text, label text, label_origin text check (label_origin in ('outcome','human','model'))
 );
+create table if not exists provider_config (
+  role text primary key check (role in ('lider','worker','esc')),
+  mode text not null check (mode in ('nuvem','local')),
+  model text not null, endpoint text not null,
+  updated_at text not null default (datetime('now'))
+);
+create table if not exists provider_test (
+  id integer primary key autoincrement, role text not null, model text not null,
+  at text not null default (datetime('now')), latency_ms integer, tokens_per_sec real,
+  args_valid integer not null, warning text, error text
+);
 `;

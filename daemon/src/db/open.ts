@@ -1,9 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
+import { applyMigrations } from './migrate.js';
 import { SCHEMA } from './schema.js';
 
 export function openDb(path: string): DatabaseSync {
   const db = new DatabaseSync(path);
   db.exec('pragma journal_mode = wal; pragma foreign_keys = on;');
   db.exec(SCHEMA);
+  applyMigrations(db);
   return db;
 }
