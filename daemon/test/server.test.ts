@@ -139,4 +139,14 @@ describe('servidor — incremento 3', () => {
     expect(await get('esc')).toEqual({ source: 'anthropic', models: ['claude-haiku-4-5', 'claude-sonnet-5', 'claude-opus-5'], error: null });
     expect((await fetch(`http://127.0.0.1:${s.port}/providers/models?role=chefe`, { headers: h })).status).toBe(404);
   });
+  it('GET /providers/models: Ollama responde não-ok → erro com status; corpo inválido → erro de resposta inválida', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    let mode: 'not-ok' | 'bad-json' = 'not-ok';
+    const fetchFn = (async () => mode === 'not-ok' ? new Response('erro', { status: 500 }) : new Response('não é json')) as unknown as typeof fetch;
+    const s = await startServer({ db, port: 0, token: 'seg', fetch: fetchFn, onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const get = async () => (await fetch(`http://127.0.0.1:${s.port}/providers/models?role=worker`, { headers: h })).json() as Promise<{ source: string; models: string[]; error: string | null }>;
+    expect(await get()).toEqual({ source: 'ollama', models: [], error: 'Ollama respondeu 500 em /api/tags' });
+    mode = 'bad-json';
+    expect(await get()).toEqual({ source: 'ollama', models: [], error: 'resposta inválida do Ollama em /api/tags' });
+  });
 });

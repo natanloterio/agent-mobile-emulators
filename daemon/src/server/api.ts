@@ -21,6 +21,19 @@ function readJson(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { try { resolve(JSON.parse(b || '{}')); } catch { resolve(null); } }); });
 }
 
+/** Leitura pura da lista de modelos do Ollama; nunca sobe o daemon (spec inc. 3 §4.5). */
+async function listOllamaModels(fetchFn: typeof fetch, base: string): Promise<{ models: string[]; error: string | null }> {
+  let r: Response;
+  try { r = await fetchFn(`${base}/api/tags`); }
+  catch { return { models: [], error: 'Ollama parado — o próximo teste ou objetivo o sobe' }; }
+  if (!r.ok) return { models: [], error: `Ollama respondeu ${r.status} em /api/tags` };
+  try {
+    const j = await r.json() as { models?: { name: string }[] };
+    if (!Array.isArray(j.models)) return { models: [], error: 'resposta inválida do Ollama em /api/tags' };
+    return { models: j.models.map((m) => m.name), error: null };
+  } catch { return { models: [], error: 'resposta inválida do Ollama em /api/tags' }; }
+}
+
 export interface RunningServer { readonly port: number; broadcast(): void; isKilled(): boolean; close(): Promise<void> }
 
 export async function startServer(o: ServerOpts): Promise<RunningServer> {
@@ -48,12 +61,8 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
         if (!isRole(role)) return send(res, 404, { error: 'papel desconhecido' });
         const cfg = readProviderConfig(o.db)[role];
         if (cfg.mode === 'nuvem') return send(res, 200, { source: 'anthropic', models: CLOUD_MODELS, error: null });
-        // Leitura pura: nunca sobe o Ollama para listar (spec inc. 3 §4.5).
-        try {
-          const r = await fetchFn(`${ollamaBase(cfg.endpoint)}/api/tags`);
-          const j = r.ok ? await r.json() as { models?: { name: string }[] } : { models: [] };
-          return send(res, 200, { source: 'ollama', models: (j.models ?? []).map((m) => m.name), error: null });
-        } catch { return send(res, 200, { source: 'ollama', models: [], error: 'Ollama parado — o próximo teste ou objetivo o sobe' }); }
+        const { models, error } = await listOllamaModels(fetchFn, ollamaBase(cfg.endpoint));
+        return send(res, 200, { source: 'ollama', models, error });
       }
       const prov = PROVIDERS_ROUTE.exec(url.pathname);
       if (prov) {
