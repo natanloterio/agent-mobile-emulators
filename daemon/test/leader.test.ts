@@ -1,5 +1,6 @@
 import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, setIdentityFlags, setIdentityState, upsertIdentity, type IdentityRow } from '../src/db/identities.js';
 import type { ProbeResult } from '../src/device/probe.js';
@@ -72,6 +73,14 @@ describe('planGoal — líder com LLM', () => {
     expect(ensured).toEqual(['http://127.0.0.1:11434/v1|gpt-oss:20b']);
     expect(plan.leader).toMatchObject({ model: 'gpt-oss:20b', costUsd: 0, error: null });
   });
+  it('papel local: prosa fora do schema ganha uma nova tentativa antes da regra', async () => {
+    const db = fleet(1);
+    const local = { ...PROVIDERS, lider: { role: 'lider' as const, mode: 'local' as const, model: 'gpt-oss:20b', endpoint: 'http://127.0.0.1:11434/v1' } };
+    const prose = { content: [{ type: 'text', text: '**Padrão de resposta escolhido**' }], finishReason: { unified: 'stop', raw: 'stop' }, usage: json({}).usage, warnings: [] };
+    const model = new MockLanguageModelV4({ doGenerate: [prose, json({ pattern: 'sharding', rationale: 'Fila compartilhada.', instructions: [] })] as never });
+    const plan = await planGoal('Responder comentários', { db, ensureReady: probeBy({}).ensureReady, model, providers: local, ollama: { ensure: async () => undefined } });
+    expect(plan.leader.error).toBeNull(); expect(plan.pattern).toBe('sharding'); expect(model.doGenerateCalls).toHaveLength(2);
+  });
 });
 
 describe('planGoal — frota', () => {
@@ -107,5 +116,13 @@ describe('deterministicPlan', () => {
   it('trabalho preso à conta → fan-out com o texto do objetivo', () => {
     const d = deterministicPlan('Responder comentários da própria caixa', ['a', 'b']);
     expect(d.pattern).toBe('fan-out'); expect(d.instructions.get('b')).toBe('Responder comentários da própria caixa');
+  });
+});
+
+describe('schema do líder (integrador)', () => {
+  it('não leva minLength/maxLength ao json_schema: o Ollama descarta a gramática inteira com eles', async () => {
+    const { LeaderOut } = await import('../src/leader/plan.js');
+    const json = JSON.stringify(z.toJSONSchema(LeaderOut));
+    expect(json).not.toMatch(/minLength|maxLength/);
   });
 });

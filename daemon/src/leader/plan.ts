@@ -37,11 +37,17 @@ export function deterministicPlan(text: string, readyIds: readonly string[]): De
   return { pattern: 'sharding', rationale: 'Regra determinística: fila de itens compartilhada → sharding, uma fatia por identidade pronta.', instructions: new Map(readyIds.map((id, k) => [id, slice(k)])) };
 }
 
-const LeaderOut = z.object({
+/**
+ * Sem minLength/maxLength de propósito: o Ollama (0.30) descarta a gramática inteira de um json_schema que os tenha e o
+ * modelo local responde texto livre (medido com gpt-oss:20b). Os limites são aplicados depois, em `clampDecision`.
+ */
+export const LeaderOut = z.object({
   pattern: z.enum(['fan-out', 'sharding']),
-  rationale: z.string().min(1).max(600),
-  instructions: z.array(z.object({ identityId: z.string(), instruction: z.string().min(1).max(2000) })),
+  rationale: z.string(),
+  instructions: z.array(z.object({ identityId: z.string(), instruction: z.string() })),
 });
+const LOCAL_ATTEMPTS = 2;
+const MAX_RATIONALE = 600; const MAX_INSTRUCTION = 2000;
 
 const LEADER_PROMPT = `Você é o líder de um enxame de celulares Android, cada um logado numa conta diferente do mesmo app.
 Decomponha o objetivo do usuário em uma instrução por identidade e escolha o padrão:
@@ -60,12 +66,22 @@ async function llmDecision(text: string, fleet: readonly Readiness[], cfg: Provi
   // Papel local: o Ollama tem de estar de pé antes da chamada, como no worker (run.ts).
   if (row.mode === 'local') await (d.ollama ?? createOllamaSupervisor()).ensure(row.endpoint, row.model);
   const model = d.model ?? (d.buildModel ?? defaultBuildModel)(row, { anthropicApiKey: d.apiKey });
-  const res = await (d.generate ?? generateText)({ model, instructions: LEADER_PROMPT, prompt: leaderPrompt(text, fleet), output: Output.object({ schema: LeaderOut, name: 'plano' }) });
+  const call = () => (d.generate ?? generateText)({ model, instructions: LEADER_PROMPT, prompt: leaderPrompt(text, fleet), output: Output.object({ schema: LeaderOut, name: 'plano' }) });
+  // Modelo local às vezes escapa da gramática e responde prosa (gpt-oss:20b, ~1 em 3 medido): uma nova tentativa antes da regra.
+  const attempts = row.mode === 'local' ? LOCAL_ATTEMPTS : 1;
+  let res!: Awaited<ReturnType<typeof call>>;
+  for (let k = 1; ; k++) {
+    try { res = await call(); break; } catch (e) { if (k >= attempts) throw e; }
+  }
   const out = res.output;
   const known = new Set(fleet.map((r) => r.identity.id));
-  const instructions = new Map(out.instructions.filter((i) => known.has(i.identityId)).map((i) => [i.identityId, i.instruction.trim()] as const));
+  const instructions = new Map(out.instructions
+    .map((i) => [i.identityId, i.instruction.trim().slice(0, MAX_INSTRUCTION)] as const)
+    .filter(([id, instr]) => known.has(id) && instr.length > 0));
+  const rationale = out.rationale.trim().slice(0, MAX_RATIONALE);
+  if (!rationale) throw new Error('líder respondeu sem justificativa');
   const usage = (res.totalUsage ?? res.usage) as UsageLike;
-  return { decision: { pattern: out.pattern, rationale: out.rationale.trim(), instructions }, costUsd: costOf(usage, pricingFor(row)) };
+  return { decision: { pattern: out.pattern, rationale, instructions }, costUsd: costOf(usage, pricingFor(row)) };
 }
 
 /**

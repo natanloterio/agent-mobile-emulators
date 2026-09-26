@@ -12,7 +12,8 @@ export const LOCAL_PRICING: Pricing = { inputPerM: 0, outputPerM: 0, cacheReadPe
 
 export function buildModel(row: ProviderRow, env: { anthropicApiKey?: string }, deps: FactoryDeps = {}): LanguageModel {
   if (row.mode === 'local') {
-    return createOpenAICompatible({ name: 'ollama', baseURL: row.endpoint, includeUsage: true, fetch: deps.fetch })(row.model);
+    // structuredOutputs: o Ollama aceita response_format json_schema; sem isto o SDK descarta o schema e o líder recebe texto livre.
+    return createOpenAICompatible({ name: 'ollama', baseURL: row.endpoint, includeUsage: true, supportsStructuredOutputs: true, fetch: deps.fetch })(row.model);
   }
   if (!env.anthropicApiKey) throw new ProviderError('auth', `papel ${row.role} está na nuvem e ANTHROPIC_API_KEY está ausente`);
   return createAnthropic({ apiKey: env.anthropicApiKey, fetch: deps.fetch })(row.model);
