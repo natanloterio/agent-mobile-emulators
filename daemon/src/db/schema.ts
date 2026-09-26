@@ -21,6 +21,7 @@ create table if not exists step (
   cache_read_tokens integer, latency_ms integer, escalated integer not null default 0,
   idempotency_key text, intent_written_at text not null, started_at text, finished_at text, error text
 );
+create unique index if not exists step_task_idempotency on step(task_id, idempotency_key);
 create table if not exists ledger (
   identity_id text not null references identity(id), item_key text not null, kind text not null,
   note text, created_at text not null default (datetime('now')), primary key (identity_id, item_key)

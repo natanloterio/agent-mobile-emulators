@@ -10,7 +10,7 @@ export interface ProbeSignals {
 }
 export interface ProbeResult {
   readonly ready: boolean; readonly signals: ProbeSignals; readonly details: readonly string[];
-  readonly failureClass: 'infra' | 'version' | null;
+  readonly failureClass: 'infra' | 'version' | 'blocked' | null;
 }
 type McpFactory = (url: string, token: string) => Promise<{ tools(): Promise<ToolSet>; close(): Promise<void> }>;
 

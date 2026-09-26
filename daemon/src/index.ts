@@ -24,16 +24,15 @@ upsertIdentity(db, {
 });
 
 const daemonToken = randomUUID();
-let killed = false;
 const server = await startServer({
   db, token: daemonToken,
-  onKill: () => { killed = true; server.broadcast(); },
+  onKill: () => server.broadcast(),
   onGoal: async (text) => {
-    killed = false;
+    if (server.isKilled()) return; // kill switch acionado: retomar via POST /resume antes de novo objetivo
     const id = getIdentity(db, 'conta1'); if (!id) return;
     const probe = await ensureIdentityReady(db, id, { adb }); server.broadcast();
     if (!probe.ready) return;
-    await runTask({ db, identity: getIdentity(db, 'conta1')!, goalText: text, apiKey: env.anthropicApiKey, isKilled: () => killed, onStep: () => server.broadcast() });
+    await runTask({ db, identity: getIdentity(db, 'conta1')!, goalText: text, apiKey: env.anthropicApiKey, isKilled: () => server.isKilled(), onStep: () => server.broadcast() });
     server.broadcast();
   },
 });

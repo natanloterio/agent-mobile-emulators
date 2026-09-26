@@ -4,7 +4,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { CONFIG } from '../config.js';
 import { setIdentityState, type IdentityRow } from '../db/identities.js';
-import { createGoalAndTask, ledgerHas, ledgerPut, setTaskState } from '../db/tasks.js';
+import { createGoalAndTask, ledgerHas, ledgerPut, setTaskState, writeIntent } from '../db/tasks.js';
 import { connectMcp } from '../device/mcp.js';
 import { detectPlatformBlock } from '../screen/checks.js';
 import { parseScreen, type ScreenState } from '../screen/parse.js';
@@ -23,31 +23,65 @@ export interface RunTaskResult {
   readonly costUsd: number; readonly usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number };
   readonly platformBlock: string | null; readonly summary: string;
 }
-/** Dependências injetáveis para teste: conexão MCP, função de geração e o próprio modelo (para usar o generateText real com um mock). */
+/** Dependências injetáveis para teste: conexão MCP, função de geração e o próprio modelo (generateText real + mock). */
 export interface RunTaskDeps {
   readonly connect?: (url: string, token: string) => Promise<{ tools(): Promise<ToolSet>; close(): Promise<void> }>;
   readonly generate?: typeof generateText;
   readonly model?: LanguageModel;
 }
 
-type Halt = { kind: 'platform-block'; text: string } | { kind: 'infra'; text: string } | null;
+/** Paradas: bloqueio de plataforma, auth do MCP (token rotacionado — retry não resolve) e infra (device/rede). */
+type Halt = { kind: 'platform-block' | 'auth' | 'infra'; text: string } | null;
 
-function classify(e: unknown): Halt {
+const MAX_SCREEN_PAGES = 5;
+const ACTION_TOOL = /_(click_node|tap_node|scroll|scroll_to_node|press_back|open_app|type_append_text|type_replace_text|type_clear_text|swipe|long_press|press_key)$/;
+
+/** Só erros vindos do MCP/device são classificados; erro benigno de tool (ex.: "Node not found within timeout") fica como tool-error. */
+export function classifyMcpError(e: unknown): Halt {
   const msg = String((e as Error)?.message ?? e);
-  if (/401|unauthorized|not found|offline|ECONNREFUSED|fetch failed/i.test(msg)) return { kind: 'infra', text: msg.slice(0, 200) };
+  if (/\b(401|403)\b|unauthorized|forbidden/i.test(msg)) return { kind: 'auth', text: msg.slice(0, 200) };
+  if (/device '[^']*' not found|no devices\/emulators|ECONNREFUSED|ECONNRESET|fetch failed|device offline/i.test(msg)) return { kind: 'infra', text: msg.slice(0, 200) };
   return null;
 }
 
-/** Envolve cada tool do MCP para ler telas, detectar bloqueio e classificar falhas de infra. */
-function wrapTools(tools: ToolSet, onScreen: (s: ScreenState) => void, onHalt: (h: Halt) => void): ToolSet {
+interface WrapCtx {
+  readonly db: DatabaseSync; readonly taskId: string; readonly pending: Map<string, number>;
+  readonly onScreen: (s: ScreenState | null) => void; readonly onHalt: (h: Halt) => void;
+}
+
+/** Lê todas as páginas de um screen state (spec Review Focus 2) e devolve texto fundido sem as linhas de cursor. */
+async function readAllPages(first: unknown, exec: (input: unknown) => Promise<unknown>, input: unknown): Promise<{ text: string; screen: ScreenState }> {
+  const texts = [textOf(first)]; let screen = parseScreen(texts[0]); const windows = [...screen.windows];
+  for (let n = 1; screen.cursor && n < MAX_SCREEN_PAGES; n++) {
+    const next = await exec({ ...(input as object), cursor: screen.cursor });
+    if (isErrorResult(next)) break;
+    texts.push(textOf(next)); screen = parseScreen(texts[texts.length - 1]); windows.push(...screen.windows);
+  }
+  const merged: ScreenState = { ...screen, cursor: null, windows };
+  return { text: texts.join('\n').split('\n').filter((l) => !/^(?:next_)?cursor:/.test(l)).join('\n'), screen: merged };
+}
+
+const isErrorResult = (out: unknown): boolean => !!out && typeof out === 'object' && (out as { isError?: boolean }).isError === true;
+
+/** Envolve cada tool do MCP: write-ahead, isError → erro, leitura paginada, invalidação da tela após ação, classificação de falha. */
+function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
+  let idx = 0;
   return Object.fromEntries(Object.entries(tools).map(([name, t]) => {
     const base = t as Tool & { execute?: (input: unknown, opts: unknown) => Promise<unknown> };
-    const execute = async (input: unknown, opts: unknown) => {
+    const execute = async (input: unknown, opts: { toolCallId?: string }) => {
+      const callId = opts?.toolCallId ?? `call-${idx}`;
+      ctx.pending.set(callId, writeIntent(ctx.db, ctx.taskId, ++idx, name, input, `${ctx.taskId}:${callId}`));
       try {
         const out = await base.execute!(input, opts);
-        if (isScreenTool(name)) onScreen(parseScreen(textOf(out)));
+        if (isErrorResult(out)) throw new Error(textOf(out) || `${name}: isError`);
+        if (isScreenTool(name)) {
+          const all = await readAllPages(out, (i) => base.execute!(i, opts), input);
+          ctx.onScreen(all.screen);
+          return all.text;
+        }
+        if (ACTION_TOOL.test(name)) ctx.onScreen(null); // a tela mudou; o gate nega até nova leitura
         return out;
-      } catch (e) { const h = classify(e); if (h) onHalt(h); throw e; }
+      } catch (e) { const h = classifyMcpError(e); if (h) ctx.onHalt(h); throw e; }
     };
     return [name, { ...base, execute } as Tool];
   }));
@@ -61,21 +95,27 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
   setIdentityState(db, identity.id, 'running', { lastError: null });
 
   let lastScreen: ScreenState | null = null; let halt: Halt = null; let costUsd = 0;
+  const pending = new Map<string, number>();
   const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
   const finish = (outcome: RunTaskResult['outcome'], summary: string): RunTaskResult => {
-    const idState = outcome === 'platform-block' ? 'needs-human' : outcome === 'infra' ? 'offline' : 'idle';
-    setIdentityState(db, identity.id, idState, { lastError: halt?.text ?? (outcome === 'failed' ? summary.slice(0, 200) : null) });
-    setTaskState(db, taskId, outcome === 'done' || outcome === 'budget' || outcome === 'killed' ? 'done' : outcome === 'infra' ? 'todo' : outcome === 'platform-block' ? 'needs-human' : 'failed');
-    return { taskId, outcome, costUsd, usage, platformBlock: halt?.kind === 'platform-block' ? halt.text : null, summary };
+    const h = halt as Halt;
+    const idState = h?.kind === 'platform-block' ? 'needs-human' : h ? 'offline' : 'idle';
+    setIdentityState(db, identity.id, idState, { lastError: h?.text ?? (outcome === 'failed' ? summary.slice(0, 200) : null) });
+    const taskState = outcome === 'platform-block' ? 'needs-human' : outcome === 'failed' ? 'failed'
+      : outcome === 'infra' ? (h?.kind === 'auth' ? 'failed' : 'todo') : 'done';
+    setTaskState(db, taskId, taskState);
+    return { taskId, outcome, costUsd, usage, platformBlock: h?.kind === 'platform-block' ? h.text : null, summary };
   };
 
   let client: Awaited<ReturnType<typeof deps.connect>> | null = null;
   try {
     client = await deps.connect(`http://127.0.0.1:${identity.mcpHostPort}/mcp`, identity.mcpToken);
     const slug = identity.deviceSlug || null;
-    const mcpTools = wrapTools(pickWorkerTools(await client.tools(), slug),
-      (s) => { lastScreen = s; const b = detectPlatformBlock(s); if (b) halt = { kind: 'platform-block', text: b }; },
-      (h) => { halt = h; });
+    const mcpTools = wrapTools(pickWorkerTools(await client.tools(), slug), {
+      db, taskId, pending,
+      onScreen: (s) => { lastScreen = s; const b = s ? detectPlatformBlock(s) : null; if (b) halt = { kind: 'platform-block', text: b }; },
+      onHalt: (h) => { halt = h; },
+    });
     const ledgerTool = tool({
       description: 'Registra um item tratado nesta identidade e diz se já existia. Chame ANTES de tratar.',
       inputSchema: z.object({ item_key: z.string().min(3), author: z.string(), excerpt: z.string().max(300), draft_reply: z.string().max(500) }),
@@ -84,29 +124,33 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     const tools: ToolSet = { ...mcpTools, ledger_record: ledgerTool };
     const stopIfHalted: StopCondition<ToolSet> = () => halt !== null || o.isKilled();
     const model: LanguageModel = depsIn.model ?? createAnthropic({ apiKey: o.apiKey })(CONFIG.models.worker);
-    // ai@7 rejeita role:'system' dentro de messages (allowSystemInMessages=false); o system vai em `instructions`.
     const messages: ModelMessage[] = [{ role: 'user', content: taskInstruction(o.goalText) }];
     const result = await deps.generate({
       model, tools, messages,
+      // ai@7 rejeita role:'system' em messages; o system vai em instructions (com cache de 1h).
       instructions: { role: 'system', content: SYSTEM_PROMPT, providerOptions: { anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } } } },
+      // Uma tool por passo: o gate decide com a tela que o modelo acabou de ler, nunca em paralelo com uma ação.
+      providerOptions: { anthropic: { disableParallelToolUse: true } },
       toolApproval: buildToolApproval(slug, () => lastScreen, 'read-only') as never,
       stopWhen: [stepCountIs(budget), stopIfHalted],
       prepareStep: ({ messages: m }) => ({ messages: pruneScreens(m, CONFIG.worker.keepScreens) }),
       onStepFinish: (step) => {
-        const r = recordStep(db, taskId, step as unknown as StepLike, HAIKU_PRICING); costUsd += r.costUsd;
+        const r = recordStep(db, taskId, step as unknown as StepLike, HAIKU_PRICING, pending); costUsd += r.costUsd;
         const u = readUsage(step.usage as never); usage.inputTokens += u.inputTokens; usage.outputTokens += u.outputTokens; usage.cacheReadTokens += u.cacheReadTokens;
         o.onStep();
       },
     });
-    // `halt` é atribuído dentro de closures; o TS estreita o `let` para null e não vê isso — reler pelo tipo declarado.
-    const finalHalt = halt as Halt;
-    if (finalHalt?.kind === 'platform-block') return finish('platform-block', result.text);
-    if (finalHalt?.kind === 'infra') return finish('infra', result.text);
+    const h = halt as Halt;
+    if (h?.kind === 'platform-block') return finish('platform-block', result.text);
+    if (h) return finish('infra', result.text);
     if (o.isKilled()) return finish('killed', result.text);
     return finish((result.steps?.length ?? 0) >= budget ? 'budget' : 'done', result.text);
   } catch (e) {
-    const h = classify(e); if (h) halt = h;
-    return finish(halt?.kind === 'infra' ? 'infra' : halt?.kind === 'platform-block' ? 'platform-block' : 'failed', String((e as Error).message ?? e));
+    // Erro fora das tools (ex.: chave da Anthropic inválida) é falha da tarefa, não do device.
+    const h = halt as Halt;
+    if (h?.kind === 'platform-block') return finish('platform-block', String((e as Error).message ?? e));
+    if (h) return finish('infra', String((e as Error).message ?? e));
+    return finish('failed', String((e as Error).message ?? e));
   } finally {
     await client?.close().catch(() => undefined);
   }

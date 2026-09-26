@@ -30,3 +30,18 @@ describe('gate determinístico', () => {
     expect(approvals.android_conta1_tap_node({ node_id: 'node_ff01' })).toMatchObject({ type: 'denied' });
   });
 });
+
+describe('gate — revisão final (I2)', () => {
+  it('casa por palavra e cobre curtir/like/"seguir de volta"/"publicar agora"', () => {
+    const s = parseScreen(S.launcher + '\nnode_a\tButton\tSeguir de volta\t-\t-\t0,0,10,10\ton,clk,ena\nnode_b\tButton\tCurtir\t-\t-\t0,20,10,30\ton,clk,ena\nnode_c\tButton\tLike\t-\t-\t0,40,10,50\ton,clk,ena\nnode_d\tButton\tPublicar agora\t-\t-\t0,60,10,70\ton,clk,ena\n');
+    for (const id of ['node_a', 'node_b', 'node_c', 'node_d']) expect(decideNodeAction(id, s), id).toMatchObject({ type: 'denied' });
+  });
+  it('container clicável sem texto com filho "Seguir" dentro dos bounds é negado', () => {
+    const s = parseScreen(S.launcher + '\nnode_box\tFrameLayout\t-\t-\t-\t0,0,100,100\ton,clk,ena\nnode_child\tTextView\tSeguir\t-\t-\t10,10,50,30\ton,ena\n');
+    expect(decideNodeAction('node_box', s)).toMatchObject({ type: 'denied' });
+  });
+  it('palavra neutra que contém o radical continua aprovada ("Seguidores: 120")', () => {
+    const s = parseScreen(S.launcher + '\nnode_n\tTextView\tSeguidores: 120\t-\t-\t0,0,10,10\ton,clk,ena\n');
+    expect(decideNodeAction('node_n', s)).toBe('approved');
+  });
+});

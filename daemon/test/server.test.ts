@@ -36,3 +36,22 @@ describe('servidor do daemon', () => {
     expect(JSON.parse(msgs[0]).type).toBe('snapshot'); ws.close();
   });
 });
+
+describe('servidor — revisão final (I11)', () => {
+  it('segundo POST /goals enquanto um roda → 409; kill/resume refletem no snapshot', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    let release!: () => void; const gate = new Promise<void>((r) => { release = r; });
+    const s = await startServer({ db, port: 0, token: 'seg', onGoal: () => gate, onKill: () => {} }); stop = s.close;
+    const h = { authorization: 'Bearer seg', 'content-type': 'application/json' };
+    const body = JSON.stringify({ text: 'objetivo um' });
+    expect((await fetch(`http://127.0.0.1:${s.port}/goals`, { method: 'POST', headers: h, body })).status).toBe(202);
+    expect((await fetch(`http://127.0.0.1:${s.port}/goals`, { method: 'POST', headers: h, body })).status).toBe(409);
+    await fetch(`http://127.0.0.1:${s.port}/kill`, { method: 'POST', headers: h });
+    expect(s.isKilled()).toBe(true);
+    expect(((await (await fetch(`http://127.0.0.1:${s.port}/state`, { headers: h })).json()) as { killed: boolean }).killed).toBe(true);
+    await fetch(`http://127.0.0.1:${s.port}/resume`, { method: 'POST', headers: h });
+    expect(s.isKilled()).toBe(false);
+    release(); await new Promise((r) => setTimeout(r, 10));
+    expect((await fetch(`http://127.0.0.1:${s.port}/goals`, { method: 'POST', headers: h, body })).status).toBe(202);
+  });
+});

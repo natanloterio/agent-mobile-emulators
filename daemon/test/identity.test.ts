@@ -37,3 +37,22 @@ describe('ensureIdentityReady', () => {
     expect(got?.lastError).toContain('449');
   });
 });
+
+describe('ensureIdentityReady — revisão final (I7, I8)', () => {
+  it('I7: forward que lança vira offline/infra, sem propagar', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { adb } = adbSpy();
+    const boom: Adb = { ...adb, forward: async () => { throw new Error("adb: device 'emulator-5554' not found"); } };
+    const r = await ensureIdentityReady(db, row, { adb: boom, probe: readyProbe });
+    expect(r.ready).toBe(false); expect(r.failureClass).toBe('infra');
+    expect(getIdentity(db, 'conta1')?.state).toBe('offline');
+  });
+  it('I8: identidade em needs-human é recusada sem tocar no device', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, { ...row, state: 'needs-human' });
+    const { adb, calls } = adbSpy();
+    const r = await ensureIdentityReady(db, getIdentity(db, 'conta1')!, { adb, probe: readyProbe });
+    expect(r.ready).toBe(false); expect(r.failureClass).toBe('blocked');
+    expect(calls).toHaveLength(0);
+    expect(getIdentity(db, 'conta1')?.state).toBe('needs-human');
+  });
+});

@@ -43,7 +43,12 @@ export function setIdentityState(
   db: DatabaseSync, id: string, state: IdentityState,
   patch: { lastError?: string | null; bannedReason?: string | null; snapshotTakenAt?: string | null } = {},
 ): void {
-  db.prepare(`update identity set state=?, last_error=coalesce(?, last_error), banned_reason=coalesce(?, banned_reason),
-    snapshot_taken_at=coalesce(?, snapshot_taken_at), updated_at=datetime('now') where id=?`)
-    .run(state, patch.lastError ?? null, patch.bannedReason ?? null, patch.snapshotTakenAt ?? null, id);
+  // `undefined` mantém a coluna; `null` limpa de fato (coalesce impediria limpar).
+  const cols: Record<string, string> = { lastError: 'last_error', bannedReason: 'banned_reason', snapshotTakenAt: 'snapshot_taken_at' };
+  const sets = ['state=?', "updated_at=datetime('now')"]; const vals: (string | null)[] = [state];
+  for (const [k, col] of Object.entries(cols)) {
+    const v = patch[k as keyof typeof patch];
+    if (v !== undefined) { sets.push(`${col}=?`); vals.push(v); }
+  }
+  db.prepare(`update identity set ${sets.join(', ')} where id=?`).run(...vals, id);
 }

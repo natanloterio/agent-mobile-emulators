@@ -26,3 +26,24 @@ describe('identities', () => {
     expect(row.state).toBe('logged-in');
   });
 });
+
+describe('identities — revisão final (I9)', () => {
+  it('lastError: null limpa; omitir mantém', () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    setIdentityState(db, 'conta1', 'needs-human', { lastError: 'checkpoint' });
+    setIdentityState(db, 'conta1', 'idle');
+    expect(getIdentity(db, 'conta1')?.lastError).toBe('checkpoint');
+    setIdentityState(db, 'conta1', 'idle', { lastError: null });
+    expect(getIdentity(db, 'conta1')?.lastError).toBeNull();
+  });
+});
+
+describe('step — revisão final (I10)', () => {
+  it('idempotency_key é único por tarefa', async () => {
+    const { createGoalAndTask, writeIntent } = await import('../src/db/tasks.js');
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { taskId } = createGoalAndTask(db, 'conta1', 'g');
+    writeIntent(db, taskId, 1, 't', {}, 'k1');
+    expect(() => writeIntent(db, taskId, 2, 't', {}, 'k1')).toThrow(/UNIQUE|unique/i);
+  });
+});

@@ -69,14 +69,20 @@ function rowsFromContent(step: StepLike): readonly (CallRow & { id: string })[] 
   return [...rows.entries()].map(([id, r]) => ({ id, ...r }));
 }
 
-/** Um passo do modelo pode ter 0..n tool calls; cada uma vira uma linha de step. A usage do passo vai na primeira. */
-export function recordStep(db: DatabaseSync, taskId: string, step: StepLike, pricing: Pricing): { costUsd: number } {
+/**
+ * Um passo do modelo pode ter 0..n tool calls. Chamadas que executaram já têm linha (write-ahead em `wrapTools`,
+ * em `pending` por toolCallId) e são apenas completadas; alucinadas/negadas nunca executaram e ganham linha aqui.
+ * A usage do passo vai na primeira linha.
+ */
+export function recordStep(db: DatabaseSync, taskId: string, step: StepLike, pricing: Pricing, pending: Map<string, number> = new Map()): { costUsd: number } {
   const usage = readUsage(step.usage);
   const costUsd = costOf(step.usage, pricing);
   const rows = rowsFromContent(step);
   const calls = rows.length ? rows : [{ id: `s${step.stepNumber}`, toolName: '(texto)', input: null, excerpt: squash(step.text, 300), error: null }];
   calls.forEach((c, i) => {
-    const id = writeIntent(db, taskId, step.stepNumber * 100 + i, c.toolName, c.input, `${taskId}:${step.stepNumber}:${c.id}`);
+    const existing = pending.get(c.id);
+    const id = existing ?? writeIntent(db, taskId, step.stepNumber * 100 + i, c.toolName, c.input, `${taskId}:${step.stepNumber}:${c.id}`);
+    if (existing !== undefined) pending.delete(c.id);
     finishStep(db, id, {
       resultExcerpt: c.excerpt, error: c.error ?? undefined,
       inputTokens: i === 0 ? usage.inputTokens : 0, outputTokens: i === 0 ? usage.outputTokens : 0, cacheReadTokens: i === 0 ? usage.cacheReadTokens : 0,

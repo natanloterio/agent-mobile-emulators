@@ -55,3 +55,82 @@ describe('runTask com o generateText real', () => {
     expect(r.usage.inputTokens).toBe(300);
   });
 });
+
+const SCREEN_P1 = 'screen:1080x2400 density:420 orientation:portrait\n--- window:1 type:APPLICATION pkg:com.instagram.android title:Instagram layer:0 focused:true ---\nnode_id\tclass\ttext\tdesc\tres_id\tbounds\tflags\nnode_p1\tTextView\tPrimeira\t-\t-\t0,0,10,10\ton,clk,ena\ncursor:abc.2\n';
+const SCREEN_P2 = 'screen:1080x2400 density:420 orientation:portrait\n--- window:1 type:APPLICATION pkg:com.instagram.android title:Instagram layer:0 focused:true ---\nnode_id\tclass\ttext\tdesc\tres_id\tbounds\tflags\nnode_p2\tTextView\tSegunda\t-\t-\t0,20,10,30\ton,clk,ena\n';
+const opts = (db: ReturnType<typeof openDb>) => ({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => false, onStep: () => {} });
+const mkMcp = (tools: Record<string, unknown>): RunTaskDeps['connect'] => async () => ({ tools: async () => tools as never, close: async () => {} });
+const screenTool = (fn: (i: { cursor?: string }) => unknown) => tool({ description: 'tela', inputSchema: z.object({ cursor: z.string().optional() }), execute: async (i) => fn(i) });
+const tapTool = tool({ description: 'tap', inputSchema: z.object({ node_id: z.string() }), execute: async () => 'Tap performed' });
+const stepsOf = (db: ReturnType<typeof openDb>, taskId: string) => db.prepare('select tool, result_excerpt, error from step where task_id=? order by idx').all(taskId) as { tool: string; result_excerpt: string; error: string | null }[];
+const taskState = (db: ReturnType<typeof openDb>, taskId: string) => (db.prepare('select state from task where id=?').get(taskId) as { state: string }).state;
+
+describe('runTask — revisão final', () => {
+  it('I1: tool use paralelo desligado e, após uma ação, o gate nega até nova leitura', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const model = new MockLanguageModelV4({ doGenerate: [
+      calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }),
+      calls({ id: 'c2', name: 'android_conta1_tap_node', input: { node_id: 'node_ok' } }),
+      calls({ id: 'c3', name: 'android_conta1_tap_node', input: { node_id: 'node_ok' } }),
+      text('fim'),
+    ] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => SCREEN), android_conta1_tap_node: tapTool }), model });
+    expect(r.outcome).toBe('done');
+    const po = model.doGenerateCalls[0].providerOptions as { anthropic?: { disableParallelToolUse?: boolean } } | undefined;
+    expect(po?.anthropic?.disableParallelToolUse).toBe(true);
+    const taps = stepsOf(db, r.taskId).filter((s) => s.tool === 'android_conta1_tap_node');
+    expect(taps[0]?.result_excerpt).toMatch(/Tap performed/);
+    expect(taps[1]?.result_excerpt).toMatch(/^GATE/);
+  });
+  it('I3: worker segue o cursor e o gate enxerga nós da página 2', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const seen: unknown[] = [];
+    const model = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }), calls({ id: 'c2', name: 'android_conta1_tap_node', input: { node_id: 'node_p2' } }), text('fim')] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool((i) => { seen.push(i.cursor ?? null); return i.cursor ? SCREEN_P2 : SCREEN_P1; }), android_conta1_tap_node: tapTool }), model });
+    expect(seen).toEqual([null, 'abc.2']);
+    expect(stepsOf(db, r.taskId).find((s) => s.tool === 'android_conta1_tap_node')?.result_excerpt).toMatch(/Tap performed/);
+  });
+  it('I4: erro benigno de tool ("Node not found within timeout") não vira infra', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const waitTool = tool({ description: 'w', inputSchema: z.object({}), execute: async () => { throw new Error('Node not found within timeout'); } });
+    const model = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c1', name: 'android_conta1_wait_for_node', input: {} }), text('fim')] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => SCREEN), android_conta1_wait_for_node: waitTool }), model });
+    expect(r.outcome).toBe('done'); expect(getIdentity(db, 'conta1')?.state).toBe('idle');
+    expect(stepsOf(db, r.taskId)[0]?.result_excerpt).toMatch(/^ERRO/);
+  });
+  it('I4/I5: 401 do MCP → infra, tarefa failed (token rotacionado não se resolve com retry), identidade offline', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const model = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }), text('fim')] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => { throw new Error('HTTP 401 Unauthorized'); }) }), model });
+    expect(r.outcome).toBe('infra'); expect(taskState(db, r.taskId)).toBe('failed'); expect(getIdentity(db, 'conta1')?.state).toBe('offline');
+  });
+  it('I5: device sumiu → infra, tarefa todo, identidade offline', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const model = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }), text('fim')] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => { throw new Error("adb: device 'emulator-5554' not found"); }) }), model });
+    expect(r.outcome).toBe('infra'); expect(taskState(db, r.taskId)).toBe('todo'); expect(getIdentity(db, 'conta1')?.state).toBe('offline');
+  });
+  it('I4: erro do próprio modelo (chave ruim) → failed, identidade continua idle', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const model = new MockLanguageModelV4({ doGenerate: async () => { throw new Error('401 authentication_error: invalid x-api-key'); } });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => SCREEN) }), model });
+    expect(r.outcome).toBe('failed'); expect(taskState(db, r.taskId)).toBe('failed'); expect(getIdentity(db, 'conta1')?.state).toBe('idle');
+  });
+  it('I6: resultado MCP com isError vira ERRO e não atualiza a tela (tap seguinte é negado)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const model = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }), calls({ id: 'c2', name: 'android_conta1_tap_node', input: { node_id: 'node_ok' } }), text('fim')] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => ({ content: [{ type: 'text', text: 'Accessibility service not connected' }], isError: true })), android_conta1_tap_node: tapTool }), model });
+    const rows = stepsOf(db, r.taskId);
+    expect(rows.find((s) => s.tool === 'android_conta1_get_screen_state')?.result_excerpt).toMatch(/^ERRO/);
+    expect(rows.find((s) => s.tool === 'android_conta1_tap_node')?.result_excerpt).toMatch(/^GATE/);
+  });
+  it('I10: a intenção existe no banco ANTES da tool executar', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    let pendingAtExec = -1;
+    const probe = tool({ description: 'p', inputSchema: z.object({}), execute: async () => { pendingAtExec = (db.prepare('select count(*) as n from step where finished_at is null').get() as { n: number }).n; return 'ok'; } });
+    const model = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c1', name: 'android_conta1_find_nodes', input: {} }), text('fim')] as never });
+    await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => SCREEN), android_conta1_find_nodes: probe }), model });
+    expect(pendingAtExec).toBe(1);
+    expect((db.prepare('select count(*) as n from step where finished_at is null').get() as { n: number }).n).toBe(0);
+  });
+});
