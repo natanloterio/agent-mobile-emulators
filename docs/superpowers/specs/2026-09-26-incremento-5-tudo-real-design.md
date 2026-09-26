@@ -90,3 +90,26 @@ A — líder, scheduler, pacing, `/goals*`. B — ciclo de vida da identidade, p
 ## 5. Fora de escopo
 
 Keychain do SO para token (continua no banco, como antes); `platform-tools` empacotado; fine-tune/System 1 (fase 6); ações irreversíveis no app alvo (o gate segue somente-leitura).
+
+## Resultado (2026-09-26)
+
+**Suíte:** 443 testes verdes (6 de integração pulados sem `ENXAME_INTEGRATION`); `tsc` do renderer, daemon e Electron limpos; `vite build` ok.
+
+**Verificação real** com um segundo daemon isolado (`ENXAME_DATA_DIR`, `ENXAME_PORT=47811`, `ENXAME_SCRCPY_PORT=27283`, cópia do banco) e um segundo Electron dirigido por Playwright (`.verify/inc5-*.cjs`, capturas em `.verify/inc5/`), sem tocar no app que já estava aberto:
+
+- Todas as telas carregam só dados do daemon: tile único da conta1 com vídeo ao vivo, medidores do host (RAM, CPU com 32 threads, VRAM do `nvidia-smi`), disco real do AVD (5,7 GB), objetivos anteriores do banco.
+- Líder local (`gpt-oss:20b`) devolveu plano em português com instrução por conta e sonda de 5 sinais verde.
+- Objetivo real pela tela: plano → "Iniciar e sair de perto" → worker na conta1 (14 passos, somente-leitura) → tarefa `done` → objetivo `done` no relatório, em 67 s.
+- Controle humano: arraste no canvas abriu a gaveta de apps no emulador; botão Início voltou à home; pausar, retomar e devolver refletiram no daemon.
+- Ciclo de vida num clone real (base temporária `mcp_test_emulator` via `ENXAME_AVD_BASE`): provisionar (1,3 s, `.ini` e `config.ini` reescritos, sem `snapshots/`), boot sem janela, login-done com snapshot, re-baseline, restore, ban, descarte (AVD apagado). O SIGINT do daemon derrubou só o emulador que ele subiu.
+
+**Defeitos achados na verificação e corrigidos:**
+1. Líder local sempre caía na regra determinística: o SDK não mandava o schema sem `supportsStructuredOutputs`, e o Ollama 0.30 descarta a gramática inteira se o schema tiver `minLength`/`maxLength`. Mesmo corrigido, o modelo escapa ~1 em 3; há uma nova tentativa.
+2. Objetivos antigos presos em `running`: reconciliação na subida fecha objetivos, falha tarefas em voo e marca passos sem conclusão para verificação.
+3. Seed da conta1 herdava o AVD da base configurável.
+4. Restore sondava com o device ainda offline e marcava needs-human por engano.
+
+**Pendências conhecidas:**
+- Provisionar com a base padrão exige parar o emulador da conta1: o AVD-base desta máquina é o próprio AVD dela. O clone tem a conta limpa no primeiro boot (`pm clear`), mas o ideal é um AVD dourado separado (`ENXAME_AVD_BASE`).
+- Texto com acento não é digitável no modo controle (`input text` só aceita ASCII).
+- Custo do líder e do escalonamento na nuvem usa a tabela do Haiku para qualquer modelo.
