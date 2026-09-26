@@ -5,7 +5,8 @@ import path from 'node:path';
 import WebSocket from 'ws';
 import { dispatchWsMessage, type WsHandlers } from './ws-dispatch.js';
 
-const INFO = path.join(os.homedir(), '.local', 'share', 'enxame', 'daemon.json');
+// Mesmo diretório do daemon (ENXAME_DATA_DIR): permite uma segunda instância isolada para verificação.
+const INFO = path.join(process.env.ENXAME_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'enxame'), 'daemon.json');
 type Info = { port: number; token: string; pid: number };
 
 function readInfo(): Info | null {

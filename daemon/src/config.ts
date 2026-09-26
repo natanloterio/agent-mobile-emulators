@@ -42,7 +42,7 @@ export const CONFIG = {
     serverPath: resolveVendor('scrcpy-server-v4.1'), version: '4.1',
     sha256: 'deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae',
     devicePath: '/data/local/tmp/enxame-scrcpy-server.jar',
-    maxSize: 720, maxFps: 30, bitRate: 2_000_000, portFrom: 27183, connectTimeoutMs: 5000, retryMs: 5000,
+    maxSize: 720, maxFps: 30, bitRate: 2_000_000, portFrom: Number(process.env.ENXAME_SCRCPY_PORT ?? 27183), connectTimeoutMs: 5000, retryMs: 5000,
   },
 } as const;
 

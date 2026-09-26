@@ -37,7 +37,7 @@ export function liveLogFor(live: FleetSnapshot | null, id: string | undefined): 
 
 const fmtTps = (n: number | null) => (n === null ? '—' : n.toFixed(1).replace('.', ','));
 export function testRows(t: LiveProviderTest): readonly TestResultRow[] {
-  const last: TestResultRow = t.error ? { label: 'Erro', value: t.error } : t.warning ? { label: 'Aviso', value: t.warning } : { label: 'Tool', value: 'android_conta1_get_screen_state' };
+  const last: TestResultRow = t.error ? { label: 'Erro', value: t.error } : t.warning ? { label: 'Aviso', value: t.warning } : { label: 'Tool', value: 'get_screen_state (tool-call canônico)' };
   return [{ label: 'Latência', value: `${t.latencyMs} ms` }, { label: 'Tokens/s', value: fmtTps(t.tokensPerSec) }, { label: 'Argumentos', value: t.argsValid ? 'estruturados e válidos' : 'inválidos' }, last];
 }
 

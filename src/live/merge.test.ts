@@ -74,7 +74,7 @@ describe('liveRoles', () => {
   it('sobrepõe modo/modelo/endpoint e traduz o último teste em linhas', () => {
     const out = liveRoles(roles, snap as never);
     expect(out[1]).toMatchObject({ mode: 'local', model: 'qwen3.5:27b', endpoint: 'http://127.0.0.1:11434/v1' });
-    expect(out[1].result).toEqual([{ label: 'Latência', value: '812 ms' }, { label: 'Tokens/s', value: '41,3' }, { label: 'Argumentos', value: 'estruturados e válidos' }, { label: 'Tool', value: 'android_conta1_get_screen_state' }]);
+    expect(out[1].result).toEqual([{ label: 'Latência', value: '812 ms' }, { label: 'Tokens/s', value: '41,3' }, { label: 'Argumentos', value: 'estruturados e válidos' }, { label: 'Tool', value: 'get_screen_state (tool-call canônico)' }]);
     expect(out[2].result?.[3]).toEqual({ label: 'Erro', value: 'auth: ANTHROPIC_API_KEY ausente' });
     expect(out[0].result).toBeNull();
     expect(roles[1].model).toBe('mock');

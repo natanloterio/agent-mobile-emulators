@@ -12,6 +12,7 @@ import { createDiskUsage, startDiskCollector } from './fleet/disk.js';
 import { bootEmulator, createEmulatorSupervisor } from './fleet/emulator.js';
 import { ensureIdentityReady } from './fleet/identity.js';
 import { pickTestIdentity } from './fleet/pick.js';
+import { reconcileOnStart } from './fleet/reconcile.js';
 import { planGoal, type PlanDeps } from './leader/plan.js';
 import { leasePorts } from './fleet/ports.js';
 import { createHostMetrics } from './host/metrics.js';
@@ -29,6 +30,9 @@ import { runTask } from './worker/run.js';
 const env = loadEnv();
 mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath);
+// Nada em voo é retomado sozinho depois de uma queda (spec §4.3).
+const reconciled = reconcileOnStart(db);
+if (reconciled.tasks + reconciled.goals + reconciled.identities > 0) console.log('[enxame-daemon] reconciliação na subida:', reconciled);
 const adb = createAdb();
 // Supervisor do Ollama: só mata o processo que ele mesmo subiu (spec §4.3).
 // Single-flight: workers do enxame pedem o Ollama quase juntos; só um `ollama serve` sobe.
