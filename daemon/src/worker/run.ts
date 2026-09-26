@@ -7,7 +7,7 @@ import { setIdentityState, type IdentityRow } from '../db/identities.js';
 import { createGoalAndTask, ledgerHas, ledgerPut, setTaskState, writeIntent } from '../db/tasks.js';
 import { connectMcp } from '../device/mcp.js';
 import { detectPlatformBlock } from '../screen/checks.js';
-import { parseScreen, type ScreenState } from '../screen/parse.js';
+import { parseScreen, type ScreenState, type ScreenWindow } from '../screen/parse.js';
 import { buildToolApproval } from './gate.js';
 import { SYSTEM_PROMPT, taskInstruction } from './prompt.js';
 import { isScreenTool, pruneScreens } from './prune.js';
@@ -49,16 +49,31 @@ interface WrapCtx {
   readonly onScreen: (s: ScreenState | null) => void; readonly onHalt: (h: Halt) => void;
 }
 
-/** Lê todas as páginas de um screen state (spec Review Focus 2) e devolve texto fundido sem as linhas de cursor. */
-async function readAllPages(first: unknown, exec: (input: unknown) => Promise<unknown>, input: unknown): Promise<{ text: string; screen: ScreenState }> {
-  const texts = [textOf(first)]; let screen = parseScreen(texts[0]); const windows = [...screen.windows];
-  for (let n = 1; screen.cursor && n < MAX_SCREEN_PAGES; n++) {
-    const next = await exec({ ...(input as object), cursor: screen.cursor });
-    if (isErrorResult(next)) break;
-    texts.push(textOf(next)); screen = parseScreen(texts[texts.length - 1]); windows.push(...screen.windows);
+/** Linhas de controle de paginação que não devem chegar ao modelo (ele não pagina; o wrapper pagina). */
+const PAGINATION_LINE = /^(?:(?:next_)?cursor:|page:\d+\/\d+ snapshot:|note:more nodes available|note:end of snapshot)/;
+
+/** Funde janelas iguais (pkg/type/title/focused) de páginas diferentes, para a janela focada conter todos os nós. */
+function mergeWindows(pages: readonly ScreenState[]): ScreenState {
+  const byKey = new Map<string, ScreenWindow>();
+  for (const p of pages) for (const w of p.windows) {
+    const k = `${w.pkg}|${w.type}|${w.title}|${w.focused}`;
+    const prev = byKey.get(k);
+    byKey.set(k, prev ? { ...prev, nodes: [...prev.nodes, ...w.nodes] } : w);
   }
-  const merged: ScreenState = { ...screen, cursor: null, windows };
-  return { text: texts.join('\n').split('\n').filter((l) => !/^(?:next_)?cursor:/.test(l)).join('\n'), screen: merged };
+  const first = pages[0];
+  return { width: first.width, height: first.height, cursor: null, windows: [...byKey.values()] };
+}
+
+/** Lê todas as páginas de um screen state (spec Review Focus 2) e devolve texto fundido sem as linhas de paginação. */
+async function readAllPages(first: unknown, exec: (input: unknown) => Promise<unknown>, input: unknown): Promise<{ text: string; screen: ScreenState }> {
+  const texts = [textOf(first)]; const pages = [parseScreen(texts[0])];
+  for (let n = 1; pages[pages.length - 1].cursor && n < MAX_SCREEN_PAGES; n++) {
+    const next = await exec({ ...(input as object), cursor: pages[pages.length - 1].cursor });
+    if (isErrorResult(next)) break;
+    texts.push(textOf(next)); pages.push(parseScreen(texts[texts.length - 1]));
+  }
+  const text = texts.map((t, i) => t.split('\n').filter((l) => !PAGINATION_LINE.test(l) && (i === 0 || !l.startsWith('screen:'))).join('\n')).join('\n');
+  return { text, screen: mergeWindows(pages) };
 }
 
 const isErrorResult = (out: unknown): boolean => !!out && typeof out === 'object' && (out as { isError?: boolean }).isError === true;

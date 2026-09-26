@@ -1,0 +1,5 @@
+const HEAD = 'screen:1080x2400 density:420 orientation:portrait';
+const WIN = '--- window:1 type:APPLICATION pkg:com.instagram.android title:Instagram layer:0 focused:true ---\nnode_id\tclass\ttext\tdesc\tres_id\tbounds\tflags';
+export const PAGE1 = `${HEAD}\npage:1/2 snapshot:k7x9q nodes:1-200/260\n${WIN}\nnode_p1\tTextView\tPrimeira\t-\t-\t0,0,10,10\ton,clk,ena\nhierarchy:\nnode_p1\nnote:more nodes available — call get_screen_state with cursor "k7x9q.2" to continue. You do NOT need to fetch every page; stop once you have found what you need. This cursor is tied to this screen snapshot; if the screen changed, call without a cursor for a fresh one.\n`;
+export const PAGE2 = `${HEAD}\npage:2/2 snapshot:k7x9q nodes:201-260/260\n${WIN}\nnode_p2\tTextView\tSegunda\t-\t-\t0,20,10,30\ton,clk,ena\nhierarchy:\nnode_p2\nnote:end of snapshot (page 2/2). You do NOT need to have fetched every page; stop once you have found what you need.\n`;
+export const PAGE2_CHECKPOINT = PAGE2.replace('node_p2\tTextView\tSegunda', 'node_ck\tTextView\tConfirme que é você');

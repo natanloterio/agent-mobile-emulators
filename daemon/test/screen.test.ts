@@ -40,3 +40,16 @@ describe('detectPlatformBlock', () => {
     expect(detectPlatformBlock(parseScreen(S.launcher))).toBeNull();
   });
 });
+
+describe('parseScreen — paginação no formato real do servidor (I3)', () => {
+  it('extrai o cursor da nota "call get_screen_state with cursor \\"<id>.<n>\\""', async () => {
+    const { PAGE1, PAGE2 } = await import('./fixtures/paged.js');
+    expect(parseScreen(PAGE1).cursor).toBe('k7x9q.2');
+    expect(parseScreen(PAGE2).cursor).toBeNull();
+  });
+  it('deriva o cursor do cabeçalho page:N/total snapshot:<id> mesmo sem a nota', async () => {
+    const { PAGE1 } = await import('./fixtures/paged.js');
+    const semNota = PAGE1.split('\n').filter((l) => !l.startsWith('note:more nodes')).join('\n');
+    expect(parseScreen(semNota).cursor).toBe('k7x9q.2');
+  });
+});

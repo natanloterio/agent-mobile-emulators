@@ -12,7 +12,10 @@ export interface ScreenState {
 
 const WINDOW_RE = /^--- window:\S+ type:(\S+) pkg:(\S+)(?: title:(.*?))?(?: activity:\S+)? layer:\S+ focused:(true|false) ---$/;
 const SCREEN_RE = /^screen:(\d+)x(\d+)/;
-const CURSOR_RE = /^(?:next_)?cursor:(\S+)/;
+const CURSOR_RE = /^(?:next_)?cursor:(\S+)/; // formato sintético/legado
+// Formato real do servidor (CompactTreeFormatter.kt): cabeçalho por página e nota com o próximo cursor.
+const PAGE_RE = /^page:(\d+)\/(\d+) snapshot:(\S+)/;
+const NOTE_CURSOR_RE = /call get_screen_state with cursor "([^"]+)"/;
 
 function parseNodeLine(line: string): ScreenNode | null {
   const c = line.split('\t');
@@ -34,6 +37,10 @@ export function parseScreen(text: string): ScreenState {
     if (sm) { width = Number(sm[1]); height = Number(sm[2]); continue; }
     const cm = CURSOR_RE.exec(line);
     if (cm) { cursor = cm[1]; continue; }
+    const nm = NOTE_CURSOR_RE.exec(line);
+    if (nm) { cursor = nm[1]; continue; }
+    const pm = PAGE_RE.exec(line);
+    if (pm) { const page = Number(pm[1]); const total = Number(pm[2]); if (page < total && !cursor) cursor = `${pm[3]}.${page + 1}`; continue; }
     const wm = WINDOW_RE.exec(line);
     if (wm) {
       if (current) windows.push({ ...current, nodes: [...current.nodes] });

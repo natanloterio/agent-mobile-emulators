@@ -56,8 +56,7 @@ describe('runTask com o generateText real', () => {
   });
 });
 
-const SCREEN_P1 = 'screen:1080x2400 density:420 orientation:portrait\n--- window:1 type:APPLICATION pkg:com.instagram.android title:Instagram layer:0 focused:true ---\nnode_id\tclass\ttext\tdesc\tres_id\tbounds\tflags\nnode_p1\tTextView\tPrimeira\t-\t-\t0,0,10,10\ton,clk,ena\ncursor:abc.2\n';
-const SCREEN_P2 = 'screen:1080x2400 density:420 orientation:portrait\n--- window:1 type:APPLICATION pkg:com.instagram.android title:Instagram layer:0 focused:true ---\nnode_id\tclass\ttext\tdesc\tres_id\tbounds\tflags\nnode_p2\tTextView\tSegunda\t-\t-\t0,20,10,30\ton,clk,ena\n';
+import { PAGE1 as SCREEN_P1, PAGE2 as SCREEN_P2, PAGE2_CHECKPOINT } from './fixtures/paged.js';
 const opts = (db: ReturnType<typeof openDb>) => ({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => false, onStep: () => {} });
 const mkMcp = (tools: Record<string, unknown>): RunTaskDeps['connect'] => async () => ({ tools: async () => tools as never, close: async () => {} });
 const screenTool = (fn: (i: { cursor?: string }) => unknown) => tool({ description: 'tela', inputSchema: z.object({ cursor: z.string().optional() }), execute: async (i) => fn(i) });
@@ -87,8 +86,23 @@ describe('runTask — revisão final', () => {
     const seen: unknown[] = [];
     const model = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }), calls({ id: 'c2', name: 'android_conta1_tap_node', input: { node_id: 'node_p2' } }), text('fim')] as never });
     const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool((i) => { seen.push(i.cursor ?? null); return i.cursor ? SCREEN_P2 : SCREEN_P1; }), android_conta1_tap_node: tapTool }), model });
-    expect(seen).toEqual([null, 'abc.2']);
+    expect(seen).toEqual([null, 'k7x9q.2']);
     expect(stepsOf(db, r.taskId).find((s) => s.tool === 'android_conta1_tap_node')?.result_excerpt).toMatch(/Tap performed/);
+  });
+  it('I3: checkpoint que só aparece na página 2 é detectado (janelas fundidas)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const model = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }), text('fim')] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool((i) => (i.cursor ? PAGE2_CHECKPOINT : SCREEN_P1)) }), model });
+    expect(r.outcome).toBe('platform-block'); expect(r.platformBlock).toMatch(/Confirme/);
+    expect(model.doGenerateCalls).toHaveLength(1);
+  });
+  it('I3: texto entregue ao modelo não contém as notas de paginação', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const model = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }), text('fim')] as never });
+    await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool((i) => (i.cursor ? SCREEN_P2 : SCREEN_P1)) }), model });
+    const prompt = JSON.stringify(model.doGenerateCalls[1]?.prompt ?? model.doGenerateCalls[0].prompt);
+    expect(prompt).not.toMatch(/more nodes available|end of snapshot/);
+    expect(prompt).toMatch(/node_p1/); expect(prompt).toMatch(/node_p2/);
   });
   it('I4: erro benigno de tool ("Node not found within timeout") não vira infra', async () => {
     const db = openDb(':memory:'); upsertIdentity(db, row);
