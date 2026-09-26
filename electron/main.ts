@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { connectSnapshots, ensureDaemon, post, request, waitForInfo } from './daemon-bridge.js';
+import { connectSnapshots, ensureDaemon, post, request, waitForInfo, type DaemonInfo } from './daemon-bridge.js';
+import { createDaemonGate } from './daemon-gate.js';
 import { createGopBuffer } from './gop-buffer.js';
 import { apiRoute } from './api-route.js';
 import { providerRoute } from './provider-route.js';
@@ -59,27 +60,31 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
+  // Canais registrados já na subida: clique antes do daemon responder recebe "daemon não conectado", não um erro do Electron.
+  const gate = createDaemonGate<DaemonInfo>();
+  ipcMain.handle('enxame:startGoal', (_e, text: string) => gate.use((info) => post(info, '/goals', { text })));
+  ipcMain.handle('enxame:kill', () => gate.use((info) => post(info, '/kill')));
+  ipcMain.handle('enxame:resume', () => gate.use((info) => post(info, '/resume')));
+  // Canal genérico do incremento 5: só rotas da lista de permissão (electron/api-route.ts).
+  ipcMain.handle('enxame:api', (_e, method: string, pathname: string, body?: unknown) => {
+    const r = apiRoute(method, pathname);
+    return gate.use((info) => request(info, r.method, r.path, body));
+  });
+  ipcMain.handle('enxame:setProvider', (_e, role: string, patch: unknown) => gate.use((info) => request(info, 'PUT', providerRoute(role, 'put'), patch)));
+  ipcMain.handle('enxame:testProvider', (_e, role: string) => gate.use((info) => request(info, 'POST', providerRoute(role, 'test'))));
+  ipcMain.handle('enxame:getProviderModels', (_e, role: string) => gate.use((info) => request(info, 'GET', providerRoute(role, 'models'))));
+
   const projectRoot = path.join(here, '..');
   ensureDaemon(projectRoot);
   waitForInfo().then((info) => {
+    gate.set(info);
     const broadcast = (ch: string, d: unknown) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send(ch, d); };
     connectSnapshots(info, {
       onSnapshot: (data) => { lastSnapshot = data; broadcast('enxame:snapshot', data); },
       onFrame: (f) => { const id = (f as { id?: unknown })?.id; if (typeof id === 'string') lastFrames.set(id, f); broadcast('enxame:frame', f); },
       onVideo: (p) => { gop.push(p as never); broadcast('enxame:video', p); },
     });
-    ipcMain.handle('enxame:startGoal', (_e, text: string) => post(info, '/goals', { text }));
-    ipcMain.handle('enxame:kill', () => post(info, '/kill'));
-    ipcMain.handle('enxame:resume', () => post(info, '/resume'));
-    // Canal genérico do incremento 5: só rotas da lista de permissão (electron/api-route.ts).
-    ipcMain.handle('enxame:api', (_e, method: string, pathname: string, body?: unknown) => {
-      const r = apiRoute(method, pathname);
-      return request(info, r.method, r.path, body);
-    });
-    ipcMain.handle('enxame:setProvider', (_e, role: string, patch: unknown) => request(info, 'PUT', providerRoute(role, 'put'), patch));
-    ipcMain.handle('enxame:testProvider', (_e, role: string) => request(info, 'POST', providerRoute(role, 'test')));
-    ipcMain.handle('enxame:getProviderModels', (_e, role: string) => request(info, 'GET', providerRoute(role, 'models')));
-  }).catch((e) => console.error('[enxame] sem daemon:', e.message));
+  }).catch((e) => { gate.fail(e.message); console.error('[enxame] sem daemon:', e.message); });
 });
 
 app.on('window-all-closed', () => {

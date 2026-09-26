@@ -6,6 +6,15 @@ import { z } from 'zod';
 
 const DATA_DIR = process.env.ENXAME_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'enxame');
 
+/** AVD dourado criado a partir da conta1 com ela parada (clone sem conta de terceiro após o primeiro boot). */
+export const GOLDEN_AVD = 'enxame_golden';
+/** Base de clonagem: `ENXAME_AVD_BASE`, senão a dourada se existir, senão o AVD da conta1 (que precisa estar parado). */
+export function pickBaseAvd(envBase: string | undefined, avdHome: string, exists: (p: string) => boolean = existsSync): string {
+  if (envBase) return envBase;
+  return exists(path.join(avdHome, `${GOLDEN_AVD}.avd`)) ? GOLDEN_AVD : 'mcp_test_playstore';
+}
+const AVD_HOME = process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd');
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** Resolve um arquivo de `daemon/vendor` tanto a partir de `daemon/src` (vitest) quanto de `dist-daemon` (build). */
 function resolveVendor(file: string): string {
@@ -29,9 +38,9 @@ export const CONFIG = {
   identity: { restoreUnsafeDays: 14 },
   /** Provisionamento, boot, disco e snapshot (spec inc. 5 §2). */
   avd: {
-    home: process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd'),
+    home: AVD_HOME,
     /** AVD dourado clonado no provisionamento; `ENXAME_AVD_BASE` troca sem rebuild (ex.: uma base sem conta e desligada). */
-    base: process.env.ENXAME_AVD_BASE ?? 'mcp_test_playstore',
+    base: pickBaseAvd(process.env.ENXAME_AVD_BASE, AVD_HOME),
     emulatorPath: '/home/loterio/Android/Sdk/emulator/emulator',
     bootTimeoutMs: 180_000, diskCacheMs: 60_000, snapshotName: 'enxame',
   },

@@ -29,6 +29,8 @@ export interface IdentityOps {
    * o AVD-base desta máquina é o da conta1, logado, e a identidade nova não pode nascer com a sessão de outra (spec §4.1).
    */
   readonly clearAccount?: (identity: IdentityRow) => Promise<void>;
+  /** Usuário Android travado por credencial após o boot (Direct Boot, `RUNNING_LOCKED`): ninguém opera o device sem o PIN. */
+  readonly userLocked?: (identity: IdentityRow) => Promise<boolean>;
   readonly now?: () => Date; readonly uuid?: () => string;
   readonly baseAvd?: string; readonly snapshotName?: string;
   readonly killSleep?: (ms: number) => Promise<void>;
@@ -133,6 +135,9 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
       try {
         const booted = await ops.boot(id, { window: body.window ?? false });
         const cur = getIdentity(ctx.db, id.id) ?? booted;
+        if (ops.userLocked && (await ops.userLocked(cur))) {
+          throw new Error(`${cur.avdName} tem bloqueio de tela com PIN/senha: digite-o na janela do emulador e remova o bloqueio (spec §4.1)`);
+        }
         // Sem login ainda (inclusive após um boot que falhou e deixou 'offline'): volta a 'provisioned' sem sonda — a sonda não
         // olha sessão e marcaria 'idle' uma identidade sem conta. As demais são sondadas a cada subida (spec §4.1).
         if (awaitingLogin(cur) && ops.clearAccount && !cur.accountClearedAt) {

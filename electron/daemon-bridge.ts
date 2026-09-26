@@ -7,7 +7,8 @@ import { dispatchWsMessage, type WsHandlers } from './ws-dispatch.js';
 
 // Mesmo diretório do daemon (ENXAME_DATA_DIR): permite uma segunda instância isolada para verificação.
 const INFO = path.join(process.env.ENXAME_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'enxame'), 'daemon.json');
-type Info = { port: number; token: string; pid: number };
+export type DaemonInfo = { port: number; token: string; pid: number };
+type Info = DaemonInfo;
 
 function readInfo(): Info | null {
   try { return existsSync(INFO) ? (JSON.parse(readFileSync(INFO, 'utf8')) as Info) : null; } catch { return null; }
