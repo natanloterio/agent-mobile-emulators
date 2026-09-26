@@ -212,9 +212,9 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       onHalt: (h) => { halt = h; },
     });
     const ledgerTool = tool({
-      description: 'Registra um item tratado nesta identidade e diz se já existia. Chame ANTES de tratar.',
+      description: 'Registra um item tratado nesta identidade (item_key "<tipo>:<autor>:<trecho>") e diz se já existia. Chame ANTES de tratar.',
       inputSchema: z.object({ item_key: z.string().min(3), author: z.string(), excerpt: z.string().max(300), draft_reply: z.string().max(500) }),
-      execute: async (i) => { const already = ledgerHas(db, identity.id, i.item_key); if (!already) ledgerPut(db, identity.id, i.item_key, 'comment', `@${i.author}: ${i.excerpt} → rascunho: ${i.draft_reply}`, taskId); return { already }; },
+      execute: async (i) => { const already = ledgerHas(db, identity.id, i.item_key); if (!already) ledgerPut(db, identity.id, i.item_key, i.item_key.split(':')[0] || 'item', `@${i.author}: ${i.excerpt} → rascunho: ${i.draft_reply}`, taskId); return { already }; },
     });
     const tools: ToolSet = { ...mcpTools, ledger_record: ledgerTool };
     const stopIfHalted: StopCondition<ToolSet> = () => halt !== null || stopped();

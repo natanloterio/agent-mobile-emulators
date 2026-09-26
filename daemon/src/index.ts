@@ -11,6 +11,7 @@ import { cloneAvd, deleteAvd } from './fleet/avd.js';
 import { createDiskUsage, startDiskCollector } from './fleet/disk.js';
 import { bootEmulator, createEmulatorSupervisor } from './fleet/emulator.js';
 import { ensureIdentityReady } from './fleet/identity.js';
+import { pickTestIdentity } from './fleet/pick.js';
 import { planGoal, type PlanDeps } from './leader/plan.js';
 import { leasePorts } from './fleet/ports.js';
 import { createHostMetrics } from './host/metrics.js';
@@ -76,6 +77,7 @@ const identityRoutes = createIdentityRoutes({
   ensureReady: (d, identity) => ensureIdentityReady(d, identity, { adb }),
   // Boot/descarte mudam quem tem device: vídeo e miniatura recomeçam com a lista nova (serial pode ter mudado por lease).
   onIdentitiesChanged: () => { const t = liveTargets(); screen.start(t); video.start(t); },
+  clearAccount: async (identity) => { await adb.shell(identity.serial, ['pm', 'clear', identity.appPackage]); },
 });
 
 // Enxame (spec inc. 5 §3.2): líder planeja sobre a frota; scheduler roda um worker por identidade pronta, com pacing.
@@ -102,10 +104,13 @@ const server = await startServer({
   // Rotas das frentes do incremento 5: objetivos, ciclo de vida da identidade, controle humano (input via `adb shell input`).
   routes: [goalsRoutes({ plan: (text) => planGoal(text, planDeps) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) })],
   onProviderTest: async (role) => {
-    const id = getIdentity(db, 'conta1')!;
+    const model = readProviderConfig(db)[role].model;
+    const fail = (error: string) => recordProviderTest(db, { role, model, latencyMs: 0, tokensPerSec: null, argsValid: false, warning: null, error, at: new Date().toISOString() });
+    const id = pickTestIdentity(listIdentities(db));
+    if (!id) return fail('nenhuma identidade livre para o tool-call canônico (todas rodando, pausadas, controladas ou sem conta)');
     const probe = await ensureIdentityReady(db, id, { adb }); server.broadcast();
-    if (!probe.ready) return recordProviderTest(db, { role, model: readProviderConfig(db)[role].model, latencyMs: 0, tokensPerSec: null, argsValid: false, warning: null, error: `identidade não pronta: ${probe.details.join('; ')}`, at: new Date().toISOString() });
-    const t = await testProvider(db, readProviderConfig(db)[role], getIdentity(db, 'conta1')!, { anthropicApiKey: env.anthropicApiKey }, { ollama });
+    if (!probe.ready) return fail(`${id.name} não pronta: ${probe.details.join('; ')}`);
+    const t = await testProvider(db, readProviderConfig(db)[role], getIdentity(db, id.id)!, { anthropicApiKey: env.anthropicApiKey }, { ollama });
     server.broadcast(); return t;
   },
 });

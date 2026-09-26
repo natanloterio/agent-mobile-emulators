@@ -24,6 +24,11 @@ export interface IdentityOps {
   readonly supervisor?: { stop(id: string): void };
   /** Lista de identidades mudou de forma que vídeo/miniatura precisam recomeçar (boot, descarte). */
   readonly onIdentitiesChanged?: () => void;
+  /**
+   * Apaga a conta do app alvo no device (ex.: `pm clear`). Chamado uma vez, no primeiro boot de um clone ainda sem login:
+   * o AVD-base desta máquina é o da conta1, logado, e a identidade nova não pode nascer com a sessão de outra (spec §4.1).
+   */
+  readonly clearAccount?: (identity: IdentityRow) => Promise<void>;
   readonly now?: () => Date; readonly uuid?: () => string;
   readonly baseAvd?: string; readonly snapshotName?: string;
   readonly killSleep?: (ms: number) => Promise<void>;
@@ -120,6 +125,10 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
         const cur = getIdentity(ctx.db, id.id) ?? booted;
         // Sem login ainda (inclusive após um boot que falhou e deixou 'offline'): volta a 'provisioned' sem sonda — a sonda não
         // olha sessão e marcaria 'idle' uma identidade sem conta. As demais são sondadas a cada subida (spec §4.1).
+        if (awaitingLogin(cur) && ops.clearAccount && !cur.accountClearedAt) {
+          await ops.clearAccount(cur);
+          setIdentityFlags(ctx.db, id.id, { accountClearedAt: now() });
+        }
         if (awaitingLogin(cur)) setIdentityState(ctx.db, id.id, 'provisioned', { lastError: null });
         else await ops.ensureReady(ctx.db, cur);
         ops.onIdentitiesChanged?.();

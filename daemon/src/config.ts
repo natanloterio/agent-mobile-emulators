@@ -30,7 +30,8 @@ export const CONFIG = {
   /** Provisionamento, boot, disco e snapshot (spec inc. 5 §2). */
   avd: {
     home: process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd'),
-    base: 'mcp_test_playstore',
+    /** AVD dourado clonado no provisionamento; `ENXAME_AVD_BASE` troca sem rebuild (ex.: uma base sem conta e desligada). */
+    base: process.env.ENXAME_AVD_BASE ?? 'mcp_test_playstore',
     emulatorPath: '/home/loterio/Android/Sdk/emulator/emulator',
     bootTimeoutMs: 180_000, diskCacheMs: 60_000, snapshotName: 'enxame',
   },

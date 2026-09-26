@@ -215,3 +215,26 @@ describe('ciclo de vida', () => {
     expect((await s.post('/identities/conta1/rebaseline')).status).toBe(409);
   });
 });
+
+describe('primeiro boot do clone (integrador, spec §4.1: imagem-base sem conta)', () => {
+  it('limpa a conta do app alvo só no primeiro boot de uma identidade aguardando login', async () => {
+    const cleared: string[] = [];
+    const h = harness({ clearAccount: async (id) => { cleared.push(id.serial); } }); const s = await serve(h.db, h.ops);
+    await s.post('/identities', { name: 'conta2' }); await s.settle();
+    await s.post('/identities/conta2/boot', { window: true }); await s.settle();
+    expect(cleared).toEqual(['emulator-5556']);
+    expect(getIdentity(h.db, 'conta2')?.accountClearedAt).toBeTruthy();
+    await s.post('/identities/conta2/boot', { window: true }); await s.settle();
+    expect(cleared).toHaveLength(1);
+  });
+  it('identidade logada nunca é limpa; falha da limpeza vira offline com o erro', async () => {
+    const cleared: string[] = [];
+    const h = harness({ clearAccount: async (id) => { cleared.push(id.id); if (id.id === 'conta2') throw new Error('pm clear falhou'); } }); const s = await serve(h.db, h.ops);
+    await s.post('/identities/conta1/boot', {}); await s.settle();
+    expect(cleared).toEqual([]);
+    await s.post('/identities', { name: 'conta2' }); await s.settle();
+    await s.post('/identities/conta2/boot', {}); await s.settle();
+    expect(getIdentity(h.db, 'conta2')).toMatchObject({ state: 'offline', lastError: expect.stringContaining('pm clear falhou') });
+    expect(getIdentity(h.db, 'conta2')?.accountClearedAt).toBeNull();
+  });
+});
