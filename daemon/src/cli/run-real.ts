@@ -4,9 +4,12 @@ import { createAdb } from '../device/adb.js';
 import { openDb } from '../db/open.js';
 import { getIdentity } from '../db/identities.js';
 import { ensureIdentityReady } from '../fleet/identity.js';
+import { daemonAlive } from '../fleet/lock.js';
 import { runTask } from '../worker/run.js';
 
 const env = loadEnv();
+const living = daemonAlive(CONFIG.daemonInfoPath);
+if (living) { console.error(`daemon vivo (PID ${living.pid}) disputa device e Ollama; pare-o ou use a API`); process.exit(4); }
 mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath);
 const id = getIdentity(db, 'conta1');

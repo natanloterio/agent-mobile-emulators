@@ -1,7 +1,7 @@
 import http from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
-import { patchErrorMessage, ProviderPatch, readProviderConfig, ROLE_KEYS, updateProvider, type RoleKey } from '../provider/config.js';
+import { CLOUD_MODELS, ollamaBase, patchErrorMessage, ProviderPatch, readProviderConfig, ROLE_KEYS, updateProvider, type RoleKey } from '../provider/config.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import { buildSnapshot } from './snapshot.js';
 import { attachWs } from './ws.js';
@@ -14,6 +14,7 @@ export interface ServerOpts {
   readonly db: DatabaseSync; readonly port?: number; readonly token: string;
   readonly onGoal: (text: string) => Promise<void>; readonly onKill: () => void;
   readonly onProviderTest: (role: RoleKey) => Promise<ProviderTest>;
+  readonly fetch?: typeof fetch;
 }
 
 function readJson(req: http.IncomingMessage): Promise<unknown> {
@@ -25,6 +26,7 @@ export interface RunningServer { readonly port: number; broadcast(): void; isKil
 export async function startServer(o: ServerOpts): Promise<RunningServer> {
   let killed = false;
   let inFlight = false;
+  const fetchFn = o.fetch ?? fetch;
   const send = (res: http.ServerResponse, code: number, body: unknown) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
   const server = http.createServer(async (req, res) => {
     try {
@@ -41,6 +43,18 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
       }
       if (req.method === 'POST' && url.pathname === '/kill') { killed = true; o.onKill(); return send(res, 200, { killed: true }); }
       if (req.method === 'POST' && url.pathname === '/resume') { killed = false; return send(res, 200, { killed: false }); }
+      if (req.method === 'GET' && url.pathname === '/providers/models') {
+        const role = url.searchParams.get('role') ?? '';
+        if (!isRole(role)) return send(res, 404, { error: 'papel desconhecido' });
+        const cfg = readProviderConfig(o.db)[role];
+        if (cfg.mode === 'nuvem') return send(res, 200, { source: 'anthropic', models: CLOUD_MODELS, error: null });
+        // Leitura pura: nunca sobe o Ollama para listar (spec inc. 3 §4.5).
+        try {
+          const r = await fetchFn(`${ollamaBase(cfg.endpoint)}/api/tags`);
+          const j = r.ok ? await r.json() as { models?: { name: string }[] } : { models: [] };
+          return send(res, 200, { source: 'ollama', models: (j.models ?? []).map((m) => m.name), error: null });
+        } catch { return send(res, 200, { source: 'ollama', models: [], error: 'Ollama parado — o próximo teste ou objetivo o sobe' }); }
+      }
       const prov = PROVIDERS_ROUTE.exec(url.pathname);
       if (prov) {
         const [, role, isTest] = prov;

@@ -6,6 +6,7 @@ import { createAdb } from '../device/adb.js';
 import { openDb } from '../db/open.js';
 import { getIdentity } from '../db/identities.js';
 import { ensureIdentityReady } from '../fleet/identity.js';
+import { daemonAlive } from '../fleet/lock.js';
 import { assertDaemonOllama, median, pickWinner, renderBakeoffTable, renderComparison, type BakeoffRow, type RunSummary } from '../bench/stats.js';
 import { startVramSampler } from '../bench/vram.js';
 import { LOCAL_ENDPOINT_DEFAULT, readProviderConfig, updateProvider } from '../provider/config.js';
@@ -19,7 +20,10 @@ const RUNS = 3;
 const exec = promisify(execFile);
 const nvidia = async () => (await exec('nvidia-smi', ['--query-gpu=memory.used', '--format=csv,noheader,nounits'])).stdout;
 
-const env = loadEnv(); mkdirSync(CONFIG.dataDir, { recursive: true });
+const env = loadEnv();
+const living = daemonAlive(CONFIG.daemonInfoPath);
+if (living) { console.error(`daemon vivo (PID ${living.pid}) disputa device e Ollama; pare-o ou use a API`); process.exit(4); }
+mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath); const adb = createAdb(); const ollama = createOllamaSupervisor();
 const id = () => getIdentity(db, 'conta1')!;
 const probe = await ensureIdentityReady(db, id(), { adb });

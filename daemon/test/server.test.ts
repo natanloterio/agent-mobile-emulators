@@ -127,4 +127,16 @@ describe('servidor — incremento 3', () => {
     const boom = await fetch(`http://127.0.0.1:${s.port}/providers/worker`, { method: 'PUT', headers: h, body: JSON.stringify({ model: 'x' }) });
     expect(boom.status).toBe(500); expect(((await boom.json()) as { error: string }).error).toBeTruthy();
   });
+  it('GET /providers/models: local com Ollama parado → [] + error; local vivo → nomes; nuvem → CLOUD_MODELS (Review Focus 1)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    let up = false;
+    const fetchFn = (async () => { if (!up) throw new Error('ECONNREFUSED'); return new Response(JSON.stringify({ models: [{ name: 'gpt-oss:20b' }, { name: 'gemma4:12b' }] })); }) as unknown as typeof fetch;
+    const s = await startServer({ db, port: 0, token: 'seg', fetch: fetchFn, onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const get = async (role: string) => (await fetch(`http://127.0.0.1:${s.port}/providers/models?role=${role}`, { headers: h })).json() as Promise<{ source: string; models: string[]; error: string | null }>;
+    expect(await get('worker')).toEqual({ source: 'ollama', models: [], error: 'Ollama parado — o próximo teste ou objetivo o sobe' });
+    up = true;
+    expect(await get('worker')).toEqual({ source: 'ollama', models: ['gpt-oss:20b', 'gemma4:12b'], error: null });
+    expect(await get('esc')).toEqual({ source: 'anthropic', models: ['claude-haiku-4-5', 'claude-sonnet-5', 'claude-opus-5'], error: null });
+    expect((await fetch(`http://127.0.0.1:${s.port}/providers/models?role=chefe`, { headers: h })).status).toBe(404);
+  });
 });
