@@ -20,7 +20,10 @@ const fakeMcp = (screenText: string, fail?: 'unauthorized' | 'device-missing'): 
   }) as never,
   close: async () => {},
 });
-const base = (db: ReturnType<typeof openDb>) => ({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => false, onStep: () => {} });
+/** Provedores fixados na nuvem: o default de fábrica do worker é local e tocaria o supervisor real do Ollama. */
+const CLOUD = { role: 'esc' as const, mode: 'nuvem' as const, model: 'claude-haiku-4-5', endpoint: 'anthropic' };
+const CLOUD_PROVIDERS = { lider: { ...CLOUD, role: 'lider' as const, model: 'claude-sonnet-5' }, worker: { ...CLOUD, role: 'worker' as const }, esc: CLOUD };
+const base = (db: ReturnType<typeof openDb>) => ({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => false, onStep: () => {}, providers: CLOUD_PROVIDERS });
 
 describe('runTask', () => {
   it('checkpoint na tela → platform-block, identidade needs-human, loop encerra', async () => {
