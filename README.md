@@ -57,8 +57,7 @@ Enxame daemon (Node) ── SQLite (goals, tasks, steps, identities)
   - the target app installed (Instagram by default);
   - the **Android Remote Control MCP** app (`com.danielealbano.androidremotecontrolmcp.gms.debug`) installed, with its accessibility service enabled and auto-start on boot turned on;
   - Play Store auto-updates turned off. The readiness check refuses a device whose app version changed.
-- An **Anthropic API key**. The daemon refuses to start without one, even if you only plan to use local models.
-- Optional: **[Ollama](https://ollama.com)** to run the worker locally. The default local model is `gpt-oss:20b`.
+- **Models:** an **Anthropic API key** for the cloud roles, **[Ollama](https://ollama.com)** for local ones, or both. The key is optional: with every role set to a local model on the **Provedores** screen, Enxame runs fully offline. The default local model is `gpt-oss:20b`.
 
 Plan for about 4.6 GB of RAM and 4 vCPUs per running emulator. On a 32-thread machine the practical ceiling is about **8 emulators at once**.
 
@@ -73,8 +72,7 @@ git clone https://github.com/natanloterio/agent-mobile-emulators.git
 cd agent-mobile-emulators
 npm install
 
-cp .env.example .env          # then put your key in it:
-# ANTHROPIC_API_KEY=sk-ant-...
+cp .env.example .env          # optional: add ANTHROPIC_API_KEY=sk-ant-... for cloud models
 
 npm run build                 # UI + Electron shell
 npm run daemon:build          # daemon
@@ -149,7 +147,7 @@ A device with a screen-lock PIN starts locked after every reboot, and nothing ca
 
 | Variable | Default | What it does |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | (required) | Key for the cloud roles. Goes in `.env`. |
+| `ANTHROPIC_API_KEY` | none | Key for the cloud roles. Goes in `.env`. Leave it out to use only local models. |
 | `ENXAME_AVD_BASE` | `enxame_golden`, if it exists | AVD cloned when provisioning. |
 | `ENXAME_DEFAULT_PIN` | none | PIN given to new identities when you don't type one. 4–16 digits. |
 | `ENXAME_STEP_BUDGET` | `30` | Maximum agent steps per task. |
@@ -180,8 +178,8 @@ Cost is tracked per task and per goal: dollars for cloud models, GPU seconds for
 | An identity is `offline` with a PIN message | Register its PIN on the Identities screen, or type it in the emulator window. |
 | An identity is `needs-human` | Open the device, fix what it reports (challenge, wrong PIN, lost session), then press **Resolvi, devolver à fila** (Resolved, back to queue). |
 | Readiness shows *"versão mudou"* (version changed) | The target app updated itself. Pin the version again, or update the version recorded for the identity. |
-| The plan says *"regra determinística"* (deterministic rule) | The leader model failed or had no key. A simple built-in rule planned the goal instead. Check **Provedores**. |
-| The app says *"daemon não conectado"* (daemon not connected) | The daemon is still starting or failed to start. Check that `.env` has `ANTHROPIC_API_KEY`, then restart the app. |
+| The plan says *"regra determinística"* (deterministic rule) | The leader model failed, or it is a cloud model and there is no API key. A simple built-in rule planned the goal instead. Switch the leader to a local model in **Provedores**, or add the key. |
+| The app says *"daemon não conectado"* (daemon not connected) | The daemon is still starting or failed to start. Check the terminal output (a malformed `ANTHROPIC_API_KEY` stops it), then restart the app. |
 
 After a crash or restart, the daemon marks interrupted work as failed. It never resumes an action whose result it doesn't know.
 

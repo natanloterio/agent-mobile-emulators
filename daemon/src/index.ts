@@ -30,6 +30,7 @@ import { createIdentityRoutes } from './server/routes-identities.js';
 import { runTask } from './worker/run.js';
 
 const env = loadEnv();
+if (!env.anthropicApiKey) console.log('[enxame-daemon] sem ANTHROPIC_API_KEY: papéis na nuvem ficam indisponíveis; use modelos locais em Provedores');
 mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath);
 // Nada em voo é retomado sozinho depois de uma queda (spec §4.3).
