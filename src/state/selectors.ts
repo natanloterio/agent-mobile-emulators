@@ -1,6 +1,7 @@
-import { DISK_PCT_BY_INDEX, LIFECYCLE_BY_NAME, RECENT_TOOLS, TARGET_APP, TARGET_APP_VERSION } from '../data/identities';
+import { demoText, DISK_PCT_BY_INDEX, LIFECYCLE_BY_NAME, RECENT_TOOLS, TARGET_APP, TARGET_APP_VERSION } from '../data/identities';
 import { endpointFor, modelFor, ROLES, testResultFor, type TestResultRow } from '../data/providers';
 import { TASK_INSTRUCTION } from '../data/goals';
+import { PT, type I18n } from '../i18n/translate';
 import { ptDecimal, usd } from '../lib/format';
 import type { DeviceState, Identity, ProviderMode, RoleKey } from '../types/fleet';
 import type { FleetState } from './fleetReducer';
@@ -41,30 +42,34 @@ export function effectiveState(d: Identity, killed: boolean): DeviceState {
   return killed && d.state === 'running' ? 'paused' : d.state;
 }
 
-export function decorateTile(d: Identity, index: number, killed: boolean): TileVM {
+export function decorateTile(d: Identity, index: number, killed: boolean, i18n: I18n = PT): TileVM {
+  const { t, fmt } = i18n;
   const effState = effectiveState(d, killed);
   const needs = d.state === 'needs';
   return {
     ...d,
+    // Demo: tarefa e erro do design no idioma da tela; vivo: texto do daemon como vem.
+    ...(d.live ? {} : { task: demoText(d.task, i18n), error: demoText(d.error, i18n) }),
     index,
     effState,
-    stateLabel: STATE_LABEL[effState],
+    // Estados crus do daemon ficam como estão; só "pausado" é português.
+    stateLabel: effState === 'paused' ? t('common.state.paused') : STATE_LABEL[effState],
     pillTone: STATE_TONE[effState],
     pillGreenBorder: needs,
     cardTone: needs ? 'dark' : d.state === 'running' ? 'grey' : 'white',
-    costFmt: d.genMs ? `${usd(d.cost)} · ${(d.genMs / 1000).toFixed(1).replace('.', ',')} s GPU` : usd(d.cost),
+    costFmt: d.genMs ? `${fmt.usd(d.cost)} · ${fmt.decimal(d.genMs / 1000)} s GPU` : fmt.usd(d.cost),
     // Modo vivo: app/versão do banco e a tarefa real no rascunho; demo: textos do design.
     app: d.live ? appLabel(d.live.appPackage) : TARGET_APP,
     version: d.live ? d.live.appVersionName || '—' : TARGET_APP_VERSION,
     needs,
-    overlay: offlineOverlay(d),
-    replyDraft: d.live ? d.task : d.state === 'running' ? 'Obrigada! Já te chamamos no direct' : 'Input do agente desligado',
-    streamLabel: d.live ? streamLabel(d.video) : '320p · 4 fps',
+    overlay: offlineOverlay(d, i18n),
+    replyDraft: d.live ? d.task : t(d.state === 'running' ? 'common.demo.draft.running' : 'common.demo.draft.off'),
+    streamLabel: d.live ? streamLabel(d.video, undefined, i18n) : '320p · 4 fps',
   };
 }
 
-export function selectTiles(s: FleetState, fleetSize: number): readonly TileVM[] {
-  return s.ids.slice(0, fleetSize).map((d, i) => decorateTile(d, i, s.killed));
+export function selectTiles(s: FleetState, fleetSize: number, i18n: I18n = PT): readonly TileVM[] {
+  return s.ids.slice(0, fleetSize).map((d, i) => decorateTile(d, i, s.killed, i18n));
 }
 
 export function selectSelected(tiles: readonly TileVM[], sel: number): TileVM {
@@ -73,14 +78,15 @@ export function selectSelected(tiles: readonly TileVM[], sel: number): TileVM {
 
 export interface Stat { readonly value: string; readonly label: string }
 
-export function selectGoalStats(tiles: readonly TileVM[], fleetSize: number, showCost: boolean): readonly Stat[] {
+export function selectGoalStats(tiles: readonly TileVM[], fleetSize: number, showCost: boolean, i18n: I18n = PT): readonly Stat[] {
+  const { t, fmt } = i18n;
   const running = tiles.filter((d) => d.state === 'running').length;
   const needs = tiles.filter((d) => d.state === 'needs').length;
   const total = tiles.reduce((a, d) => a + d.cost, 0);
   return [
-    { value: `${running}/${fleetSize}`, label: 'identidades rodando' },
-    { value: String(needs), label: 'precisam de você' },
-    { value: showCost ? usd(total) : '—', label: 'custo até agora' },
+    { value: `${running}/${fleetSize}`, label: t('common.stat.running') },
+    { value: String(needs), label: t('common.stat.needYou') },
+    { value: showCost ? fmt.usd(total) : '—', label: t('common.stat.costSoFar') },
   ];
 }
 
@@ -101,26 +107,30 @@ export interface LogRow {
   readonly tag: 'gate' | 'agora' | 'ok';
 }
 
-export function selectLog(sel: TileVM): readonly LogRow[] {
+export function selectLog(sel: TileVM, i18n: I18n = PT): readonly LogRow[] {
   return RECENT_TOOLS.map((t, k) => {
     const i = sel.steps - k;
     const irreversible = t.desc.startsWith('Enviar');
     return {
       i: i > 0 ? String(i) : '—',
       tool: `android_${sel.name}_${t.tool}`,
-      desc: t.desc,
+      desc: demoText(t.desc, i18n),
       tokens: t.tool === 'get_screen_state' ? '2.6k tok' : '1.9k tok',
       tag: irreversible ? 'gate' : k === 0 && sel.state === 'running' ? 'agora' : 'ok',
     };
   });
 }
 
-export function selectSelStats(sel: TileVM): readonly Stat[] {
+export function selectSelStats(sel: TileVM, i18n: I18n = PT): readonly Stat[] {
+  const { t, fmt } = i18n;
+  const steps = sel.earlyStopRemaining
+    ? t('common.stat.stepsLeft', { steps: sel.steps, budget: sel.budget, n: sel.earlyStopRemaining })
+    : `${sel.steps}/${sel.budget}`;
   return [
-    { value: sel.earlyStopRemaining ? `${sel.steps}/${sel.budget} · ${sel.earlyStopRemaining} sobrando` : `${sel.steps}/${sel.budget}`, label: 'passos do orçamento' },
-    { value: String(Math.max(0, Math.floor(sel.steps / 3.4))), label: 'itens no ledger' },
-    { value: usd(sel.cost), label: 'custo da tarefa' },
-    { value: '1,4k', label: 'tokens de tools (11)' },
+    { value: steps, label: t('common.stat.stepsBudget') },
+    { value: String(Math.max(0, Math.floor(sel.steps / 3.4))), label: t('common.stat.ledgerItems') },
+    { value: fmt.usd(sel.cost), label: t('common.stat.taskCost') },
+    { value: `${fmt.decimal(1.4)}k`, label: t('common.stat.toolTokens', { n: 11 }) },
   ];
 }
 
