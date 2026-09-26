@@ -72,7 +72,8 @@ export function useFleet(): UseFleet {
     const get = window.enxame?.getProviderModels; if (!get) return;
     get(role).then((r) => {
       dispatch({ type: 'providerModels', role, models: r.models });
-      if (r.error) dispatch({ type: 'providerError', role, message: r.error });
+      // Lista limpa apaga o erro anterior (ex.: "Ollama parado"); erro novo substitui.
+      dispatch({ type: 'providerError', role, message: r.error });
     }).catch(() => undefined);
   }, []);
 
