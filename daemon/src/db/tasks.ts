@@ -20,10 +20,20 @@ export function writeIntent(db: DatabaseSync, taskId: string, tool: string, args
   return Number(r.lastInsertRowid);
 }
 
-export function finishStep(db: DatabaseSync, stepId: number, p: { resultExcerpt?: string; latencyMs?: number; error?: string; inputTokens?: number; outputTokens?: number; cacheReadTokens?: number }): void {
+export interface FinishStepPatch {
+  resultExcerpt?: string; latencyMs?: number; error?: string; inputTokens?: number; outputTokens?: number; cacheReadTokens?: number;
+  provider?: string; genMs?: number | null; invalidCall?: boolean;
+}
+export function finishStep(db: DatabaseSync, stepId: number, p: FinishStepPatch): void {
   db.prepare(`update step set result_excerpt=coalesce(?, result_excerpt), latency_ms=coalesce(?, latency_ms), error=coalesce(?, error),
-    input_tokens=coalesce(?, input_tokens), output_tokens=coalesce(?, output_tokens), cache_read_tokens=coalesce(?, cache_read_tokens), finished_at=datetime('now') where id=?`)
-    .run(p.resultExcerpt ?? null, p.latencyMs ?? null, p.error ?? null, p.inputTokens ?? null, p.outputTokens ?? null, p.cacheReadTokens ?? null, stepId);
+    input_tokens=coalesce(?, input_tokens), output_tokens=coalesce(?, output_tokens), cache_read_tokens=coalesce(?, cache_read_tokens),
+    provider=coalesce(?, provider), gen_ms=coalesce(?, gen_ms), invalid_call=case when ? then 1 else invalid_call end, finished_at=datetime('now') where id=?`)
+    .run(p.resultExcerpt ?? null, p.latencyMs ?? null, p.error ?? null, p.inputTokens ?? null, p.outputTokens ?? null, p.cacheReadTokens ?? null,
+      p.provider ?? null, p.genMs ?? null, p.invalidCall ? 1 : 0, stepId);
+}
+
+export function markDegraded(db: DatabaseSync, taskId: string, atStep: number): void {
+  db.prepare('update task set degraded=1, escalated_at_step=? where id=?').run(atStep, taskId);
 }
 
 export function addTaskCost(db: DatabaseSync, taskId: string, usd: number): void {

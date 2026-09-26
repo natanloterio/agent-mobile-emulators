@@ -79,3 +79,17 @@ describe('idx sequencial', () => {
     expect(idxs).toEqual([1, 2, 3]);
   });
 });
+
+describe('recordStep — proveniência (incremento 2)', () => {
+  it('grava provider, gen_ms e invalid_call nas linhas certas', () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { taskId } = createGoalAndTask(db, 'conta1', 'objetivo');
+    recordStep(db, taskId, { stepNumber: 1, text: '', usage: { inputTokens: 10, outputTokens: 2 }, content: [
+      { type: 'tool-call', toolCallId: 'c1', toolName: 'android_conta1_tap_node', input: {}, invalid: true },
+      { type: 'tool-error', toolCallId: 'c1', toolName: 'android_conta1_tap_node', error: 'Invalid input' },
+    ] } as never, PRICING, new Map(), { provider: 'local:qwen3.5:27b', genMs: 812 });
+    const s = db.prepare('select provider, gen_ms, invalid_call, result_excerpt from step where task_id=?').get(taskId) as { provider: string; gen_ms: number; invalid_call: number; result_excerpt: string };
+    expect(s).toMatchObject({ provider: 'local:qwen3.5:27b', gen_ms: 812, invalid_call: 1 });
+    expect(s.result_excerpt).toMatch(/^ERRO/);
+  });
+});

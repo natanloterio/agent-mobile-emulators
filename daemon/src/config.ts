@@ -12,9 +12,8 @@ export const CONFIG = {
   adbServerPort: 5038,
   mcpAppPackage: 'com.danielealbano.androidremotecontrolmcp.gms.debug',
   targetApp: { package: 'com.instagram.android', versionName: '448.0.0.52.84' },
-  models: { worker: 'claude-haiku-4-5', escalation: 'claude-sonnet-5' },
   ports: { consoleFrom: 5554, consoleMax: 5584, mcpHostFrom: 8080 },
-  worker: { stepBudget: 30, keepScreens: 2 },
+  worker: { stepBudget: 30, keepScreens: 2, qualityFloor: 3 },
 } as const;
 
 const EnvSchema = z.object({ ANTHROPIC_API_KEY: z.string().min(20, 'ANTHROPIC_API_KEY ausente ou curta') });

@@ -12,3 +12,8 @@ export function taskInstruction(goalText: string): string {
   return `Objetivo: ${goalText}
 Passos esperados: abrir o Instagram (open_app com com.instagram.android), ir para a aba de atividade/notificações, localizar até 5 comentários recentes ainda sem resposta nas publicações desta conta, e para cada um chamar ledger_record com item_key "comment:<autor>:<8 primeiros chars do texto>", o autor, o trecho e um rascunho de resposta curta e cordial em português. Não envie nada.`;
 }
+
+/** Mensagem que abre o segmento 2 (spec §5): o histórico não traz as tool calls inválidas (o SDK as descarta). */
+export const ESCALATION_NOTE = (n: number, model: string): string =>
+  `Continuação: o modelo anterior (${model}) falhou ${n} vezes ao chamar tools com argumentos válidos e foi substituído por você. ` +
+  `Continue a mesma tarefa de onde a última tela parou. Leia a tela antes de agir. As regras de somente-leitura continuam valendo.`;

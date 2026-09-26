@@ -188,3 +188,79 @@ describe('runTask — prompt caching (spec §4.3 lever 3)', () => {
     expect(po?.anthropic?.disableParallelToolUse).toBe(true);
   });
 });
+
+import { createOllamaSupervisor } from '../src/provider/ollama.js';
+
+const invalid = (id: string) => calls({ id, name: 'android_conta1_tap_node', input: { wrong: true } });
+const LOCAL = { role: 'worker' as const, mode: 'local' as const, model: 'qwen3.5:27b', endpoint: 'http://127.0.0.1:11434/v1' };
+const ESC = { role: 'esc' as const, mode: 'nuvem' as const, model: 'claude-haiku-4-5', endpoint: 'anthropic' };
+const LIDER = { role: 'lider' as const, mode: 'nuvem' as const, model: 'claude-sonnet-5', endpoint: 'anthropic' };
+const providers = (esc = ESC) => ({ lider: LIDER, worker: LOCAL, esc });
+const okOllama = createOllamaSupervisor({ fetch: (async () => new Response(JSON.stringify({ models: [{ name: 'qwen3.5:27b' }] }))) as never });
+const tools = () => ({ android_conta1_get_screen_state: screenTool(() => SCREEN), android_conta1_tap_node: tapTool });
+
+describe('runTask — incremento 2: provedor, piso e escalonamento', () => {
+  it('piso em 3 inválidas → segundo generateText com o modelo de esc, histórico + nota, orçamento restante; task degraded', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const worker = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c0', name: 'android_conta1_get_screen_state', input: {} }), invalid('c1'), invalid('c2'), invalid('c3'), text('nunca')] as never });
+    const esc = new MockLanguageModelV4({ doGenerate: [text('resumo do escalonamento')] as never });
+    const r = await runTask({ ...opts(db), providers: providers(), stepBudget: 10 }, { connect: mkMcp(tools()), model: worker, escModel: esc, ollama: okOllama });
+    expect(r.outcome).toBe('done'); expect(r.summary).toBe('resumo do escalonamento');
+    expect(r.degraded).toBe(true); expect(r.escalatedAtStep).toBe(4); expect(r.invalidCalls).toBe(3);
+    expect(worker.doGenerateCalls).toHaveLength(4); expect(esc.doGenerateCalls).toHaveLength(1);
+    const seen = esc.doGenerateCalls[0].prompt.map((m) => m.role);
+    expect(seen[0]).toBe('system'); expect(seen).toContain('tool'); expect(seen[seen.length - 1]).toBe('user');
+    const lastUser = esc.doGenerateCalls[0].prompt[esc.doGenerateCalls[0].prompt.length - 1] as { content: { text?: string }[] };
+    expect(JSON.stringify(lastUser.content)).toMatch(/3 vez|falhou/);
+    const t = db.prepare('select degraded, escalated_at_step, state from task where id=?').get(r.taskId) as { degraded: number; escalated_at_step: number; state: string };
+    expect(t).toEqual({ degraded: 1, escalated_at_step: 4, state: 'done' });
+    const provs = db.prepare('select provider, invalid_call from step where task_id=? order by idx').all(r.taskId) as { provider: string; invalid_call: number }[];
+    expect(provs.map((p) => p.provider)).toEqual(['local:qwen3.5:27b', 'local:qwen3.5:27b', 'local:qwen3.5:27b', 'local:qwen3.5:27b', 'nuvem:claude-haiku-4-5']);
+    expect(provs.filter((p) => p.invalid_call === 1)).toHaveLength(3);
+  });
+  it('sem esc na nuvem (esc local) → outcome quality-floor, task failed, identidade idle, sem segundo modelo', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const worker = new MockLanguageModelV4({ doGenerate: [invalid('c1'), invalid('c2'), invalid('c3'), text('nunca')] as never });
+    const esc = new MockLanguageModelV4({ doGenerate: [text('não')] as never });
+    const r = await runTask({ ...opts(db), providers: providers({ ...ESC, mode: 'local', endpoint: LOCAL.endpoint }) }, { connect: mkMcp(tools()), model: worker, escModel: esc, ollama: okOllama });
+    expect(r.outcome).toBe('quality-floor'); expect(esc.doGenerateCalls).toHaveLength(0);
+    expect(taskState(db, r.taskId)).toBe('failed'); expect(getIdentity(db, 'conta1')?.state).toBe('idle');
+  });
+  it('Ollama que não sobe → outcome infra (infra-local), task todo, identidade idle, modelo nunca chamado', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const worker = new MockLanguageModelV4({ doGenerate: [text('x')] as never });
+    const dead = createOllamaSupervisor({ fetch: (async () => { throw new Error('ECONNREFUSED'); }) as never, sleep: async () => {}, timeoutMs: 1, logPath: '/dev/null', openLog: () => 'x', spawn: () => ({ pid: 1, kill: () => true, on: () => undefined }) });
+    const r = await runTask({ ...opts(db), providers: providers() }, { connect: mkMcp(tools()), model: worker, ollama: dead });
+    expect(r.outcome).toBe('infra'); expect(worker.doGenerateCalls).toHaveLength(0);
+    expect(taskState(db, r.taskId)).toBe('todo'); expect(getIdentity(db, 'conta1')?.state).toBe('idle');
+    expect(getIdentity(db, 'conta1')?.lastError).toMatch(/Ollama/);
+  });
+  it('kill switch durante o segmento 2 → killed com degraded preservado (Review Focus 3)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    let killed = false;
+    const worker = new MockLanguageModelV4({ doGenerate: [invalid('c1'), invalid('c2'), invalid('c3')] as never });
+    const esc = new MockLanguageModelV4({ doGenerate: [
+      { ...calls({ id: 'e1', name: 'android_conta1_get_screen_state', input: {} }) }, text('não chega'),
+    ] as never });
+    const r = await runTask({ ...opts(db), providers: providers(), isKilled: () => killed, onStep: () => { if (esc.doGenerateCalls.length > 0) killed = true; } }, { connect: mkMcp(tools()), model: worker, escModel: esc, ollama: okOllama });
+    expect(r.outcome).toBe('killed'); expect(r.degraded).toBe(true);
+    expect((db.prepare('select degraded from task where id=?').get(r.taskId) as { degraded: number }).degraded).toBe(1);
+  });
+  it('nuvem: providerOptions do anthropic continuam; local: providerOptions vazio e sem cacheControl', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const local = new MockLanguageModelV4({ doGenerate: [text('fim')] as never });
+    await runTask({ ...opts(db), providers: providers() }, { connect: mkMcp(tools()), model: local, ollama: okOllama });
+    expect(local.doGenerateCalls[0].providerOptions ?? {}).toEqual({});
+    const cloud = new MockLanguageModelV4({ doGenerate: [text('fim')] as never });
+    await runTask({ ...opts(db), providers: { ...providers(), worker: { ...ESC, role: 'worker' } } }, { connect: mkMcp(tools()), model: cloud });
+    expect((cloud.doGenerateCalls[0].providerOptions as { anthropic: { cacheControl: unknown } }).anthropic.cacheControl).toEqual({ type: 'ephemeral', ttl: '1h' });
+  });
+  it('gen_ms vem do onLanguageModelCallEnd (performance.responseTimeMs) e o total sai em result.genMs', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const m = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c0', name: 'android_conta1_get_screen_state', input: {} }), text('fim')] as never });
+    const r = await runTask({ ...opts(db), providers: providers() }, { connect: mkMcp(tools()), model: m, ollama: okOllama });
+    const g = db.prepare('select gen_ms from step where task_id=?').all(r.taskId) as { gen_ms: number | null }[];
+    expect(g.every((x) => typeof x.gen_ms === 'number' && x.gen_ms >= 0)).toBe(true);
+    expect(r.genMs).toBeGreaterThanOrEqual(0); expect(r.provider).toBe('local:qwen3.5:27b');
+  });
+});

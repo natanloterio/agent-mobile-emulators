@@ -1,5 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { addTaskCost, finishStep, writeIntent } from '../db/tasks.js';
+import { invalidCallIds } from '../provider/quality.js';
+
+export interface StepExtra { readonly provider?: string; readonly genMs?: number | null }
 
 export interface Pricing { readonly inputPerM: number; readonly outputPerM: number; readonly cacheReadPerM: number }
 /** Preços por milhão de tokens. CONFIRMAR na tabela oficial antes de usar em relatório; o relatório também imprime tokens crus. */
@@ -74,10 +77,11 @@ function rowsFromContent(step: StepLike): readonly (CallRow & { id: string })[] 
  * em `pending` por toolCallId) e são apenas completadas; alucinadas/negadas nunca executaram e ganham linha aqui.
  * A usage do passo vai na primeira linha.
  */
-export function recordStep(db: DatabaseSync, taskId: string, step: StepLike, pricing: Pricing, pending: Map<string, number> = new Map()): { costUsd: number } {
+export function recordStep(db: DatabaseSync, taskId: string, step: StepLike, pricing: Pricing, pending: Map<string, number> = new Map(), extra: StepExtra = {}): { costUsd: number } {
   const usage = readUsage(step.usage);
   const costUsd = costOf(step.usage, pricing);
   const rows = rowsFromContent(step);
+  const invalid = new Set(invalidCallIds(step));
   const calls = rows.length ? rows : [{ id: `s${step.stepNumber}`, toolName: '(texto)', input: null, excerpt: squash(step.text, 300), error: null }];
   calls.forEach((c, i) => {
     const existing = pending.get(c.id);
@@ -86,6 +90,7 @@ export function recordStep(db: DatabaseSync, taskId: string, step: StepLike, pri
     finishStep(db, id, {
       resultExcerpt: c.excerpt, error: c.error ?? undefined,
       inputTokens: i === 0 ? usage.inputTokens : 0, outputTokens: i === 0 ? usage.outputTokens : 0, cacheReadTokens: i === 0 ? usage.cacheReadTokens : 0,
+      provider: extra.provider, genMs: i === 0 ? extra.genMs ?? null : null, invalidCall: invalid.has(c.id),
     });
   });
   addTaskCost(db, taskId, costUsd);
