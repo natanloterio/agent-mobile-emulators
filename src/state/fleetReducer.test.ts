@@ -14,4 +14,13 @@ describe('fleetReducer — provedores (incremento 3)', () => {
     const s1 = fleetReducer(s0, { type: 'providerModels', role: 'worker', models: ['gpt-oss:20b', 'gemma4:12b'] });
     expect(s1.providerModels.worker).toEqual(['gpt-oss:20b', 'gemma4:12b']); expect(s0.providerModels).toEqual({});
   });
+  it('providerModelsError vive num slot separado: PUT bem-sucedido não apaga "Ollama parado"', () => {
+    const s0 = createInitialState();
+    const s1 = fleetReducer(s0, { type: 'providerModelsError', role: 'worker', message: 'Ollama parado — o próximo teste ou objetivo o sobe' });
+    const s2 = fleetReducer(s1, { type: 'providerError', role: 'worker', message: null });
+    expect(s2.providerModelsErrors.worker).toBe('Ollama parado — o próximo teste ou objetivo o sobe');
+    expect(s2.providerErrors.worker).toBeUndefined(); expect(s0.providerModelsErrors).toEqual({});
+    const s3 = fleetReducer(s2, { type: 'providerModelsError', role: 'worker', message: null });
+    expect(s3.providerModelsErrors.worker).toBeUndefined(); expect(s2.providerModelsErrors.worker).toBeDefined();
+  });
 });

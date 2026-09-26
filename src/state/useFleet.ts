@@ -1,21 +1,15 @@
-import { useCallback, useEffect, useMemo, useReducer } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { DEFAULT_GOAL_TEXT } from '../data/goals';
 import type { ProviderMode, RoleKey, Screen } from '../types/fleet';
 import { createInitialState, fleetReducer, type FleetState } from './fleetReducer';
+import { createProviderActions } from './providerActions';
+
+export { bridgeMessage } from './providerActions';
 
 const TICK_MS = 2600;
 const DECOMPOSE_MS = 1200;
 const TEST_MS = 1400;
 const SCREENS: readonly Screen[] = ['cockpit', 'device', 'new', 'report', 'ids', 'prov'];
-
-/**
- * O IPC do Electron embrulha como `Error invoking remote method 'canal': Error: /providers/x → 409: {"error":"…"}`;
- * a tela mostra só a linha legível.
- */
-export const bridgeMessage = (e: Error) => e.message
-  .replace(/^Error invoking remote method '[^']+': (?:\w*Error: )?/, '')
-  .replace(/^.*→ \d+: /, '')
-  .replace(/^\{"error":"|"\}$/g, '');
 
 /** `?screen=report` abre direto numa tela. Valor desconhecido cai no cockpit. */
 function initialScreenFromUrl(): Screen {
@@ -73,15 +67,9 @@ export function useFleet(): UseFleet {
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [runningKey]);
 
-  // Sem bridge (Vite no browser) não há lista real: o seletor oferece só o modelo atual.
-  const loadProviderModels = useCallback((role: RoleKey) => {
-    const get = window.enxame?.getProviderModels; if (!get) return;
-    get(role).then((r) => {
-      dispatch({ type: 'providerModels', role, models: r.models });
-      // Lista limpa apaga o erro anterior (ex.: "Ollama parado"); erro novo substitui.
-      dispatch({ type: 'providerError', role, message: r.error });
-    }).catch((e: Error) => dispatch({ type: 'providerError', role, message: bridgeMessage(e) }));
-  }, []);
+  // Lido pela lista mock sem daemon; atualizado no render para o efeito do Providers (filho) já ver o modo novo.
+  const modesRef = useRef(state.modes);
+  modesRef.current = state.modes;
 
   const actions = useMemo<FleetActions>(
     () => ({
@@ -96,34 +84,11 @@ export function useFleet(): UseFleet {
       decompose: () => dispatch({ type: 'decomposeStart', fallbackText: DEFAULT_GOAL_TEXT }),
       resetPlan: () => dispatch({ type: 'resetPlan' }),
       launch: (fleetSize) => dispatch({ type: 'launch', fleetSize }),
-      // Com daemon: persiste no registro e o teste é real; sem daemon (Vite no browser) segue o mock com timer.
-      pickMode: (role, mode) => {
-        const set = window.enxame?.setProvider;
-        if (!set) { dispatch({ type: 'pickMode', role, mode }); return; }
-        // 409 (frota ocupada) ou 400 não mudam o modo: o erro aparece no card do papel.
-        set(role, { mode }).then(() => {
-          dispatch({ type: 'pickMode', role, mode });
-          dispatch({ type: 'providerError', role, message: null });
-          loadProviderModels(role);
-        }).catch((e: Error) => dispatch({ type: 'providerError', role, message: bridgeMessage(e) }));
-      },
-      setProviderField: (role, patch) => {
-        const set = window.enxame?.setProvider; if (!set) return;
-        set(role, patch)
-          .then(() => dispatch({ type: 'providerError', role, message: null }))
-          .catch((e: Error) => dispatch({ type: 'providerError', role, message: bridgeMessage(e) }));
-      },
-      loadProviderModels,
-      testConnection: (role) => {
-        dispatch({ type: 'testStart', role });
-        const test = window.enxame?.testProvider;
-        if (!test) return;
-        test(role).catch(() => undefined).finally(() => dispatch({ type: 'testDone', role }));
-      },
+      ...createProviderActions({ dispatch, getBridge: () => window.enxame, getMode: (role) => modesRef.current[role] }),
       provision: () => dispatch({ type: 'provision' }),
       extraAction: (index) => dispatch({ type: 'extraAction', index }),
     }),
-    [loadProviderModels],
+    [],
   );
 
   return { state, actions };

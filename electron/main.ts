@@ -12,7 +12,7 @@ const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
 
 // O daemon manda um snapshot ao conectar e depois só em eventos; guardamos o último para
-// reenviar a cada carga da janela (abertura e Ctrl+R), senão a tela fica no mock até o próximo evento.
+// reenviar a cada carga da janela (did-finish-load), senão a tela fica no mock até o próximo evento.
 let lastSnapshot: unknown = null;
 
 function createWindow(): void {

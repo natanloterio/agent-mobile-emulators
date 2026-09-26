@@ -16,7 +16,10 @@ export interface FleetState {
   readonly tests: Readonly<Record<RoleKey, TestStage>>;
   readonly modes: Readonly<Record<RoleKey, ProviderMode>>;
   readonly tick: number;
+  /** Erro do último PUT (400/409) por papel. */
   readonly providerErrors: Partial<Record<RoleKey, string>>;
+  /** Erro da última carga da lista de modelos (ex.: "Ollama parado"); separado para um PUT não apagá-lo. */
+  readonly providerModelsErrors: Partial<Record<RoleKey, string>>;
   readonly providerModels: Partial<Record<RoleKey, readonly string[]>>;
 }
 
@@ -39,6 +42,7 @@ export type FleetAction =
   | { type: 'testDone'; role: RoleKey }
   | { type: 'providerError'; role: RoleKey; message: string | null }
   | { type: 'providerModels'; role: RoleKey; models: readonly string[] }
+  | { type: 'providerModelsError'; role: RoleKey; message: string | null }
   | { type: 'provision' }
   | { type: 'extraAction'; index: number };
 
@@ -56,6 +60,7 @@ export function createInitialState(screen: Screen = 'cockpit'): FleetState {
   modes: DEFAULT_MODES,
   tick: 0,
   providerErrors: {},
+  providerModelsErrors: {},
   providerModels: {},
   };
 }
@@ -105,6 +110,13 @@ function applyExtraAction(e: ExtraIdentity): ExtraIdentity {
   return { ...e, lc: 'logged-in', handle: '@loja.sul', snap: 'agora', action: '' };
 }
 
+function withRoleMessage(
+  errors: Partial<Record<RoleKey, string>>, role: RoleKey, message: string | null,
+): Partial<Record<RoleKey, string>> {
+  const { [role]: _drop, ...rest } = errors;
+  return message ? { ...rest, [role]: message } : rest;
+}
+
 export function fleetReducer(s: FleetState, a: FleetAction): FleetState {
   switch (a.type) {
     case 'go':
@@ -145,10 +157,10 @@ export function fleetReducer(s: FleetState, a: FleetAction): FleetState {
       return { ...s, tests: { ...s.tests, [a.role]: 'run' } };
     case 'testDone':
       return s.tests[a.role] === 'run' ? { ...s, tests: { ...s.tests, [a.role]: 'done' } } : s;
-    case 'providerError': {
-      const { [a.role]: _drop, ...rest } = s.providerErrors;
-      return { ...s, providerErrors: a.message ? { ...s.providerErrors, [a.role]: a.message } : rest };
-    }
+    case 'providerError':
+      return { ...s, providerErrors: withRoleMessage(s.providerErrors, a.role, a.message) };
+    case 'providerModelsError':
+      return { ...s, providerModelsErrors: withRoleMessage(s.providerModelsErrors, a.role, a.message) };
     case 'providerModels':
       return { ...s, providerModels: { ...s.providerModels, [a.role]: a.models } };
     case 'provision':

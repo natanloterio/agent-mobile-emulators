@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInitialState, fleetReducer } from './fleetReducer';
 import { liveRoles } from '../live/merge';
 import { decorateTile, selectRoles, selectSelStats } from './selectors';
+import { shouldSubmitEndpoint } from '../screens/endpointSubmit';
 
 describe('selectors — incremento 3', () => {
   it('selectRoles expõe modelos carregados e erro; sem lista, oferece o modelo atual (Review Focus 1)', () => {
@@ -27,5 +28,17 @@ describe('selectors — incremento 3', () => {
     expect(t.costFmt).toMatch(/33,9 s GPU/);
     expect(selectSelStats(t)[0].value).toBe('17/30 · 13 sobrando');
     expect(decorateTile({ ...base, genMs: 0 }, 0, false).costFmt).not.toMatch(/GPU/);
+  });
+  it('card mostra erro de PUT antes do erro de carga; só o de PUT decide o reenvio do endpoint', () => {
+    const ollama = 'Ollama parado — o próximo teste ou objetivo o sobe';
+    const s1 = fleetReducer(createInitialState(), { type: 'providerModelsError', role: 'worker', message: ollama });
+    const w1 = selectRoles(s1).find((r) => r.key === 'worker')!;
+    expect(w1.error).toBe(ollama); expect(w1.putError).toBeNull();
+    // Blur com o valor intacto não reenvia: o PUT limparia o erro de PUT, não o "Ollama parado".
+    expect(shouldSubmitEndpoint(w1.endpoint, w1.endpoint, w1.putError)).toBe(false);
+    const s2 = fleetReducer(s1, { type: 'providerError', role: 'worker', message: 'endpoint precisa ser http(s)' });
+    const w2 = selectRoles(s2).find((r) => r.key === 'worker')!;
+    expect(w2.error).toBe('endpoint precisa ser http(s)');
+    expect(shouldSubmitEndpoint(w2.endpoint, w2.endpoint, w2.putError)).toBe(true);
   });
 });

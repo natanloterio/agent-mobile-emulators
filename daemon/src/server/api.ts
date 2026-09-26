@@ -40,6 +40,12 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
   let killed = false;
   let inFlight = false;
   const fetchFn = o.fetch ?? fetch;
+  // Um throw depois do `send` (ex.: `ws.broadcast`) não pode virar um segundo writeHead: ERR_HTTP_HEADERS_SENT
+  // rejeitaria o handler async sem tratamento, fatal no Node 24.
+  const sendError = (res: http.ServerResponse, e: unknown) => {
+    if (res.headersSent) { console.error('[daemon] erro após resposta enviada:', e); return; }
+    send(res, 500, { error: String((e as Error).message ?? e) });
+  };
   const send = (res: http.ServerResponse, code: number, body: unknown) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
   const server = http.createServer(async (req, res) => {
     try {
@@ -80,13 +86,13 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
           if (inFlight) return send(res, 409, { error: 'objetivo ou teste em execução' });
           inFlight = true;
           try { const t = await o.onProviderTest(role); send(res, 200, t); ws.broadcast(); return; }
-          catch (e) { return send(res, 500, { error: String((e as Error).message ?? e) }); }
+          catch (e) { return sendError(res, e); }
           finally { inFlight = false; }
         }
       }
       return send(res, 404, { error: 'not found' });
     } catch (e) {
-      return send(res, 500, { error: String((e as Error).message ?? e) });
+      return sendError(res, e);
     }
   });
   const ws = attachWs(server, o.token, () => buildSnapshot(o.db, killed));

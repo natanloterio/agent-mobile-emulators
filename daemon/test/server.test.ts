@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { openDb } from '../src/db/open.js';
 import { upsertIdentity } from '../src/db/identities.js';
@@ -148,5 +148,23 @@ describe('servidor — incremento 3', () => {
     expect(await get()).toEqual({ source: 'ollama', models: [], error: 'Ollama respondeu 500 em /api/tags' });
     mode = 'bad-json';
     expect(await get()).toEqual({ source: 'ollama', models: [], error: 'resposta inválida do Ollama em /api/tags' });
+  });
+});
+
+describe('servidor — erro depois da resposta enviada', () => {
+  it('broadcast que lança após o 200 do POST /test não tenta um segundo writeHead (só loga)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const test = { role: 'worker', model: 'm', latencyMs: 1, tokensPerSec: null, argsValid: true, warning: null, error: null, at: 'x' };
+    // Fechar o banco faz o buildSnapshot do broadcast lançar depois do send(200).
+    const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { db.close(); return test as never; } });
+    stop = s.close;
+    const errors: unknown[][] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => { errors.push(a); });
+    try {
+      const r = await fetch(`http://127.0.0.1:${s.port}/providers/worker/test`, { method: 'POST', headers: { authorization: 'Bearer seg' } });
+      expect(r.status).toBe(200); expect(await r.json()).toMatchObject({ role: 'worker', argsValid: true });
+      await new Promise((res) => setTimeout(res, 20));
+      expect(errors.some((a) => a[0] === '[daemon] erro após resposta enviada:')).toBe(true);
+    } finally { spy.mockRestore(); }
   });
 });

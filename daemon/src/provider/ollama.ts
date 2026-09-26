@@ -97,7 +97,8 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
     },
     ensure: async (endpoint, model) => {
       const base = ollamaBase(endpoint);
-      const host = base.replace(/^https?:\/\//, '');
+      // Só host:porta: um path no endpoint (`…/ollama/v1`) não pode virar "remoto" nem ir para OLLAMA_HOST.
+      const host = new URL(base).host;
       const alive = await listModels(fetchFn, base);
       if (alive) {
         checkModel(alive, model);

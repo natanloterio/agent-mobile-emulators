@@ -62,7 +62,7 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, isMobile, on
             {r.mode === 'local' ? (
               <label className="role__field"><span>Endpoint</span>
                 <input className="role__input" defaultValue={r.endpoint} key={r.endpoint} aria-label={`Endpoint do papel ${r.name}`}
-                  onBlur={(e) => { if (shouldSubmitEndpoint(e.target.value, r.endpoint, r.error)) onSetField(r.key, { endpoint: e.target.value }); }}
+                  onBlur={(e) => { if (shouldSubmitEndpoint(e.target.value, r.endpoint, r.putError)) onSetField(r.key, { endpoint: e.target.value }); }}
                   onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
               </label>
             ) : (

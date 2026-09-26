@@ -253,7 +253,10 @@ export interface RoleVM {
   readonly testing: boolean;
   readonly result: readonly TestResultRow[] | null;
   readonly models: readonly string[];
+  /** O que o card mostra: erro do PUT se houver, senão o erro de carga da lista. */
   readonly error: string | null;
+  /** Só o erro do último PUT; decide se o blur do endpoint reenvia. */
+  readonly putError: string | null;
 }
 
 export function selectRoles(s: FleetState): readonly RoleVM[] {
@@ -270,7 +273,8 @@ export function selectRoles(s: FleetState): readonly RoleVM[] {
       model,
       // Sem lista carregada não há opções: o seletor mostra só o modelo atual (nunca um rótulo do mock no modo vivo).
       models: s.providerModels[r.key] ?? [],
-      error: s.providerErrors[r.key] ?? null,
+      error: s.providerErrors[r.key] ?? s.providerModelsErrors[r.key] ?? null,
+      putError: s.providerErrors[r.key] ?? null,
       endpoint: endpointFor(mode),
       testLabel: stage === 'run' ? 'Rodando tool-call canônico em conta1…' : 'Testar conexão',
       testing: stage === 'run',
