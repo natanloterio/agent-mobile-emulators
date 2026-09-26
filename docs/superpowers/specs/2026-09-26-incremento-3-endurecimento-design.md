@@ -134,3 +134,13 @@ Líder; concorrência de vários workers; mudar a tarefa ou o critério do bench
 | seed no snapshot | §4.4 |
 | nota "default de fábrica só em banco novo" | §7 |
 | (da revisão, §4.6 do spec 2) campos editáveis e erro de `PUT` | §4.5 |
+
+## 10. Resultado (2026-09-26)
+
+**Integração (§4.6) — verde nesta máquina.** Com o daemon parado e o emulador em adb 5038, `ENXAME_INTEGRATION=1 npx vitest run --project daemon daemon/test/integration/ollama.integration.test.ts` passou em 7,2 s: `ensure` subiu um `ollama serve` próprio (nenhum vivo antes), `testProvider('worker')` com `gpt-oss:20b` devolveu `argsValid=true`, `warning=null`, `error=null` com **3539 ms de latência e 29,1 tok/s** (carga do modelo incluída), e depois de `stop()` não restou processo com `OLLAMA_CONTEXT_LENGTH=32768`. Sem a variável: 1 skipped. Desvio do plano: o supervisor recusa spawn sob vitest sem injeção (guarda dos testes unitários), então o teste injeta um `spawn` real explícito.
+
+**Tela real (Electron, `electron .` sobre o Vite de dev, dirigido por Playwright).** A tela ao vivo só ficou alcançável depois de corrigir o shell do Electron no commit `4cbb8b1` (preload emitido como CommonJS para carregar no renderer sandboxed; último snapshot reenviado a cada carga da página). Com isso, `window.enxame` expõe as oito funções da ponte e a tela abre direto no estado do daemon:
+- (a) o select do worker lista os modelos do disco do Ollama (`gpt-oss:20b` selecionado, `gemma4:12b` e outros); trocar para `gemma4:12b` persiste — recarregar a página mantém `gemma4:12b`, o que também prova o reenvio do snapshot. Voltou para `gpt-oss:20b`. O atalho Ctrl+R não recarrega (a janela não tem menu, logo não tem o acelerador); a recarga foi feita pelo renderer.
+- (b) `ftp://x` no endpoint mostra "endpoint precisa ser http(s)" em vermelho (`rgb(179, 38, 30)`) na linha de erro do card; digitar de volta `http://127.0.0.1:11434/v1` limpa o erro.
+- (c) com "Testar conexão" do worker em voo (stand-in de objetivo em execução), clicar no toggle mostra "objetivo ou teste em execução; troca de provedor só com a frota parada". O teste terminou com 688 ms e 153,4 tok/s (modelo já quente).
+- (d) o tile da conta1 no Cockpit mostra "US$ 0,20 · 56,3 s GPU". "N sobrando" não aparece: a última tarefa terminou `done` em 30/30 e é anterior à migração (`early_stop_remaining` nulo).

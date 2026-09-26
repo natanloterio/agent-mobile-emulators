@@ -88,6 +88,8 @@ Não conta: negação do gate (é o modelo sendo barrado por política, comporta
 
 Contagem é **por tarefa, acumulada**, não consecutiva. `tripped()` é `true` a partir de `limit`.
 
+**Atualizado no incremento 3:** erro de parâmetro do servidor MCP também conta (ver `2026-09-26-incremento-3-endurecimento-design.md` §4.1).
+
 ### 4.6 Tela Provedores
 
 A tela existente (toggle Nuvem/Local, modelo, endpoint, botão de teste por papel) passa a operar sobre o snapshot vivo:
@@ -96,6 +98,8 @@ A tela existente (toggle Nuvem/Local, modelo, endpoint, botão de teste por pape
 - Toggle e edição de modelo/endpoint chamam `PUT /providers/:role` pelo bridge (`window.enxame.setProvider(role, patch)`).
 - Botão "Testar conexão" chama `POST /providers/:role/test` e mostra `latência · tok/s · args válidos`, ou a mensagem da classe de erro ("Ollama parado — subindo…", "modelo não está no disco", "identidade não pronta").
 - O último `provider_test` por papel aparece na tela ao abrir (vem do snapshot).
+
+**Entregue no incremento 3** (§4.5 daquele spec): seletor de modelos, endpoint editável, erro de PUT no card.
 
 ## 5. Fluxo do worker
 
