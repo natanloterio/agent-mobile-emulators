@@ -48,6 +48,8 @@ export interface Adb {
   forward(serial: string, hostPort: number, spec: string): Promise<void>;
   forwardRemove(serial: string, hostPort: number): Promise<void>;
   shellSpawn(serial: string, cmd: readonly string[]): ChildLike;
+  /** `adb shell` genérico; os argumentos são juntados com espaço e interpretados pelo `sh` do device — quem chama escapa. */
+  shell(serial: string, cmd: readonly string[]): Promise<string>;
   broadcastConfigure(serial: string, extras: Record<string, string | number | boolean>): Promise<void>;
   startTrampoline(serial: string, action: 'start' | 'stop'): Promise<void>;
   screencap(serial: string): Promise<Buffer>;
@@ -89,6 +91,7 @@ export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: 
     forward: async (serial, hostPort, spec) => { await run(['-s', serial, 'forward', `tcp:${hostPort}`, spec]); },
     forwardRemove: async (serial, hostPort) => { await run(['-s', serial, 'forward', '--remove', `tcp:${hostPort}`]); },
     shellSpawn: (serial, cmd) => spawnFn(adbPath, ['-s', serial, 'shell', ...cmd], { env }),
+    shell,
     broadcastConfigure: async (serial, extras) => {
       await shell(serial, ['am', 'broadcast', '-a', CONFIGURE_ACTION, '-n', `${MCP_PKG}/${CONFIGURE_RECEIVER}`, ...extraArgs(extras)]);
     },

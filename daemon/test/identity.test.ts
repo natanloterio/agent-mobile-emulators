@@ -12,7 +12,7 @@ const adbSpy = () => {
     forward: async (s, h, d) => { calls.push(`forward ${s} ${h} ${d}`); },
     forwardRemove: async () => undefined,
     push: async () => undefined,
-    shellSpawn: () => ({ pid: 1, kill: () => true, on: () => undefined }),
+    shellSpawn: () => ({ pid: 1, kill: () => true, on: () => undefined }), shell: async () => '',
     broadcastConfigure: async (_s, e) => { calls.push(`configure ${Object.keys(e).sort().join(',')}`); },
     startTrampoline: async (_s, a) => { calls.push(`trampoline ${a}`); },
     screencap: async () => Buffer.alloc(0),
