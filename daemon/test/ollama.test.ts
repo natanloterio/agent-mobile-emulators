@@ -1,6 +1,8 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { CONFIG } from '../src/config.js';
 import { ProviderError } from '../src/provider/errors.js';
-import { createOllamaSupervisor, modelListed, OLLAMA_ENV } from '../src/provider/ollama.js';
+import { createOllamaSupervisor, isLoopbackHost, modelListed, OLLAMA_ENV } from '../src/provider/ollama.js';
 
 const tags = (...names: string[]) => new Response(JSON.stringify({ models: names.map((name) => ({ name })) }), { status: 200 });
 const refused = () => { throw new Error('fetch failed: ECONNREFUSED'); };
@@ -91,5 +93,27 @@ describe('supervisor — revisão final', () => {
   it('Important 9: sob vitest, sem spawn injetado, nunca spawna processo real', async () => {
     const sup = createOllamaSupervisor({ fetch: (async () => { throw new Error('ECONNREFUSED'); }) as never, findProcesses: () => [] });
     await expect(sup.ensure('http://127.0.0.1:11434/v1', 'm')).rejects.toMatchObject({ kind: 'infra-local', message: expect.stringMatching(/teste/) });
+  });
+});
+
+describe('supervisor — incremento 3', () => {
+  it('isLoopbackHost', () => {
+    for (const h of ['127.0.0.1:11434', 'localhost:11434', '[::1]:11434', '127.0.0.1']) expect(isLoopbackHost(h), h).toBe(true);
+    for (const h of ['192.168.1.5:11434', 'ollama.lan:11434', '10.0.0.2']) expect(isLoopbackHost(h), h).toBe(false);
+  });
+  it('endpoint remoto morto → infra-local sem spawn; remoto vivo → conecta sem adotar (Review Focus 2)', async () => {
+    const spawned: string[] = [];
+    const dead = createOllamaSupervisor({ fetch: (async () => { throw new Error('ECONNREFUSED'); }) as never, sleep: async () => {}, findProcesses: () => [], spawn: () => { spawned.push('x'); return { pid: 1, kill: () => true, on: () => undefined }; } });
+    await expect(dead.ensure('http://192.168.1.5:11434/v1', 'm')).rejects.toMatchObject({ kind: 'infra-local', message: expect.stringMatching(/remoto/) });
+    expect(spawned).toEqual([]);
+    const alive = createOllamaSupervisor({ fetch: (async () => tags('m')) as never, findProcesses: () => [{ pid: 9, env: 'OLLAMA_HOST=127.0.0.1:11434\0OLLAMA_CONTEXT_LENGTH=32768\0' }] });
+    expect(await alive.ensure('http://192.168.1.5:11434/v1', 'm')).toMatchObject({ spawnedByUs: false, adopted: false });
+  });
+  it('logPath fica em CONFIG.dataDir e o fd é fechado no stop()', async () => {
+    const opened: string[] = []; const closed: unknown[] = [];
+    const sup = createOllamaSupervisor({ fetch: (async () => { throw new Error('ECONNREFUSED'); }) as never, sleep: async () => {}, timeoutMs: 1, findProcesses: () => [],
+      openLog: (p) => { opened.push(p); return 42; }, closeLog: (fd) => { closed.push(fd); }, spawn: () => ({ pid: 1, kill: () => true, on: () => undefined }) });
+    await sup.ensure('http://127.0.0.1:11434/v1', 'm').catch(() => undefined);
+    expect(opened[0]).toBe(path.join(CONFIG.dataDir, 'ollama.log')); expect(closed).toEqual([42]);
   });
 });

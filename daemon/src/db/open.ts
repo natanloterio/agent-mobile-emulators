@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { seedProviderConfig } from '../provider/config.js';
 import { applyMigrations } from './migrate.js';
 import { SCHEMA } from './schema.js';
 
@@ -7,5 +8,6 @@ export function openDb(path: string): DatabaseSync {
   db.exec('pragma journal_mode = wal; pragma foreign_keys = on;');
   db.exec(SCHEMA);
   applyMigrations(db);
+  seedProviderConfig(db);
   return db;
 }

@@ -115,3 +115,16 @@ describe('snapshot — incremento 3', () => {
     expect(snap.identities[0].earlyStopRemaining).toBe(13);
   });
 });
+
+describe('servidor — incremento 3', () => {
+  const h = { authorization: 'Bearer seg', 'content-type': 'application/json' };
+  it('PUT inválido devolve mensagem única; erro interno vira 500 JSON', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const bad = await fetch(`http://127.0.0.1:${s.port}/providers/worker`, { method: 'PUT', headers: h, body: JSON.stringify({ endpoint: 'ftp://x' }) });
+    expect(bad.status).toBe(400); expect(await bad.json()).toEqual({ error: 'endpoint precisa ser http(s)' });
+    db.close();
+    const boom = await fetch(`http://127.0.0.1:${s.port}/providers/worker`, { method: 'PUT', headers: h, body: JSON.stringify({ model: 'x' }) });
+    expect(boom.status).toBe(500); expect(((await boom.json()) as { error: string }).error).toBeTruthy();
+  });
+});
