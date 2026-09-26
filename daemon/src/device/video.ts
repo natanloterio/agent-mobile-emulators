@@ -23,7 +23,9 @@ export interface VideoDeps {
 
 const S = CONFIG.scrcpy;
 
-export const scidFor = (id: string): string => createHash('sha1').update(id).digest('hex').slice(0, 8);
+// scrcpy lê o scid com Integer.parseInt(s, 16): precisa caber em int32 com sinal, então zeramos o bit mais alto.
+export const scidFor = (id: string): string =>
+  ((parseInt(createHash('sha1').update(id).digest('hex').slice(0, 8), 16) & 0x7fffffff) >>> 0).toString(16).padStart(8, '0');
 
 /** Linha de comando do servidor (spec inc. 4 §2): só vídeo, sem áudio/controle, H.264 Annex B puro. */
 export function serverArgs(scid: string): readonly string[] {

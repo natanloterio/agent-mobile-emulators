@@ -26,6 +26,8 @@ function harness() {
 describe('scidFor / serverArgs', () => {
   it('scid é 8 hex determinístico; args do servidor têm raw_stream e sem áudio/controle', () => {
     expect(scidFor('conta1')).toMatch(/^[0-9a-f]{8}$/); expect(scidFor('conta1')).toBe(scidFor('conta1')); expect(scidFor('conta2')).not.toBe(scidFor('conta1'));
+    // scrcpy faz Integer.parseInt(scid, 16): precisa caber em int32 com sinal ('probe' dava a949c530 antes da correção)
+    for (const id of ['conta1', 'probe', 'B']) { expect(scidFor(id)).toMatch(/^[0-9a-f]{8}$/); expect(parseInt(scidFor(id), 16)).toBeLessThanOrEqual(0x7fffffff); }
     const a = serverArgs('0000abcd').join(' ');
     expect(a).toMatch(/^CLASSPATH=\/data\/local\/tmp\/enxame-scrcpy-server\.jar app_process \/ com\.genymobile\.scrcpy\.Server 4\.1 /);
     for (const kv of ['scid=0000abcd', 'tunnel_forward=true', 'video=true', 'audio=false', 'control=false', 'raw_stream=true', 'cleanup=true', 'max_size=720', 'max_fps=30', 'video_bit_rate=2000000']) expect(a).toContain(kv);
