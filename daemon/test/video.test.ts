@@ -1,12 +1,12 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createVideoStreams, scidFor, serverArgs, type VideoPacket, type VideoState } from '../src/device/video.js';
 
 const nal = (type: number, ...body: number[]) => Buffer.from([0, 0, 0, 1, type, ...body]);
 const SPS = nal(0x67, 1), PPS = nal(0x68, 2), IDR = nal(0x65, 3), P = nal(0x41, 4), END = Buffer.from([0, 0, 0, 1]);
 
-function harness() {
+function harness(onState?: (id: string, s: VideoState) => void) {
   const calls: string[] = []; const children: { serial: string; args: readonly string[]; em: EventEmitter; killed: boolean }[] = [];
   const sockets: PassThrough[] = [];
   const adb = {
@@ -18,7 +18,7 @@ function harness() {
   const connect = async (_port: number) => { const s = new PassThrough(); sockets.push(s); return s; };
   const waits: (() => void)[] = []; const sleep = () => new Promise<void>((r) => { waits.push(r); });
   const states: string[] = [];
-  const v = createVideoStreams({ adb, connect, sleep, serverPath: '/repo/daemon/vendor/scrcpy-server-v4.1', portFrom: 27183, onState: (id, s) => states.push(`${id}:${s}`) });
+  const v = createVideoStreams({ adb, connect, sleep, serverPath: '/repo/daemon/vendor/scrcpy-server-v4.1', portFrom: 27183, onState: onState ?? ((id, s) => states.push(`${id}:${s}`)) });
   const settle = async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r)); };
   return { adb, calls, children, sockets, waits, states, v, settle };
 }
@@ -47,6 +47,18 @@ describe('createVideoStreams', () => {
     expect(pk[0].data.equals(Buffer.concat([SPS, PPS, IDR]))).toBe(true);
     expect(h.v.state('conta1')).toBe('streaming'); expect(h.states).toContain('conta1:streaming');
     h.v.stop(); await h.settle(); expect(h.children[0].killed).toBe(true); expect(h.calls.at(-1)).toBe('forwardRemove emulator-5554 27183');
+  });
+  it('onState que lança não derruba o loop: a sessão chega a streaming e os pacotes continuam fluindo', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const onState = (_id: string, s: VideoState) => { throw new Error(`onState falhou em ${s}`); };
+    const h = harness(onState); const pk: VideoPacket[] = []; h.v.onPacket((p) => pk.push(p));
+    h.v.start([{ id: 'conta1', serial: 'emulator-5554' }]);
+    h.v.setActive(true); await h.settle();
+    h.sockets[0].write(Buffer.concat([SPS, PPS, IDR, P, END])); await h.settle();
+    expect(h.v.state('conta1')).toBe('streaming');
+    expect(pk.map((p) => [p.id, p.seq, p.key])).toEqual([['conta1', 0, true], ['conta1', 1, false]]);
+    expect(errSpy).toHaveBeenCalled();
+    h.v.stop(); errSpy.mockRestore();
   });
   it('socket fecha → retrying, forwardRemove, respawn após retryMs; duas identidades com portas distintas e independentes', async () => {
     const h = harness(); h.v.setActive(true);

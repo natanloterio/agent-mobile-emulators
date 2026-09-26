@@ -32,7 +32,7 @@ export function serverArgs(scid: string): readonly string[] {
   return [`CLASSPATH=${S.devicePath}`, 'app_process', '/', 'com.genymobile.scrcpy.Server', S.version,
     `scid=${scid}`, 'tunnel_forward=true', 'video=true', 'audio=false', 'control=false', 'raw_stream=true', 'cleanup=true',
     `max_size=${S.maxSize}`, `max_fps=${S.maxFps}`, `video_bit_rate=${S.bitRate}`,
-    'video_codec_options=i-frame-interval:int=2', 'log_level=warn']; // quadro-chave a cada 2 s (KEY_I_FRAME_INTERVAL)
+    'video_codec_options=i-frame-interval:int=2', 'log_level=warn']; // quadro-chave: pedido 2 s (KEY_I_FRAME_INTERVAL), medido ~4 s (~120 pacotes) neste emulador
 }
 
 /** O `adb shell` padrão tem stdout/stderr em pipe: drena para o servidor nunca bloquear; stderr vai para o log. */
@@ -61,7 +61,10 @@ export function createVideoStreams(deps: VideoDeps): VideoStreams {
   const wakers = new Set<() => void>();
   let active = false; let generation = 0;
 
-  const setState = (id: string, s: VideoState) => { if (states.get(id) === s) return; states.set(id, s); deps.onState?.(id, s); };
+  const setState = (id: string, s: VideoState) => {
+    if (states.get(id) === s) return; states.set(id, s);
+    try { deps.onState?.(id, s); } catch (e) { console.error('[video] onState falhou:', e); }
+  };
   const wake = () => { const ws = [...wakers]; wakers.clear(); for (const w of ws) w(); };
   const waitWake = (ms?: number): Promise<void> => new Promise((r) => {
     wakers.add(r);

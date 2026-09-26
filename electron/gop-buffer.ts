@@ -1,5 +1,5 @@
 interface Packet { readonly id: string; readonly key: boolean }
-const DEFAULT_MAX_GOP = 400;   // ~13 s a 30 fps; com IDR a cada 2 s o GOP tem ~60 pacotes, o limite é só rede de segurança
+const DEFAULT_MAX_GOP = 400;   // ~13 s a 30 fps; IDR pedido a 2 s, medido ~4 s (~120 pacotes) neste emulador, o limite é só rede de segurança
 
 /**
  * Guarda, por identidade, o quadro-chave mais recente e tudo depois dele, para reenviar numa recarga da janela (spec inc. 4 §2).

@@ -3,7 +3,7 @@ import type { LiveVideoPacket } from './types';
 type Sub = (p: LiveVideoPacket) => void;
 export interface VideoBus { publish(p: LiveVideoPacket): void; subscribe(id: string, cb: Sub): () => void }
 
-/** ~13 s a 30 fps; com IDR a cada 2 s o GOP tem ~60 pacotes, o limite é só rede de segurança (mesma regra de electron/gop-buffer.ts). */
+/** ~13 s a 30 fps; IDR pedido a 2 s, medido ~4 s (~120 pacotes) neste emulador, o limite é só rede de segurança (mesma regra de electron/gop-buffer.ts). */
 const DEFAULT_MAX_GOP = 400;
 
 /** Key reinicia o GOP; delta sem key anterior é ignorado; no limite o GOP inteiro é descartado (truncado não decodifica). */

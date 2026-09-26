@@ -18,11 +18,12 @@ export interface PhoneLabelInput {
 }
 
 /**
- * Rótulo da tela: "ao vivo" vem do estado do stream no daemon (tela parada não gera pacote, spec inc. 4 §4);
+ * Rótulo da tela: "ao vivo" exige tanto o estado `streaming` do daemon quanto um quadro já decodificado
+ * (sem quadro decodificado, streaming ainda não desenhou nada no canvas — mostra a idade do que existe);
  * fora disso, a idade do último quadro decodificado ou do poster; sem nada, o rótulo padrão do tile.
  */
 export function phoneLabel({ video, videoAt, screenAt, now, fallback }: PhoneLabelInput): string {
-  if (video === 'streaming') return LIVE_LABEL;
+  if (video === 'streaming' && videoAt !== null) return LIVE_LABEL;
   if (videoAt !== null) return frameAgeLabel(videoAt, now);
   if (screenAt !== undefined) return frameAgeLabel(screenAt, now);
   return fallback;

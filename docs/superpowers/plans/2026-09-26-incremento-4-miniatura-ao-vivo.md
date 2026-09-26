@@ -18,7 +18,7 @@
 - Standalone: nenhum binário além de `daemon/vendor/scrcpy-server-v4.1` (sha256 `deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae`) e do `adb` já configurado; nada de `ffmpeg`, `scrcpy` do sistema ou v4l2.
 - Tudo por identidade: servidor, porta (`CONFIG.scrcpy.portFrom + índice`), `scid` (8 hex derivados do `id`), decoder, tile. Pacotes casam por `id`, nunca por posição.
 - Servidor scrcpy sempre com `video=true audio=false control=false raw_stream=true cleanup=true max_size=720 max_fps=30 video_bit_rate=2000000`.
-- Mensagens WS: `{ type: 'video', data: { id, seq, key, nal } }` (`nal` base64 de uma access unit Annex B; IDR com SPS+PPS na frente) e `{ type: 'frame', data: { id, at, png } }` (poster); snapshot inalterado; nada gravado no SQLite.
+- Mensagens WS: `{ type: 'video', data: { id, seq, key, nal } }` (`nal` base64 de uma access unit Annex B; IDR com SPS+PPS na frente) e `{ type: 'frame', data: { id, at, png } }` (poster); snapshot ganha só o campo opcional `video` (estado do stream); nada gravado no SQLite.
 - Vídeo e captura só rodam com ≥ 1 cliente WS; kill switch não os para.
 - Nunca imprimir `ANTHROPIC_API_KEY` nem o token do daemon; não alterar worker, gate, benchmark nem o servidor MCP.
 
