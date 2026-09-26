@@ -9,6 +9,22 @@ export interface IdentityRow {
   readonly consolePort: number; readonly mcpHostPort: number; readonly mcpToken: string; readonly deviceSlug: string;
   readonly appPackage: string; readonly appVersionName: string; readonly state: IdentityState;
   readonly lastError?: string | null; readonly bannedReason?: string | null; readonly snapshotTakenAt?: string | null;
+  // Incremento 5 (lidos do banco; o upsert não os escreve — use setIdentityFlags).
+  readonly paused?: boolean; readonly controlled?: boolean; readonly discardedAt?: string | null;
+  readonly lastSignals?: ProbeSignalsRow | null; readonly diskBytes?: number | null; readonly bannedAt?: string | null;
+  readonly createdAt?: string | null;
+}
+
+/** Espelho de `ProbeSignals` (device/probe.ts) sem importar o módulo de device no banco. */
+export interface ProbeSignalsRow {
+  readonly bootCompleted: boolean; readonly accessibility: boolean; readonly mcpInitialize: boolean;
+  readonly toolsPresent: boolean; readonly versionMatch: boolean;
+}
+
+export interface IdentityFlags {
+  readonly paused?: boolean; readonly controlled?: boolean; readonly discardedAt?: string | null;
+  readonly lastSignals?: ProbeSignalsRow | null; readonly diskBytes?: number | null;
+  readonly handle?: string; readonly bannedAt?: string | null; readonly appVersionName?: string;
 }
 
 const COLS = ['id','name','handle','avd_name','serial','console_port','mcp_host_port','mcp_token','device_slug','app_package','app_version_name','state'] as const;
@@ -18,6 +34,12 @@ export function upsertIdentity(db: DatabaseSync, r: IdentityRow): void {
   db.prepare(`insert into identity (${COLS.join(',')}) values (${COLS.map(() => '?').join(',')})
     on conflict(id) do update set ${sets}, updated_at=datetime('now')`)
     .run(r.id, r.name, r.handle, r.avdName, r.serial, r.consolePort, r.mcpHostPort, r.mcpToken, r.deviceSlug, r.appPackage, r.appVersionName, r.state);
+  db.prepare("update identity set created_at = coalesce(created_at, datetime('now')) where id=?").run(r.id);
+}
+
+function parseSignals(raw: unknown): ProbeSignalsRow | null {
+  if (typeof raw !== 'string' || !raw) return null;
+  try { return JSON.parse(raw) as ProbeSignalsRow; } catch { return null; }
 }
 
 function fromRow(x: Record<string, unknown>): IdentityRow {
@@ -27,6 +49,10 @@ function fromRow(x: Record<string, unknown>): IdentityRow {
     deviceSlug: String(x.device_slug), appPackage: String(x.app_package), appVersionName: String(x.app_version_name),
     state: x.state as IdentityState, lastError: (x.last_error as string | null) ?? null,
     bannedReason: (x.banned_reason as string | null) ?? null, snapshotTakenAt: (x.snapshot_taken_at as string | null) ?? null,
+    paused: Number(x.paused ?? 0) === 1, controlled: Number(x.controlled ?? 0) === 1,
+    discardedAt: (x.discarded_at as string | null) ?? null, lastSignals: parseSignals(x.last_signals_json),
+    diskBytes: x.disk_bytes === null || x.disk_bytes === undefined ? null : Number(x.disk_bytes),
+    bannedAt: (x.banned_at as string | null) ?? null, createdAt: (x.created_at as string | null) ?? null,
   };
 }
 
@@ -51,4 +77,25 @@ export function setIdentityState(
     if (v !== undefined) { sets.push(`${col}=?`); vals.push(v); }
   }
   db.prepare(`update identity set ${sets.join(', ')} where id=?`).run(...vals, id);
+}
+
+/** Grava só os campos presentes (`undefined` mantém; `null` limpa). Nunca muta a entrada. */
+export function setIdentityFlags(db: DatabaseSync, id: string, f: IdentityFlags): void {
+  const cols: readonly [keyof IdentityFlags, string, (v: never) => string | number | null][] = [
+    ['paused', 'paused', (v: boolean) => (v ? 1 : 0)],
+    ['controlled', 'controlled', (v: boolean) => (v ? 1 : 0)],
+    ['discardedAt', 'discarded_at', (v: string | null) => v],
+    ['lastSignals', 'last_signals_json', (v: ProbeSignalsRow | null) => (v ? JSON.stringify(v) : null)],
+    ['diskBytes', 'disk_bytes', (v: number | null) => v],
+    ['handle', 'handle', (v: string) => v],
+    ['bannedAt', 'banned_at', (v: string | null) => v],
+    ['appVersionName', 'app_version_name', (v: string) => v],
+  ] as never;
+  const sets: string[] = []; const vals: (string | number | null)[] = [];
+  for (const [k, col, enc] of cols) {
+    const v = f[k];
+    if (v !== undefined) { sets.push(`${col}=?`); vals.push(enc(v as never)); }
+  }
+  if (sets.length === 0) return;
+  db.prepare(`update identity set ${sets.join(', ')}, updated_at=datetime('now') where id=?`).run(...vals, id);
 }

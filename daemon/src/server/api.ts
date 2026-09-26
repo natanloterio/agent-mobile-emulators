@@ -5,7 +5,7 @@ import { CLOUD_MODELS, ollamaBase, patchErrorMessage, ProviderPatch, readProvide
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import type { ScreenCapture } from '../device/screen.js';
 import type { VideoState, VideoStreams } from '../device/video.js';
-import { buildSnapshot } from './snapshot.js';
+import { buildSnapshot, listGoals, type HostMetrics, type SnapshotSources } from './snapshot.js';
 import { attachWs } from './ws.js';
 
 const GoalBody = z.object({ text: z.string().min(3).max(2000) });
@@ -21,7 +21,22 @@ export interface ServerOpts {
   readonly screen?: ScreenCapture; readonly video?: VideoStreams;
   /** Estado do stream por identidade, publicado no snapshot (`identities[].video`); ausente = 'idle'. */
   readonly videoState?: (id: string) => VideoState;
+  /** Métricas do host publicadas no snapshot (spec inc. 5 §3.1); ausente = null. */
+  readonly host?: () => HostMetrics | null;
+  /** Rotas de outras frentes (spec inc. 5 §3.2): avaliadas antes do 404, na ordem; `true` = tratou. */
+  readonly routes?: readonly Route[];
 }
+
+/** Contexto de uma rota plugável. `send` responde JSON; `body()` lê o corpo uma vez (JSON inválido → null). */
+export interface RouteCtx {
+  readonly req: http.IncomingMessage; readonly url: URL; readonly method: string;
+  readonly db: DatabaseSync;
+  send(code: number, body?: unknown): void;
+  body(): Promise<unknown>;
+  broadcast(): void;
+  isKilled(): boolean;
+}
+export type Route = (ctx: RouteCtx) => boolean | Promise<boolean>;
 
 function readJson(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { try { resolve(JSON.parse(b || '{}')); } catch { resolve(null); } }); });
@@ -52,12 +67,17 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
     if (res.headersSent) { console.error('[daemon] erro após resposta enviada:', e); return; }
     send(res, 500, { error: String((e as Error).message ?? e) });
   };
-  const send = (res: http.ServerResponse, code: number, body: unknown) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+  const send = (res: http.ServerResponse, code: number, body: unknown) => {
+    if (code === 204 || body === undefined) { res.writeHead(code); res.end(); return; }
+    res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body));
+  };
+  const sources: SnapshotSources = { videoState: o.videoState, host: o.host };
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
       if (req.headers.authorization !== `Bearer ${o.token}`) return send(res, 401, { error: 'unauthorized' });
-      if (req.method === 'GET' && url.pathname === '/state') return send(res, 200, buildSnapshot(o.db, killed, o.videoState));
+      if (req.method === 'GET' && url.pathname === '/state') return send(res, 200, buildSnapshot(o.db, killed, sources));
+      if (req.method === 'GET' && url.pathname === '/goals') return send(res, 200, { goals: listGoals(o.db) });
       if (req.method === 'POST' && url.pathname === '/goals') {
         const parsed = GoalBody.safeParse(await readJson(req));
         if (!parsed.success) return send(res, 400, { error: parsed.error.issues.map((i) => i.message) });
@@ -96,12 +116,22 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
           finally { inFlight = false; }
         }
       }
+      if (o.routes?.length) {
+        let bodyP: Promise<unknown> | null = null;
+        const ctx: RouteCtx = {
+          req, url, method: req.method ?? 'GET', db: o.db,
+          send: (code, body) => send(res, code, body),
+          body: () => (bodyP ??= readJson(req)),
+          broadcast: () => ws.broadcast(), isKilled: () => killed,
+        };
+        for (const route of o.routes) if (await route(ctx)) return;
+      }
       return send(res, 404, { error: 'not found' });
     } catch (e) {
       return sendError(res, e);
     }
   });
-  const ws = attachWs(server, o.token, () => buildSnapshot(o.db, killed, o.videoState), o.screen, o.video);
+  const ws = attachWs(server, o.token, () => buildSnapshot(o.db, killed, sources), o.screen, o.video);
   await new Promise<void>((r) => server.listen(o.port ?? 47800, '127.0.0.1', r));
   const port = (server.address() as { port: number }).port;
   return { port, broadcast: ws.broadcast, isKilled: () => killed, close: async () => { ws.close(); await new Promise<void>((r) => server.close(() => r())); } };

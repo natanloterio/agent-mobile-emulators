@@ -48,6 +48,6 @@ export function addTaskCost(db: DatabaseSync, taskId: string, usd: number): void
 export function ledgerHas(db: DatabaseSync, identityId: string, key: string): boolean {
   return !!db.prepare('select 1 from ledger where identity_id=? and item_key=?').get(identityId, key);
 }
-export function ledgerPut(db: DatabaseSync, identityId: string, key: string, kind: string, note: string): void {
-  db.prepare('insert or ignore into ledger (identity_id, item_key, kind, note) values (?, ?, ?, ?)').run(identityId, key, kind, note);
+export function ledgerPut(db: DatabaseSync, identityId: string, key: string, kind: string, note: string, taskId: string | null = null): void {
+  db.prepare('insert or ignore into ledger (identity_id, item_key, kind, note, task_id) values (?, ?, ?, ?, ?)').run(identityId, key, kind, note, taskId);
 }

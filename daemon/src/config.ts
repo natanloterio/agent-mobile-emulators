@@ -23,6 +23,8 @@ export const CONFIG = {
   targetApp: { package: 'com.instagram.android', versionName: '448.0.0.52.84' },
   ports: { consoleFrom: 5554, consoleMax: 5584, mcpHostFrom: 8080 },
   worker: { stepBudget: 30, keepScreens: 2, qualityFloor: 3 },
+  /** Ciclo de vida (spec inc. 5 §2): snapshot mais velho que isto exige confirmação humana para restaurar. */
+  identity: { restoreUnsafeDays: 14 },
   /** Miniatura ao vivo (spec inc. 4): captura por identidade, só com alguém assistindo. */
   screen: { intervalMs: 500, retryMs: 5000 },
   /** scrcpy-server empacotado (spec inc. 4 §4.1). O caminho vale a partir de `daemon/src` (vitest) e de `dist-daemon` (build). */
