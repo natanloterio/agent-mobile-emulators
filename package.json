@@ -12,20 +12,37 @@
     "preview": "vite preview",
     "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "start": "electron .",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "daemon:build": "tsc -p tsconfig.daemon.json",
+    "daemon:start": "node --env-file=.env dist-daemon/index.js",
+    "test": "vitest run",
+    "test:integration": "ENXAME_INTEGRATION=1 vitest run --project daemon",
+    "real:run": "npm run daemon:build && node --env-file=.env dist-daemon/cli/run-real.js"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.65",
+    "@ai-sdk/mcp": "^2.0.60",
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "ai": "^7.0.116",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "ws": "^8.21.3",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/node": "^26.6.3",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "electron": "^33.2.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
+    "vitest": "^5.0.2",
     "wait-on": "^8.0.1"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

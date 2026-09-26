@@ -4,3 +4,6 @@ dist-electron/
 *.tsbuildinfo
 .DS_Store
 .verify/
+.superpowers/
+.env
+dist-daemon/
