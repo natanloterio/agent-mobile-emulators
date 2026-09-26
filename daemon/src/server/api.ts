@@ -1,6 +1,7 @@
 import http from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
+import { GoalPlanSchema, type GoalPlan } from '../leader/types.js';
 import { CLOUD_MODELS, ollamaBase, patchErrorMessage, ProviderPatch, readProviderConfig, ROLE_KEYS, updateProvider, type RoleKey } from '../provider/config.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import type { ScreenCapture } from '../device/screen.js';
@@ -8,13 +9,19 @@ import type { VideoState, VideoStreams } from '../device/video.js';
 import { buildSnapshot, listGoals, type HostMetrics, type SnapshotSources } from './snapshot.js';
 import { attachWs } from './ws.js';
 
-const GoalBody = z.object({ text: z.string().min(3).max(2000) });
+export const GoalText = z.string().min(3).max(2000);
+/** `plan` é o GoalPlan devolvido por POST /goals/plan (spec inc. 5 §3.2); ausente, o daemon planeja antes. */
+const GoalBody = z.object({ text: GoalText, plan: GoalPlanSchema.optional() });
 const PROVIDERS_ROUTE = /^\/providers(?:\/([a-z]+))?(\/test)?$/;
 const isRole = (x: string): x is RoleKey => (ROLE_KEYS as readonly string[]).includes(x);
 
 export interface ServerOpts {
   readonly db: DatabaseSync; readonly port?: number; readonly token: string;
-  readonly onGoal: (text: string) => Promise<void>; readonly onKill: () => void;
+  /**
+   * Cria o objetivo (planejando antes se `plan` for null) e devolve o goalId já gravado; `done` resolve quando ele termina.
+   * Enquanto `done` não resolve, novos objetivos e trocas de provedor recebem 409.
+   */
+  readonly onGoal: (text: string, plan: GoalPlan | null) => Promise<GoalStart>; readonly onKill: () => void;
   readonly onProviderTest: (role: RoleKey) => Promise<ProviderTest>;
   readonly fetch?: typeof fetch;
   /** Posters/fallback (screencap) e vídeo ao vivo (spec inc. 4); ausentes, o WS só manda snapshots. */
@@ -27,6 +34,8 @@ export interface ServerOpts {
   readonly routes?: readonly Route[];
 }
 
+export interface GoalStart { readonly goalId: string; readonly done: Promise<unknown> }
+
 /** Contexto de uma rota plugável. `send` responde JSON; `body()` lê o corpo uma vez (JSON inválido → null). */
 export interface RouteCtx {
   readonly req: http.IncomingMessage; readonly url: URL; readonly method: string;
@@ -35,6 +44,8 @@ export interface RouteCtx {
   body(): Promise<unknown>;
   broadcast(): void;
   isKilled(): boolean;
+  /** Objetivo (ou teste de provedor) em execução. */
+  busy(): boolean;
 }
 export type Route = (ctx: RouteCtx) => boolean | Promise<boolean>;
 
@@ -82,9 +93,13 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
         const parsed = GoalBody.safeParse(await readJson(req));
         if (!parsed.success) return send(res, 400, { error: parsed.error.issues.map((i) => i.message) });
         if (inFlight) return send(res, 409, { error: 'já existe um objetivo em execução' });
+        if (killed) return send(res, 409, { error: 'kill switch acionado: POST /resume antes de um novo objetivo' });
         inFlight = true;
-        o.onGoal(parsed.data.text).catch((e: unknown) => console.error('[daemon] objetivo falhou:', e)).finally(() => { inFlight = false; });
-        return send(res, 202, { accepted: true });
+        let started: GoalStart;
+        try { started = await o.onGoal(parsed.data.text, parsed.data.plan ?? null); }
+        catch (e) { inFlight = false; return sendError(res, e); }
+        started.done.catch((e: unknown) => console.error('[daemon] objetivo falhou:', e)).finally(() => { inFlight = false; ws.broadcast(); });
+        send(res, 202, { goalId: started.goalId }); ws.broadcast(); return;
       }
       if (req.method === 'POST' && url.pathname === '/kill') { killed = true; o.onKill(); return send(res, 200, { killed: true }); }
       if (req.method === 'POST' && url.pathname === '/resume') { killed = false; return send(res, 200, { killed: false }); }
@@ -122,7 +137,7 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
           req, url, method: req.method ?? 'GET', db: o.db,
           send: (code, body) => send(res, code, body),
           body: () => (bodyP ??= readJson(req)),
-          broadcast: () => ws.broadcast(), isKilled: () => killed,
+          broadcast: () => ws.broadcast(), isKilled: () => killed, busy: () => inFlight,
         };
         for (const route of o.routes) if (await route(ctx)) return;
       }

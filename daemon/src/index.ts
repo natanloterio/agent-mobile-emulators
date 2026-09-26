@@ -4,15 +4,19 @@ import { CONFIG, loadEnv } from './config.js';
 import { createAdb } from './device/adb.js';
 import { createDeviceInput } from './device/input.js';
 import { openDb } from './db/open.js';
-import { getIdentity, listIdentities, upsertIdentity } from './db/identities.js';
+import { getIdentity, listIdentities, upsertIdentity, type IdentityRow } from './db/identities.js';
 import { createScreenCapture } from './device/screen.js';
 import { createVideoStreams } from './device/video.js';
 import { ensureIdentityReady } from './fleet/identity.js';
+import { planGoal, type PlanDeps } from './leader/plan.js';
 import { readProviderConfig } from './provider/config.js';
 import { createOllamaSupervisor } from './provider/ollama.js';
 import { recordProviderTest, testProvider } from './provider/probe.js';
 import { startServer } from './server/api.js';
 import { controlRoutes } from './server/routes-control.js';
+import { goalsRoutes } from './server/routes-goals.js';
+import { startGoal, type WorkerJob } from './swarm/scheduler.js';
+import { singleFlightOllama } from './swarm/single-flight.js';
 import { runTask } from './worker/run.js';
 
 const env = loadEnv();
@@ -20,7 +24,8 @@ mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath);
 const adb = createAdb();
 // Supervisor do Ollama: só mata o processo que ele mesmo subiu (spec §4.3).
-const ollama = createOllamaSupervisor();
+// Single-flight: workers do enxame pedem o Ollama quase juntos; só um `ollama serve` sobe.
+const ollama = singleFlightOllama(createOllamaSupervisor());
 
 // Identidade 0: o emulador já provisionado. Token vem do arquivo salvo na sessão de setup ou é gerado agora.
 const tokenFile = '/tmp/claude-1000/-media-loterio-workspace-workspace-pitaia-research/mcp-token.txt';
@@ -45,21 +50,28 @@ video.start(targets);
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { video.stop(); screen.stop(); ollama.stop(); process.exit(0); });
 process.on('exit', () => { video.stop(); screen.stop(); ollama.stop(); });
 
+// Enxame (spec inc. 5 §3.2): líder planeja sobre a frota; scheduler roda um worker por identidade pronta, com pacing.
+const ensureReady = (id: IdentityRow) => ensureIdentityReady(db, id, { adb });
+const planDeps: PlanDeps = { db, ensureReady, apiKey: env.anthropicApiKey, ollama };
+const runWorker = (j: WorkerJob) => runTask({
+  db, identity: j.identity, goalText: j.goalText, goalId: j.goalId, taskId: j.taskId, instruction: j.instruction,
+  apiKey: env.anthropicApiKey, isKilled: () => server.isKilled(), onStep: () => server.broadcast(), pacing: CONFIG.swarm,
+}, { ollama });
+
 const daemonToken = randomUUID();
 const server = await startServer({
   db, token: daemonToken, screen, video, videoState: (id) => video.state(id),
   // Controle humano (spec inc. 5 §3.2): `controlled` no banco para o worker; input via `adb shell input`.
-  routes: [controlRoutes({ input: createDeviceInput(adb) })],
   // Kill switch derruba o Ollama que é nosso (spec §4.3); /resume + próximo objetivo o sobem de novo.
   onKill: () => { ollama.stop(); server.broadcast(); },
-  onGoal: async (text) => {
-    if (server.isKilled()) return; // kill switch acionado: retomar via POST /resume antes de novo objetivo
-    const id = getIdentity(db, 'conta1'); if (!id) return;
-    const probe = await ensureIdentityReady(db, id, { adb }); server.broadcast();
-    if (!probe.ready) return;
-    await runTask({ db, identity: getIdentity(db, 'conta1')!, goalText: text, apiKey: env.anthropicApiKey, isKilled: () => server.isKilled(), onStep: () => server.broadcast() }, { ollama });
+  // Kill switch já é recusado na rota (409). Plano do cliente é re-sondado no start de cada identidade.
+  onGoal: async (text, planIn) => {
+    const plan = planIn ? { ...planIn, text } : await planGoal(text, planDeps);
     server.broadcast();
+    const started = startGoal(plan, { db, isKilled: () => server.isKilled(), runWorker, ensureReady, onChange: () => server.broadcast() });
+    return { goalId: started.goalId, done: started.done };
   },
+  routes: [goalsRoutes({ plan: (text) => planGoal(text, planDeps) }), controlRoutes({ input: createDeviceInput(adb) })],
   onProviderTest: async (role) => {
     const id = getIdentity(db, 'conta1')!;
     const probe = await ensureIdentityReady(db, id, { adb }); server.broadcast();
