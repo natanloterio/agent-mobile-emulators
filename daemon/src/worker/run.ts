@@ -145,10 +145,11 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     const messages: ModelMessage[] = [{ role: 'user', content: taskInstruction(o.goalText) }];
     const result = await deps.generate({
       model, tools, messages,
-      // ai@7 rejeita role:'system' em messages; o system vai em instructions (com cache de 1h).
-      instructions: { role: 'system', content: SYSTEM_PROMPT, providerOptions: { anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } } } },
+      // ai@7 rejeita role:'system' em messages; o system vai em instructions.
+      instructions: SYSTEM_PROMPT,
       // Uma tool por passo: o gate decide com a tela que o modelo acabou de ler, nunca em paralelo com uma ação.
-      providerOptions: { anthropic: { disableParallelToolUse: true } },
+      // cacheControl no nível da chamada: o schema de opções da mensagem de sistema do provider não o aceita (medido: cache 0).
+      providerOptions: { anthropic: { disableParallelToolUse: true, cacheControl: { type: 'ephemeral', ttl: '1h' } } },
       toolApproval: buildToolApproval(slug, () => lastScreen, 'read-only') as never,
       stopWhen: [stepCountIs(budget), stopIfHalted],
       prepareStep: ({ messages: m }) => ({ messages: pruneScreens(m, CONFIG.worker.keepScreens) }),

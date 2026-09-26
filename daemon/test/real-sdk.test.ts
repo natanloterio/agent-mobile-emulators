@@ -177,3 +177,14 @@ describe('runTask — tools reais do @ai-sdk/mcp (shape MCP + toModelOutput)', (
     expect((inputsSeen[0] as { include_screenshot?: boolean }).include_screenshot).toBe(false);
   });
 });
+
+describe('runTask — prompt caching (spec §4.3 lever 3)', () => {
+  it('cacheControl 1h vai no nível da chamada (o schema da mensagem de sistema do provider não o aceita)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const model = new MockLanguageModelV4({ doGenerate: [text('ok')] as never });
+    await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => SCREEN) }), model });
+    const po = model.doGenerateCalls[0].providerOptions as { anthropic?: { cacheControl?: { type: string; ttl?: string }; disableParallelToolUse?: boolean } } | undefined;
+    expect(po?.anthropic?.cacheControl).toEqual({ type: 'ephemeral', ttl: '1h' });
+    expect(po?.anthropic?.disableParallelToolUse).toBe(true);
+  });
+});
