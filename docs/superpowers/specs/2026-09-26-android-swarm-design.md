@@ -26,7 +26,7 @@ Decidido explicitamente, não por omissão:
 - **Camada de evasão de defesas de plataforma:** rotação de fingerprint, farm de SMS,
   resolução de captcha, rotação de IP para criação de contas. Além da questão de fundo, é a
   parte que quebra continuamente e colocaria o produto em manutenção permanente.
-- **Escala além de ~10 emuladores simultâneos.** Ver seção 3.
+- **Escala além de ~8–10 emuladores simultâneos.** Ver seção 3 para os três tetos.
 - **Device físico.** O design assume emulador; a escolha de scrcpy na seção 4.2 preserva o
   caminho para hardware real, mas nada além disso.
 
@@ -42,6 +42,10 @@ Medidas nesta máquina em 2026-09-26, não estimadas:
 | Host | i9-14900K (32 threads), 125 GB RAM, RTX 5090 32 GB VRAM, 397 GB disco livre |
 | RSS de um emulador | 4,6 GB **com `hw.ramSize=2G` no guest** (pico 5,0 GB; multiplicador host/guest 2,16×) |
 | Baseline do host sem emulador | 38,3 GiB (IDE, navegador, Docker, etc.) |
+| vCPU por emulador | `hw.cpu.ncore=4` contra 32 threads de host |
+| CPU de um emulador ocioso | ~48% de um core, 162 threads |
+| VRAM por emulador (`-gpu host`) | 636 MiB |
+| Snapshot em disco | `ram.img` = tamanho exato do guest RAM, **além** dos 3,4 GB do AVD |
 | Tamanho de um AVD | 3,4 GB (cresce com dados do app) |
 | Teto por RAM/CPU | 8–12 emuladores responsivos |
 | **Teto duro do protocolo adb** | **16 emuladores** (varredura de portas ímpares 5555–5585) |
@@ -59,9 +63,18 @@ abandonada porque erra em direções opostas: superestima schemas de tool (~char
 subestima a árvore de acessibilidade em 44–66% (~chars/2,5–2,8, por causa dos `node_<hash>`,
 tabs, `res_id` e tuplas de coordenada).
 
-**Alvo de escala: ≤ 10 identidades simultâneas, tudo local.**
+**Alvo de escala: 8 identidades simultâneas, tudo local; 10 como esticada a validar.**
+Revisado para baixo depois da revisão adversarial: 10 era um alvo derivado só de RAM. Os três
+tetos independentes são 16 (protocolo adb), 8 (CPU) e 8–10 (RAM, conforme `hw.ramSize`). Vale
+o menor.
 
 `hw.ramSize` é restrição de primeira ordem e precisa ser declarada, não herdada do default:
+
+**CPU é teto independente e mais apertado que RAM.** Com `hw.cpu.ncore=4`, dez identidades
+pedem 40 vCPU contra 32 threads: **1,25× de oversubscrição antes de qualquer trabalho**, e um
+emulador ocioso já consome ~48% de um core só existindo — dez ociosos são ~5 cores. Somam-se
+a isso o dump de árvore de acessibilidade, o encode de vídeo por software dentro do guest
+(seção 4.2) e, se houver modelo local, a inferência na mesma máquina. **Por CPU o teto é 8.**
 
 | n | guest | RAM total com baseline | cabe em 125,6 GiB |
 |---|---|---|---|
@@ -76,7 +89,16 @@ o que empurra para 4G, onde o alvo de 10 deixa de caber. Decidir por medição n
 rodar uma identidade a 2G sob carga real e observar `lowmemorykiller`. Se 2G não servir, o
 alvo cai para ~8.
 
-Consumo de disco projetado: 60–100 GB.
+**Disco:** os 3,4 GB do AVD **não incluem o snapshot**. O `ram.img` tem exatamente o tamanho
+do guest RAM (confirmado em AVDs desta máquina: guest de 4G gera snapshot de 4,1 GB). Como a
+seção 4.1 exige re-snapshot a cada execução, o snapshot é permanente, não eventual:
+
+| guest | AVD + crescimento | snapshot | por identidade | × 10 |
+|---|---|---|---|---|
+| 2G | ~4–5 GB | 2,1 GB | ~6–7 GB | **60–70 GB** |
+| 4G | ~4–5 GB | 4,3 GB | ~8–9 GB | **80–90 GB** |
+
+Cabe nos 397 GB livres, mas a decisão de `hw.ramSize` move disco e RAM juntos.
 
 ### Viabilidade do alvo (validada)
 
@@ -255,6 +277,19 @@ descobre qual identidade travou.
 Regra: trabalho preso à identidade, fan-out; lista de itens, sharding. O padrão escolhido
 fica registrado na execução.
 
+**Recuperação de crash e idempotência.** SQLite em WAL não é gargalo para dez devices a um
+passo cada poucos segundos — essa parte está resolvida. O problema é o outro lado da mesma
+decisão: se o daemon morre, os emuladores continuam com ações em voo e o banco não sabe
+quais. Sem isso, na volta é impossível distinguir *"ia tocar Enviar"* de *"toquei Enviar e
+não sei o resultado"* — e para ação irreversível o erro é comentário duplicado, o mesmo padrão
+que a seção 10 associa a checkpoint. Portanto, e alinhado ao que o próprio servidor MCP exige
+de operações retryáveis:
+
+- **intenção escrita antes da ação** (write-ahead) com `started_at`, e conciliação na volta;
+- **chave de idempotência por ação** derivada de (identidade, item externo, tipo de ação);
+- ação em voo sem conclusão registrada **nunca** é repetida automaticamente: vira verificação
+  de estado real no device, e só então decide.
+
 **Fila em SQLite com escritor único (o daemon).** Divergência deliberada do `agent-team`, que
 usa fila em arquivos: lá o worktree git é a unidade de isolamento; aqui o daemon já é dono de
 todo o estado e o dashboard precisa de query.
@@ -318,10 +353,20 @@ O Claude Agent SDK foi descartado por ser específico de um provedor.
 | Worker por device | 40–60 passos × N contas | barato e rápido — onde local ganha |
 | Escalonamento | raro | modelo forte |
 
-**Concorrência é o gargalo local, não o tamanho do modelo.** N workers no mesmo endpoint é
-caso de batching contínuo: vLLM aguenta, Ollama serializa muito mais. A RTX 5090 (32 GB)
-comporta modelos classe 30B em 4-bit (~18–20 GB); 70B em 4-bit não cabe sem offload que
-inviabiliza o loop.
+**A VRAM é disputada por três consumidores, não um.** Com `-gpu host` cada emulador ocupa
+636 MiB de VRAM; dez ocupam ~6,4 GiB dos 32 GB. Sobra para o modelo local:
+
+| n devices | VRAM livre | menos pesos 30B-4bit (~19 GiB) = KV cache |
+|---|---|---|
+| 8 | 23,7 GiB | 4,7 GiB |
+| 10 | 22,4 GiB | **3,4 GiB** |
+
+**Consequência não resolvida:** o vLLM pré-aloca a maior parte da VRAM livre para KV cache, e
+com ~3,4 GiB não cabem dez sequências concorrentes de ~13k tokens. "Concorrência é o gargalo,
+e vLLM aguenta" é verdade em geral e **não foi testada nesta configuração**, que é a única que
+importa. Saídas, a decidir por medição: modelo local menor, menos devices, `-gpu
+swiftshader_indirect` nos emuladores (libera VRAM ao custo de CPU, que a seção 3 já mostra
+apertada), ou worker em nuvem e GPU reservada só para a camada System 1.
 
 **"Testar conexão" roda um tool-call canônico** contra um device vivo e reporta latência,
 tokens/s e se os argumentos vieram estruturados e válidos. Modelo local que responde bem em
@@ -422,7 +467,7 @@ SQLite, escritor único (daemon).
 - **task** — id, goal_id, identity_id (nulo = qualquer), instrucao, estado, tentativas,
   custo, criado_em, finalizado_em.
 - **step** — id, task_id, indice, acao, tool, argumentos, resultado, tokens, latencia_ms,
-  escalou.
+  escalou, **started_at, idempotency_key, intent_written_at** (recuperação de crash).
 - **decision_sample** — id, step_id, estado_reduzido, pergunta, resposta_do_modelo, rotulo.
   Alimenta a suíte de eval e depois o fine-tune.
 
