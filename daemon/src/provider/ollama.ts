@@ -116,7 +116,7 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
       try {
         const log = openLog(logPath); logFd = log;
         child = spawnFn('ollama', ['serve'], { env: { ...process.env, ...OLLAMA_ENV, OLLAMA_HOST: host }, stdio: ['ignore', log, log] });
-      } catch (e) { spawnErr = e as Error; child = null; }
+      } catch (e) { spawnErr = e as Error; child = null; releaseLog(); }
       child?.on('exit', () => { child = null; releaseLog(); });
       child?.on('error', (e) => { spawnErr = e ?? new Error('spawn error'); child = null; releaseLog(); });
       const t0 = Date.now();

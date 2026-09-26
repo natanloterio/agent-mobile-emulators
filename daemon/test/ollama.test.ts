@@ -116,4 +116,11 @@ describe('supervisor — incremento 3', () => {
     await sup.ensure('http://127.0.0.1:11434/v1', 'm').catch(() => undefined);
     expect(opened[0]).toBe(path.join(CONFIG.dataDir, 'ollama.log')); expect(closed).toEqual([42]);
   });
+  it('spawn falha de forma síncrona → fd do log é fechado antes de lançar (revisão: fd leak)', async () => {
+    const closed: unknown[] = [];
+    const sup = createOllamaSupervisor({ fetch: (async () => { throw new Error('ECONNREFUSED'); }) as never, sleep: async () => {}, findProcesses: () => [],
+      openLog: () => 77, closeLog: (fd) => { closed.push(fd); }, spawn: () => { throw new Error('spawn ollama ENOENT'); } });
+    await expect(sup.ensure('http://127.0.0.1:11434/v1', 'm')).rejects.toMatchObject({ kind: 'infra-local' });
+    expect(closed).toEqual([77]);
+  });
 });
