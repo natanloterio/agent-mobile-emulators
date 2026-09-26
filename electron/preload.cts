@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('enxame', {
   },
   startGoal: (text: string) => ipcRenderer.invoke('enxame:startGoal', text),
   kill: () => ipcRenderer.invoke('enxame:kill'),
+  resume: () => ipcRenderer.invoke('enxame:resume'),
+  api: (method: string, path: string, body?: unknown) => ipcRenderer.invoke('enxame:api', method, path, body),
   setProvider: (role: string, patch: unknown) => ipcRenderer.invoke('enxame:setProvider', role, patch),
   testProvider: (role: string) => ipcRenderer.invoke('enxame:testProvider', role),
   getProviderModels: (role: string) => ipcRenderer.invoke('enxame:getProviderModels', role),

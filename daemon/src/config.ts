@@ -23,6 +23,18 @@ export const CONFIG = {
   targetApp: { package: 'com.instagram.android', versionName: '448.0.0.52.84' },
   ports: { consoleFrom: 5554, consoleMax: 5584, mcpHostFrom: 8080 },
   worker: { stepBudget: 30, keepScreens: 2, qualityFloor: 3 },
+  /** Enxame (spec §4.3 Pacing, inc. 5 §2): starts escalonados com jitter, atraso entre passos e teto de ações/hora por identidade. */
+  swarm: { staggerMs: 8000, jitterMs: 3000, stepDelayMs: 1500, stepJitterMs: 1000, maxActionsPerHour: 120 },
+  /** Ciclo de vida (spec inc. 5 §2): snapshot mais velho que isto exige confirmação humana para restaurar. */
+  identity: { restoreUnsafeDays: 14 },
+  /** Provisionamento, boot, disco e snapshot (spec inc. 5 §2). */
+  avd: {
+    home: process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd'),
+    /** AVD dourado clonado no provisionamento; `ENXAME_AVD_BASE` troca sem rebuild (ex.: uma base sem conta e desligada). */
+    base: process.env.ENXAME_AVD_BASE ?? 'mcp_test_playstore',
+    emulatorPath: '/home/loterio/Android/Sdk/emulator/emulator',
+    bootTimeoutMs: 180_000, diskCacheMs: 60_000, snapshotName: 'enxame',
+  },
   /** Miniatura ao vivo (spec inc. 4): captura por identidade, só com alguém assistindo. */
   screen: { intervalMs: 500, retryMs: 5000 },
   /** scrcpy-server empacotado (spec inc. 4 §4.1). O caminho vale a partir de `daemon/src` (vitest) e de `dist-daemon` (build). */
@@ -30,7 +42,7 @@ export const CONFIG = {
     serverPath: resolveVendor('scrcpy-server-v4.1'), version: '4.1',
     sha256: 'deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae',
     devicePath: '/data/local/tmp/enxame-scrcpy-server.jar',
-    maxSize: 720, maxFps: 30, bitRate: 2_000_000, portFrom: 27183, connectTimeoutMs: 5000, retryMs: 5000,
+    maxSize: 720, maxFps: 30, bitRate: 2_000_000, portFrom: Number(process.env.ENXAME_SCRCPY_PORT ?? 27183), connectTimeoutMs: 5000, retryMs: 5000,
   },
 } as const;
 

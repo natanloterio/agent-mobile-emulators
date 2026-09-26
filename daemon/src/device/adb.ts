@@ -48,9 +48,15 @@ export interface Adb {
   forward(serial: string, hostPort: number, spec: string): Promise<void>;
   forwardRemove(serial: string, hostPort: number): Promise<void>;
   shellSpawn(serial: string, cmd: readonly string[]): ChildLike;
+  /** `adb shell` genérico; os argumentos são juntados com espaço e interpretados pelo `sh` do device — quem chama escapa. */
+  shell(serial: string, cmd: readonly string[]): Promise<string>;
   broadcastConfigure(serial: string, extras: Record<string, string | number | boolean>): Promise<void>;
   startTrampoline(serial: string, action: 'start' | 'stop'): Promise<void>;
   screencap(serial: string): Promise<Buffer>;
+  /** Console do emulador via `adb emu` (snapshot save/load, kill). Resposta `KO:` vira AdbError mesmo com código 0. */
+  emu(serial: string, args: readonly string[]): Promise<string>;
+  /** `pm trim-caches 999G`: libera o cache dos apps antes do re-baseline (spec inc. 5 §3.2). */
+  trimCaches(serial: string): Promise<void>;
 }
 
 export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: Spawn; adbPath?: string; serverPort?: number } = {}): Adb {
@@ -89,10 +95,18 @@ export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: 
     forward: async (serial, hostPort, spec) => { await run(['-s', serial, 'forward', `tcp:${hostPort}`, spec]); },
     forwardRemove: async (serial, hostPort) => { await run(['-s', serial, 'forward', '--remove', `tcp:${hostPort}`]); },
     shellSpawn: (serial, cmd) => spawnFn(adbPath, ['-s', serial, 'shell', ...cmd], { env }),
+    shell,
     broadcastConfigure: async (serial, extras) => {
       await shell(serial, ['am', 'broadcast', '-a', CONFIGURE_ACTION, '-n', `${MCP_PKG}/${CONFIGURE_RECEIVER}`, ...extraArgs(extras)]);
     },
     startTrampoline: async (serial, action) => { await shell(serial, ['am', 'start', '-n', `${MCP_PKG}/${TRAMPOLINE}`, '--es', 'action', action]); },
     screencap: (serial) => runBuffer(['-s', serial, 'exec-out', 'screencap', '-p']),
+    emu: async (serial, args) => {
+      const out = await run(['-s', serial, 'emu', ...args]);
+      const ko = /^KO:?\s*(.*)$/m.exec(out);
+      if (ko) throw new AdbError('command', `adb emu ${args.join(' ')}: ${ko[1] || 'KO'}`);
+      return out;
+    },
+    trimCaches: async (serial) => { await shell(serial, ['pm', 'trim-caches', '999G']); },
   };
 }

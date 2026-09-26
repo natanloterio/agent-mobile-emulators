@@ -5,7 +5,8 @@ import path from 'node:path';
 import WebSocket from 'ws';
 import { dispatchWsMessage, type WsHandlers } from './ws-dispatch.js';
 
-const INFO = path.join(os.homedir(), '.local', 'share', 'enxame', 'daemon.json');
+// Mesmo diretório do daemon (ENXAME_DATA_DIR): permite uma segunda instância isolada para verificação.
+const INFO = path.join(process.env.ENXAME_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'enxame'), 'daemon.json');
 type Info = { port: number; token: string; pid: number };
 
 function readInfo(): Info | null {
@@ -46,7 +47,7 @@ export async function post(info: Info, pathname: string, body?: unknown): Promis
 
 export async function request(info: Info, method: 'GET' | 'PUT' | 'POST', pathname: string, body?: unknown): Promise<unknown> {
   const r = await fetch(`http://127.0.0.1:${info.port}${pathname}`, { method, headers: { authorization: `Bearer ${info.token}`, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-  const json = await r.json().catch(() => null);
+  const json = r.status === 204 ? null : await r.json().catch(() => null);
   if (!r.ok) throw new Error(`${pathname} → ${r.status}: ${JSON.stringify(json)}`);
   return json;
 }

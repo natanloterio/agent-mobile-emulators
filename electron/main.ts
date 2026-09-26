@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectSnapshots, ensureDaemon, post, request, waitForInfo } from './daemon-bridge.js';
 import { createGopBuffer } from './gop-buffer.js';
+import { apiRoute } from './api-route.js';
 import { providerRoute } from './provider-route.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -69,6 +70,12 @@ app.whenReady().then(() => {
     });
     ipcMain.handle('enxame:startGoal', (_e, text: string) => post(info, '/goals', { text }));
     ipcMain.handle('enxame:kill', () => post(info, '/kill'));
+    ipcMain.handle('enxame:resume', () => post(info, '/resume'));
+    // Canal genérico do incremento 5: só rotas da lista de permissão (electron/api-route.ts).
+    ipcMain.handle('enxame:api', (_e, method: string, pathname: string, body?: unknown) => {
+      const r = apiRoute(method, pathname);
+      return request(info, r.method, r.path, body);
+    });
     ipcMain.handle('enxame:setProvider', (_e, role: string, patch: unknown) => request(info, 'PUT', providerRoute(role, 'put'), patch));
     ipcMain.handle('enxame:testProvider', (_e, role: string) => request(info, 'POST', providerRoute(role, 'test')));
     ipcMain.handle('enxame:getProviderModels', (_e, role: string) => request(info, 'GET', providerRoute(role, 'models')));

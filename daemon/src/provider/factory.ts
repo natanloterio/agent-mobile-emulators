@@ -12,7 +12,8 @@ export const LOCAL_PRICING: Pricing = { inputPerM: 0, outputPerM: 0, cacheReadPe
 
 export function buildModel(row: ProviderRow, env: { anthropicApiKey?: string }, deps: FactoryDeps = {}): LanguageModel {
   if (row.mode === 'local') {
-    return createOpenAICompatible({ name: 'ollama', baseURL: row.endpoint, includeUsage: true, fetch: deps.fetch })(row.model);
+    // structuredOutputs: o Ollama aceita response_format json_schema; sem isto o SDK descarta o schema e o líder recebe texto livre.
+    return createOpenAICompatible({ name: 'ollama', baseURL: row.endpoint, includeUsage: true, supportsStructuredOutputs: true, fetch: deps.fetch })(row.model);
   }
   if (!env.anthropicApiKey) throw new ProviderError('auth', `papel ${row.role} está na nuvem e ANTHROPIC_API_KEY está ausente`);
   return createAnthropic({ apiKey: env.anthropicApiKey, fetch: deps.fetch })(row.model);
@@ -23,4 +24,15 @@ export function providerOptionsFor(row: ProviderRow): Record<string, Record<stri
   return row.mode === 'nuvem' ? { anthropic: { disableParallelToolUse: true, cacheControl: { type: 'ephemeral', ttl: '1h' } } } : {};
 }
 
-export function pricingFor(row: ProviderRow): Pricing { return row.mode === 'nuvem' ? HAIKU_PRICING : LOCAL_PRICING; }
+/** US$ por milhão de tokens (tabela da API Anthropic, 2026-06); cache read = 0,1× o input. */
+export const CLOUD_PRICING: Readonly<Record<string, Pricing>> = {
+  'claude-haiku-4-5': HAIKU_PRICING,
+  'claude-sonnet-5': { inputPerM: 2, outputPerM: 10, cacheReadPerM: 0.2 },
+  'claude-opus-5': { inputPerM: 5, outputPerM: 25, cacheReadPerM: 0.5 },
+};
+
+/** Modelo de nuvem fora da tabela conta pelo mais caro conhecido: melhor superestimar do que esconder custo. */
+export function pricingFor(row: ProviderRow): Pricing {
+  if (row.mode !== 'nuvem') return LOCAL_PRICING;
+  return CLOUD_PRICING[row.model] ?? CLOUD_PRICING['claude-opus-5'];
+}

@@ -2,8 +2,12 @@ import { DISK_PCT_BY_INDEX, LIFECYCLE_BY_NAME, RECENT_TOOLS, TARGET_APP, TARGET_
 import { endpointFor, modelFor, ROLES, testResultFor, type TestResultRow } from '../data/providers';
 import { TASK_INSTRUCTION } from '../data/goals';
 import { ptDecimal, usd } from '../lib/format';
-import type { DeviceState, Identity, Lifecycle, ProviderMode, RoleKey } from '../types/fleet';
+import type { DeviceState, Identity, ProviderMode, RoleKey } from '../types/fleet';
 import type { FleetState } from './fleetReducer';
+import { appLabel, offlineOverlay, streamLabel } from './liveSelectors';
+import type { IdRow } from './idRows';
+
+export { lifecycleTone, type IdRow } from './idRows';
 
 export type Tone = 'green' | 'grey' | 'dark' | 'white';
 
@@ -20,6 +24,8 @@ export interface TileVM extends Identity {
   readonly needs: boolean;
   readonly overlay: string;
   readonly replyDraft: string;
+  /** Rótulo do stream no tile: estado real do vídeo no vivo; resolução do design no demo. */
+  readonly streamLabel: string;
 }
 
 const STATE_LABEL: Record<DeviceState, string> = {
@@ -47,11 +53,13 @@ export function decorateTile(d: Identity, index: number, killed: boolean): TileV
     pillGreenBorder: needs,
     cardTone: needs ? 'dark' : d.state === 'running' ? 'grey' : 'white',
     costFmt: d.genMs ? `${usd(d.cost)} · ${(d.genMs / 1000).toFixed(1).replace('.', ',')} s GPU` : usd(d.cost),
-    app: TARGET_APP,
-    version: TARGET_APP_VERSION,
+    // Modo vivo: app/versão do banco e a tarefa real no rascunho; demo: textos do design.
+    app: d.live ? appLabel(d.live.appPackage) : TARGET_APP,
+    version: d.live ? d.live.appVersionName || '—' : TARGET_APP_VERSION,
     needs,
-    overlay: d.state === 'offline' ? 'Sonda: app atualizou sozinho. Device não entra na frota.' : '',
-    replyDraft: d.state === 'running' ? 'Obrigada! Já te chamamos no direct' : 'Input do agente desligado',
+    overlay: offlineOverlay(d),
+    replyDraft: d.live ? d.task : d.state === 'running' ? 'Obrigada! Já te chamamos no direct' : 'Input do agente desligado',
+    streamLabel: d.live ? streamLabel(d.video) : '320p · 4 fps',
   };
 }
 
@@ -168,22 +176,6 @@ export function selectCostRows(tiles: readonly TileVM[]): readonly CostRow[] {
   return tiles.map((d) => ({ name: d.name, costFmt: usd(d.cost), pct: Math.round((d.cost / max) * 100) }));
 }
 
-export interface IdRow {
-  readonly key: string;
-  readonly name: string;
-  readonly handle: string;
-  readonly lc: Lifecycle;
-  readonly app: string;
-  readonly version: string;
-  readonly snap: string;
-  readonly disk: string;
-  readonly diskPct: number;
-  readonly ports: string;
-  readonly dimmed: boolean;
-  readonly action: string;
-  readonly onAction: { readonly kind: 'open'; readonly index: number } | { readonly kind: 'extra'; readonly index: number } | null;
-}
-
 function snapshotLabel(i: number): string {
   if (i === 9) return '23 dias · restore-unsafe';
   if (i === 2) return 'há 2 dias';
@@ -202,6 +194,7 @@ export function selectIdRows(s: FleetState, fleetSize: number): readonly IdRow[]
     const diskPct = DISK_PCT_BY_INDEX[i] ?? 40;
     const action = actionForActive(d, i, diskPct);
     return {
+      ...DEMO_ROW,
       key: d.name,
       name: d.name,
       handle: d.handle,
@@ -213,11 +206,11 @@ export function selectIdRows(s: FleetState, fleetSize: number): readonly IdRow[]
       diskPct,
       ports: `${5554 + i * 2} · ${8080 + i}`,
       dimmed: false,
-      action,
-      onAction: action && i < fleetSize ? { kind: 'open', index: i } : null,
+      actions: action && i < fleetSize ? [{ kind: 'open', label: action, index: i }] : [],
     };
   });
   const extra: IdRow[] = s.extra.map((e, k) => ({
+    ...DEMO_ROW,
     key: e.name,
     name: e.name,
     handle: e.handle,
@@ -229,17 +222,12 @@ export function selectIdRows(s: FleetState, fleetSize: number): readonly IdRow[]
     diskPct: e.diskPct,
     ports: e.ports,
     dimmed: e.lc === 'banned',
-    action: e.action,
-    onAction: e.action ? { kind: 'extra', index: k } : null,
+    actions: e.action ? [{ kind: 'extra', label: e.action, index: k }] : [],
   }));
   return [...active, ...extra];
 }
 
-export function lifecycleTone(lc: Lifecycle): Tone {
-  if (lc === 'running') return 'green';
-  if (lc === 'dirty' || lc === 'banned') return 'dark';
-  return 'white';
-}
+const DEMO_ROW = { error: null, busy: false } as const;
 
 export interface RoleVM {
   readonly key: RoleKey;

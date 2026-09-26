@@ -2,6 +2,8 @@ import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { DEFAULT_GOAL_TEXT } from '../data/goals';
 import type { ProviderMode, RoleKey, Screen } from '../types/fleet';
 import { createInitialState, fleetReducer, type FleetState } from './fleetReducer';
+import { createGoalActions, type GoalActions } from './goalActions';
+import { createIdentityActions, type IdentityActions } from './identityActions';
 import { createProviderActions } from './providerActions';
 
 export { bridgeMessage } from './providerActions';
@@ -40,22 +42,32 @@ export interface FleetActions {
 export interface UseFleet {
   readonly state: FleetState;
   readonly actions: FleetActions;
+  /** Modo vivo: há bridge com o canal genérico `api` (Electron). Decide dados reais × demo. */
+  readonly bridged: boolean;
+  /** Ações que falam com o daemon (modo vivo). */
+  readonly goal: GoalActions;
+  readonly identity: IdentityActions;
 }
 
-/** Estado da frota com os efeitos temporais do design: tick, decomposição e teste de provedor. */
+/** Bridge do preload; a presença de `api` marca o modo vivo. */
+export const hasLiveBridge = (): boolean => !!window.enxame?.api;
+
+/** Estado da frota; no demo, com os efeitos temporais do design (tick, decomposição); no vivo, nenhum tick. */
 export function useFleet(): UseFleet {
   const [state, dispatch] = useReducer(fleetReducer, initialScreenFromUrl(), createInitialState);
+  const bridged = useMemo(hasLiveBridge, []);
 
   useEffect(() => {
+    if (bridged) return;
     const id = window.setInterval(() => dispatch({ type: 'tick' }), TICK_MS);
     return () => window.clearInterval(id);
-  }, []);
+  }, [bridged]);
 
   useEffect(() => {
-    if (state.planStage !== 1) return;
+    if (bridged || state.planStage !== 1) return;
     const id = window.setTimeout(() => dispatch({ type: 'decomposeReady' }), DECOMPOSE_MS);
     return () => window.clearTimeout(id);
-  }, [state.planStage]);
+  }, [bridged, state.planStage]);
 
   const runningTests = (Object.keys(state.tests) as RoleKey[]).filter((k) => state.tests[k] === 'run');
   const runningKey = runningTests.join(',');
@@ -91,5 +103,10 @@ export function useFleet(): UseFleet {
     [],
   );
 
-  return { state, actions };
+  const live = useMemo(() => {
+    const deps = { dispatch, getBridge: () => window.enxame };
+    return { goal: createGoalActions(deps), identity: createIdentityActions({ ...deps, confirm: (m: string) => window.confirm(m) }) };
+  }, []);
+
+  return { state, actions, bridged, ...live };
 }
