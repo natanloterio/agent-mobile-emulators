@@ -23,6 +23,8 @@ export function humanBlockLabel(i: IdentityRow): string | null {
   if (i.state === 'needs-human') return 'needs-human';
   if (i.state === 'banned') return 'banida';
   if (i.discardedAt) return 'descartada';
+  // Sem login ainda: a sonda não olha sessão e marcaria 'idle' um device sem conta (mesma regra do boot).
+  if (i.state === 'provisioned' || i.state === 'blank' || i.handle === 'sem conta') return 'aguardando login';
   return null;
 }
 

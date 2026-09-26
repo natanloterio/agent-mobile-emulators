@@ -14,21 +14,20 @@ export interface GoalsRoutesOpts {
  * ou outro planejamento em curso (dois planos sondariam os mesmos devices ao mesmo tempo).
  */
 export function goalsRoutes(o: GoalsRoutesOpts): Route {
-  let planning = false;
   return async (ctx) => {
     if (ctx.method !== 'POST' || ctx.url.pathname !== '/goals/plan') return false;
     const parsed = PlanBody.safeParse(await ctx.body());
     if (!parsed.success) { ctx.send(400, { error: parsed.error.issues.map((i) => i.message) }); return true; }
-    if (ctx.busy()) { ctx.send(409, { error: 'já existe um objetivo em execução' }); return true; }
-    if (planning) { ctx.send(409, { error: 'já existe um planejamento em curso' }); return true; }
-    planning = true;
+    // Mesmo lock do objetivo e do teste de provedor: a sonda do plano não pode correr sobre workers ativos.
+    const release = ctx.lock();
+    if (!release) { ctx.send(409, { error: 'objetivo, teste ou planejamento em execução' }); return true; }
     try {
       const plan = await o.plan(parsed.data.text);
       ctx.send(200, plan);
     } catch (e) {
       console.error('[daemon] planejamento falhou:', e);
       ctx.send(500, { error: String((e as Error)?.message ?? e) });
-    } finally { planning = false; }
+    } finally { release(); }
     ctx.broadcast(); // a sonda gravou sinais e estados novos
     return true;
   };

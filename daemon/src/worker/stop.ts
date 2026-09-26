@@ -4,7 +4,8 @@ import { getIdentity } from '../db/identities.js';
 /** Pausa ou controle humano desta identidade (spec inc. 5 §3.2): o worker para no próximo passo. Identidade sumida também para. */
 export function humanStopped(db: DatabaseSync, identityId: string): boolean {
   const id = getIdentity(db, identityId);
-  return !id || !!id.paused || !!id.controlled;
+  // Banida ou marcada needs-human por um humano no meio da tarefa: para, e settleIdentity não sobrescreve o estado.
+  return !id || !!id.paused || !!id.controlled || id.state === 'banned' || id.state === 'needs-human' || !!id.discardedAt;
 }
 
 /**

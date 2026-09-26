@@ -153,6 +153,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     const body = await parse(ctx, LoginBody); if (!body) return;
     const handle = normalizeHandle(body.handle);
     if (!handle) return ctx.send(400, { error: 'handle inválido' });
+    if (id.state === 'running' || id.state === 'banned' || id.discardedAt) return ctx.send(409, { error: `login-done indisponível em ${id.state}` });
     setIdentityFlags(ctx.db, id.id, { handle });
     try {
       await saveSnapshot(ops.adb, id.serial, snap);
@@ -204,9 +205,14 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     for (let k = 0; k < 60 && !(await ops.adb.devices().catch(() => [] as readonly string[])).includes(serial); k++) await sleep(1000);
   }
 
+  /** Tarefa `todo`/`running` desta identidade (ex.: esperando o start escalonado): restore/re-baseline agora furariam a verificação. */
+  const hasPendingTask = (db: DatabaseSync, identityId: string): boolean =>
+    !!db.prepare("select 1 from task t join goal g on g.id = t.goal_id where t.identity_id=? and t.state in ('todo','running') and g.state='running' limit 1").get(identityId);
+
   const restore: Action = async (ctx, id) => {
     const body = await parse(ctx, RestoreBody); if (!body) return;
     if (id.state === 'banned' || id.state === 'running' || id.discardedAt) return ctx.send(409, { error: `restore indisponível em ${id.state}` });
+    if (hasPendingTask(ctx.db, id.id)) return ctx.send(409, { error: 'identidade com tarefa pendente no objetivo em curso' });
     if (!id.snapshotTakenAt) return ctx.send(409, { error: 'identidade sem snapshot' });
     if (isRestoreUnsafe(id.snapshotTakenAt, clock().getTime()) && !body.confirm) return ctx.send(409, { error: 'restore-unsafe: confirme' });
     if (!(await online(id))) return ctx.send(409, { error: 'emulador fora do adb: dê boot antes' });
@@ -226,6 +232,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
 
   const rebaseline: Action = async (ctx, id) => {
     if (id.state === 'banned' || id.state === 'running' || id.discardedAt) return ctx.send(409, { error: `re-baseline indisponível em ${id.state}` });
+    if (hasPendingTask(ctx.db, id.id)) return ctx.send(409, { error: 'identidade com tarefa pendente no objetivo em curso' });
     if (!(await online(id))) return ctx.send(409, { error: 'emulador fora do adb: dê boot antes' });
     try {
       await ops.adb.trimCaches(id.serial);

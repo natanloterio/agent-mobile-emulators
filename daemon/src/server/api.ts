@@ -46,6 +46,8 @@ export interface RouteCtx {
   isKilled(): boolean;
   /** Objetivo (ou teste de provedor) em execução. */
   busy(): boolean;
+  /** Toma o mesmo lock de objetivo/teste (ex.: planejamento, que sonda os devices); `null` se ocupado. */
+  lock(): (() => void) | null;
 }
 export type Route = (ctx: RouteCtx) => boolean | Promise<boolean>;
 
@@ -138,6 +140,7 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
           send: (code, body) => send(res, code, body),
           body: () => (bodyP ??= readJson(req)),
           broadcast: () => ws.broadcast(), isKilled: () => killed, busy: () => inFlight,
+          lock: () => { if (inFlight) return null; inFlight = true; let released = false; return () => { if (!released) { released = true; inFlight = false; } }; },
         };
         for (const route of o.routes) if (await route(ctx)) return;
       }

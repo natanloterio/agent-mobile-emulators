@@ -92,7 +92,8 @@ export function goalSummary(db: DatabaseSync, g: GoalDbRow): GoalSummary {
     id: g.id, text: g.text, pattern: g.pattern, state: g.state, costUsd: g.cost_usd, createdAt: g.created_at,
     finishedAt: g.finished_at ?? null, rationale: g.rationale ?? null,
     tasksTotal: counts.total, tasksDone: counts.done, tasksFailed: counts.failed, tasksNeeds: counts.needs,
-    tasksRunning: counts.running, itemsHandled: items.n,
+    // Objetivo fechado não tem tarefa rodando: 'todo' que sobrou (kill, pausa, infra) fica para repetir num objetivo novo.
+    tasksRunning: g.state === 'running' ? counts.running : 0, itemsHandled: items.n,
   };
 }
 
