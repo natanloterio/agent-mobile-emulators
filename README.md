@@ -1,0 +1,206 @@
+# Enxame
+
+**A desktop cockpit for a swarm of Android emulators driven by AI agents.**
+
+You describe a goal in plain language, such as *"Reply to the comments from the last 24 hours on every account"*. Enxame splits it into tasks, hands one to each emulator, and runs them without step-by-step supervision. Later you come back to see what was done, what it cost, and which accounts need a human.
+
+Each emulator is an **identity**: one Android Virtual Device (AVD) tied to one account, which keeps its own app data and history over time. It is built for automating apps that have no API.
+
+> **Use it on accounts you own or are authorized to operate.** Automating third-party apps like Instagram may violate their Terms of Service and can get accounts challenged or banned. Enxame paces its actions and never retries after a platform block, but it cannot remove that risk.
+
+---
+
+## What you get
+
+The interface is in Portuguese. Screens and buttons are named below as they appear in the app, with a translation.
+
+| Screen | What it does |
+|---|---|
+| **Cockpit** | Live video of every emulator in a grid, each tile showing its state, current task, steps and cost. Click a tile to zoom in. The **Kill switch** stops everything and leaves the devices as they are. |
+| **Novo objetivo** (New goal) | Type a goal and press **Decompor** (Decompose). The leader model picks a strategy (see [Running a goal](#running-a-goal)), writes one instruction per identity and runs a 5-signal readiness check on each device. **Iniciar e sair de perto** (Start and walk away) launches it. |
+| **Device** | One emulator full size. **Assumir controle** (Take control) pauses the agent and lets you tap, swipe and type on the device yourself. You can also pause the identity, send it back to the queue, or mark it banned. |
+| **Relatório** (Report) | Tasks done, items handled, who needs you, cost per identity, and past goals. |
+| **Identidades** (Identities) | Every identity with its lifecycle, app version, snapshot age, disk usage and ports. Provision new identities, boot them, log in, register a PIN, restore, re-baseline, or free the disk of a banned one. |
+| **Provedores** (Providers) | Which model plays each role (leader, worker, escalation), cloud or local, with a real **Testar conexão** (Test connection) that runs a tool call on a live device. |
+
+The sidebar shows the host's real RAM, CPU and GPU memory usage.
+
+---
+
+## How it works
+
+```
+Electron app (React UI)
+        │  IPC
+        ▼
+Enxame daemon (Node) ── SQLite (goals, tasks, steps, identities)
+        │
+        ├── adb (private server on port 5038) ── emulators
+        │        └── scrcpy-server (bundled) → live H.264 video
+        ├── Android Remote Control MCP app on each device → the agent's tools
+        └── LLM providers: Anthropic (cloud) and/or Ollama (local)
+```
+
+- The **daemon** owns the emulators, the database and the agents. The app only draws what it reports.
+- Each **worker** agent drives exactly one device through the MCP server running on that device. It reads the screen's accessibility tree, acts, and records every step before doing it, so a crash never repeats an action blindly.
+- Workers are **read-only by default**: a gate blocks send/publish/follow actions. Drafts go to a per-account ledger so nothing is handled twice.
+- If a local model keeps making invalid tool calls, the task **escalates** to the stronger cloud model and is flagged as degraded.
+
+---
+
+## Requirements
+
+- **Linux** with a desktop session. This build was developed on Ubuntu with an NVIDIA GPU.
+- **Node.js 24 or newer**. The daemon uses the built-in `node:sqlite`.
+- **Android SDK** with the emulator, platform-tools and an **Android 14 (API 34) Google Play x86_64** system image.
+- At least one **base AVD** with:
+  - the target app installed (Instagram by default);
+  - the **Android Remote Control MCP** app (`com.danielealbano.androidremotecontrolmcp.gms.debug`) installed, with its accessibility service enabled and auto-start on boot turned on;
+  - Play Store auto-updates turned off. The readiness check refuses a device whose app version changed.
+- An **Anthropic API key**. The daemon refuses to start without one, even if you only plan to use local models.
+- Optional: **[Ollama](https://ollama.com)** to run the worker locally. The default local model is `gpt-oss:20b`.
+
+Plan for about 4.6 GB of RAM and 4 vCPUs per running emulator. On a 32-thread machine the practical ceiling is about **8 emulators at once**.
+
+> Some paths are still fixed in `daemon/src/config.ts`: the Android SDK at `~/Android/Sdk` (`adbPath`, `emulatorPath`) and the conta1 identity seed in `daemon/src/index.ts`. Edit them if your setup differs.
+
+---
+
+## Getting started
+
+```bash
+git clone https://github.com/natanloterio/agent-mobile-emulators.git
+cd agent-mobile-emulators
+npm install
+
+cp .env.example .env          # then put your key in it:
+# ANTHROPIC_API_KEY=sk-ant-...
+
+npm run build                 # UI + Electron shell
+npm run daemon:build          # daemon
+npx electron --no-sandbox .   # starts the app; the app starts the daemon for you
+```
+
+The app starts the daemon on its own if none is running. The daemon writes its address and access token to `~/.local/share/enxame/daemon.json`. It uses a private adb server on port **5038**, so it won't clash with Android Studio.
+
+For UI work with hot reload:
+
+```bash
+npm run electron:dev
+```
+
+Opening `npm run dev` in a plain browser shows a **demo mode** with sample data. That mode is for design review only; nothing in it talks to real devices.
+
+---
+
+## Your first identity
+
+1. **Prepare the base AVD.**
+   - By default new identities are cloned from an AVD named `enxame_golden`. If it doesn't exist, `mcp_test_playstore` is used instead, and that AVD must be **stopped** while cloning.
+   - To create `enxame_golden`, copy a stopped, ready AVD, or point `ENXAME_AVD_BASE` at the AVD you want to use.
+2. **Identidades → Provisionar identidade** (Provision identity).
+   - Optionally type a **PIN** in the field next to the button. Enxame copies the base AVD into a new one with its own ports, its own MCP token and its own lifecycle.
+3. **Subir com janela** (Start with window).
+   - The new emulator boots in a visible window.
+   - On this first boot Enxame wipes the target app's data, so the new identity never inherits another account's session.
+   - If you gave a PIN, it is applied to the device now.
+4. **Log in by hand** in that window. Enxame never creates or logs into accounts automatically.
+5. **Login feito** (Login done).
+   - Type the account's @handle.
+   - Enxame saves a snapshot as the identity's restore point.
+   - The identity is now `logged-in` and joins the fleet at the next readiness check.
+
+### PINs and locked devices
+
+A device with a screen-lock PIN starts locked after every reboot, and nothing can use it until the PIN is typed. Enxame handles that for you:
+
+- Each identity can store its PIN. The UI only ever shows whether a PIN exists, never the PIN itself.
+- Before every readiness check, after every boot and after every restore, the daemon wakes the device and types the PIN if it finds it locked.
+- For an identity created without a PIN, use **Registrar PIN** (Register PIN) on its row. The PIN is only saved if it actually unlocks the device.
+- A **wrong PIN is tried only once**. The identity then moves to `needs-human` and nothing retries it, because repeated wrong PINs lock the device.
+
+---
+
+## Running a goal
+
+1. **Novo objetivo** → describe what you want → **Decompor**. The leader chooses one of two strategies:
+   - **fan-out**: the work belongs to each account, like "reply to your own comments". Every identity gets its own task.
+   - **sharding**: there is one shared queue of items to split, like "go through these 300 mentions". Each identity gets a slice.
+2. **Review the plan.** Each identity shows its five readiness signals and whether it will take part:
+   - boot completed;
+   - accessibility service on;
+   - MCP server answering;
+   - the agent's tools present;
+   - app version matches the one recorded for the identity.
+3. **Iniciar e sair de perto** (Start and walk away).
+   - Identities start a few seconds apart, with random jitter.
+   - Actions are paced and capped per hour for each account.
+4. Watch it in the **Cockpit**, or come back later to the **Relatório**.
+
+**When something goes wrong:**
+
+- A platform challenge ("confirm it's you", captcha, code request) stops that identity only. It goes to `needs-human` and is **never retried automatically**. The rest of the fleet keeps going.
+- **Assumir controle** on any device pauses its agent immediately. **Devolver ao agente** (Give back to agent) returns it.
+- The **Kill switch** stops every agent without touching the devices, so you can inspect them.
+
+---
+
+## Configuration
+
+| Variable | Default | What it does |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | (required) | Key for the cloud roles. Goes in `.env`. |
+| `ENXAME_AVD_BASE` | `enxame_golden`, if it exists | AVD cloned when provisioning. |
+| `ENXAME_DEFAULT_PIN` | none | PIN given to new identities when you don't type one. 4–16 digits. |
+| `ENXAME_STEP_BUDGET` | `30` | Maximum agent steps per task. |
+| `ENXAME_DATA_DIR` | `~/.local/share/enxame` | Database, logs and `daemon.json`. |
+| `ENXAME_PORT` | `47800` | Daemon HTTP/WebSocket port (loopback only). |
+| `ENXAME_SCRCPY_PORT` | `27183` | First local port used for video streams. |
+| `ANDROID_AVD_HOME` | `~/.android/avd` | Where AVDs live. |
+
+**Models** are chosen on the **Provedores** screen, per role:
+
+| Role | Default | Notes |
+|---|---|---|
+| Leader | Claude Sonnet 5 | Plans each goal. |
+| Worker | `gpt-oss:20b` on Ollama | Runs on each device. |
+| Escalation | Claude Haiku 4.5 | Takes over when the worker keeps making invalid tool calls. |
+
+Local models need an OpenAI-compatible endpoint (default `http://127.0.0.1:11434/v1`). The daemon starts its own Ollama process if none is running.
+
+Cost is tracked per task and per goal: dollars for cloud models, GPU seconds for local ones.
+
+---
+
+## Troubleshooting
+
+| Symptom | What to do |
+|---|---|
+| Provisioning says *"AVD-base … em uso"* (base AVD in use) | The base AVD's emulator is running. Copying a running AVD corrupts the clone. Stop it, or create `enxame_golden` and clone from that instead. |
+| An identity is `offline` with a PIN message | Register its PIN on the Identities screen, or type it in the emulator window. |
+| An identity is `needs-human` | Open the device, fix what it reports (challenge, wrong PIN, lost session), then press **Resolvi, devolver à fila** (Resolved, back to queue). |
+| Readiness shows *"versão mudou"* (version changed) | The target app updated itself. Pin the version again, or update the version recorded for the identity. |
+| The plan says *"regra determinística"* (deterministic rule) | The leader model failed or had no key. A simple built-in rule planned the goal instead. Check **Provedores**. |
+| The app says *"daemon não conectado"* (daemon not connected) | The daemon is still starting or failed to start. Check that `.env` has `ANTHROPIC_API_KEY`, then restart the app. |
+
+After a crash or restart, the daemon marks interrupted work as failed. It never resumes an action whose result it doesn't know.
+
+---
+
+## Development
+
+```bash
+npm test                      # unit tests (daemon, UI logic, Electron glue)
+npm run typecheck
+ENXAME_INTEGRATION=1 npm run test:integration   # needs a real emulator and Ollama; stop the daemon first
+npm run real:run              # one real task end to end, from the CLI
+npm run bench                 # local-model bake-off
+```
+
+- Design documents and increment specs live in `docs/superpowers/`.
+- The bundled `scrcpy-server` and its license are in `daemon/vendor/`.
+- Nothing here depends on a system-installed scrcpy or ffmpeg.
+
+## License
+
+Private project. The bundled `scrcpy-server` is © Genymobile, Apache-2.0; see `daemon/vendor/LICENSE-scrcpy`.
