@@ -8,8 +8,14 @@ const DECOMPOSE_MS = 1200;
 const TEST_MS = 1400;
 const SCREENS: readonly Screen[] = ['cockpit', 'device', 'new', 'report', 'ids', 'prov'];
 
-/** O bridge lança `Error('/providers/x → 409: {"error":"…"}')`; a tela mostra só a linha legível. */
-const bridgeMessage = (e: Error) => e.message.replace(/^.*→ \d+: /, '').replace(/^\{"error":"|"\}$/g, '');
+/**
+ * O IPC do Electron embrulha como `Error invoking remote method 'canal': Error: /providers/x → 409: {"error":"…"}`;
+ * a tela mostra só a linha legível.
+ */
+export const bridgeMessage = (e: Error) => e.message
+  .replace(/^Error invoking remote method '[^']+': (?:\w*Error: )?/, '')
+  .replace(/^.*→ \d+: /, '')
+  .replace(/^\{"error":"|"\}$/g, '');
 
 /** `?screen=report` abre direto numa tela. Valor desconhecido cai no cockpit. */
 function initialScreenFromUrl(): Screen {
@@ -74,7 +80,7 @@ export function useFleet(): UseFleet {
       dispatch({ type: 'providerModels', role, models: r.models });
       // Lista limpa apaga o erro anterior (ex.: "Ollama parado"); erro novo substitui.
       dispatch({ type: 'providerError', role, message: r.error });
-    }).catch(() => undefined);
+    }).catch((e: Error) => dispatch({ type: 'providerError', role, message: bridgeMessage(e) }));
   }, []);
 
   const actions = useMemo<FleetActions>(

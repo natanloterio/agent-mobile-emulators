@@ -268,7 +268,8 @@ export function selectRoles(s: FleetState): readonly RoleVM[] {
       tone: r.tone,
       mode,
       model,
-      models: s.providerModels[r.key] ?? [model],
+      // Sem lista carregada não há opções: o seletor mostra só o modelo atual (nunca um rótulo do mock no modo vivo).
+      models: s.providerModels[r.key] ?? [],
       error: s.providerErrors[r.key] ?? null,
       endpoint: endpointFor(mode),
       testLabel: stage === 'run' ? 'Rodando tool-call canônico em conta1…' : 'Testar conexão',
