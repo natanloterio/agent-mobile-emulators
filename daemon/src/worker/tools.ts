@@ -6,6 +6,9 @@ export const WORKER_TOOL_SUFFIXES = [
   'wait_for_node', 'type_append_text', 'press_back', 'open_app',
 ] as const;
 
+/** Tools que mudam a tela (ação no device), pelo sufixo. Base do teto de ações/hora e da invalidação da tela no gate. */
+export const ACTION_TOOL = /_(click_node|tap_node|scroll|scroll_to_node|press_back|open_app|type_append_text|type_replace_text|type_clear_text|swipe|long_press|press_key)$/;
+
 export function toolPrefix(slug: string | null): string {
   return slug ? `android_${slug}_` : 'android_';
 }
