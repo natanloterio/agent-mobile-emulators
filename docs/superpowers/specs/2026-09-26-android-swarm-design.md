@@ -42,7 +42,8 @@ Medidas nesta máquina em 2026-09-26, não estimadas:
 | Host | i9-14900K (32 threads), 125 GB RAM, RTX 5090 32 GB VRAM, 397 GB disco livre |
 | RSS de um emulador | 4,6 GB |
 | Tamanho de um AVD | 3,4 GB (cresce com dados do app) |
-| Teto prático | 8–12 emuladores responsivos; ~20 no limite |
+| Teto por RAM/CPU | 8–12 emuladores responsivos |
+| **Teto duro do protocolo adb** | **16 emuladores** (varredura de portas ímpares 5555–5585) |
 | Boot frio até `sys.boot_completed` | ~40 s |
 | `tools/list` do servidor MCP | 57 tools, ~7,7k tokens (chars/4) |
 | Subset de 11 tools p/ fluxo de comentários | ~1,5k tokens (−80%) |
@@ -85,13 +86,49 @@ recém-formatado toda vez. Snapshot é recuperação de desastre.
 
 **Ciclo de vida:** `blank → provisioned → logged-in → running → dirty → restored`.
 
-**Sonda de prontidão.** Um device entra na frota apenas com os quatro sinais verdes:
+**Sonda de prontidão.** Um device entra na frota apenas com os cinco sinais verdes:
 `sys.boot_completed=1`, accessibility service ativo, `initialize` HTTP 200, `tools/list`
-com a contagem esperada. Roda a cada subida do device.
+com a contagem esperada, e **`versionName` do app alvo igual ao registrado na identidade**.
+Roda a cada subida do device.
 
-**Portas determinísticas.** Cada identidade carrega `console_port = 5554 + 2n` e
-`mcp_host_port = 8080 + n`. No start o daemon refaz o `adb forward` e confirma com a sonda.
-O usuário nunca executa `adb` à mão.
+O quinto sinal existe porque a imagem Play Store traz auto-update ligado e o app alvo se
+atualiza sozinho — o Instagram, semanalmente. Sem ele, um update silencioso invalida as
+fixtures do CI (seção 7) e o worker descobre a mudança como "tela inesperada" no meio de um
+job, escalando para o modelo forte por um motivo que não é deriva de UI. Com ele, o device
+simplesmente não fica pronto e o usuário é avisado **antes** do job rodar.
+
+Defesa em profundidade, na ordem: auto-update desligado na imagem-base; versão do APK pinada
+onde a distribuição permitir; sonda como rede final, porque nenhuma das duas primeiras é
+garantida contra atualização forçada pela plataforma.
+
+**Alocação de portas.** Cada identidade tem uma reserva de `console_port` (par, a partir de
+5554) e de `mcp_host_port` (a partir de 8080). Três exigências que uma fórmula estática não
+atende:
+
+- O emulador sobe com **`emulator -port <console_port>`** (singular — o adbport é derivado
+  como `console_port + 1`). Sem essa flag ele auto-seleciona o primeiro par livre e o
+  mapeamento gravado no banco vira ficção na primeira mudança de ordem de boot.
+- Com `-port`, **se a porta não estiver livre o emulador encerra** em vez de escolher outra.
+  Socket em `TIME_WAIT` ou processo qemu zumbi da execução anterior basta para isso. O daemon
+  portanto **verifica a porta antes de subir** e, se estiver presa, faz lease do próximo slot
+  livre e atualiza o registro da identidade — a porta é um recurso alocado dinamicamente e
+  persistido, não uma função do índice.
+- O teto de 16 identidades da seção 3 é consequência direta disso: acima do slot 15 o adb
+  deixa de enxergar o device.
+
+`adb forward` é outra coisa e não substitui nada acima: ele só expõe o servidor MCP do device
+em `mcp_host_port` no host.
+
+**O adb server é recurso de frota, não de device.** Um único processo `adb` detém todos os
+forwards, e um cliente adb de versão diferente mata esse processo e derruba **todos** de uma
+vez. Nesta máquina já convivem três binários: `/usr/bin/adb` 34.0.4-debian (primeiro no PATH),
+o 37.0.0 do SDK, e o que o scrcpy 4.1 traz embutido. Android Studio, gradle, plugins de IDE e
+o Makefile do repo do servidor MCP também disparam adb. Consequências no design:
+
+- O daemon roda um adb server **próprio e isolado** (`ANDROID_ADB_SERVER_PORT` dedicado), com
+  binário pinado e empacotado no app; o scrcpy é configurado para o mesmo server.
+- Perda de forward é tratada como **evento de frota**: reconciliação de todos os forwards
+  contra o registro, não reparo de um device.
 
 **Credenciais** vão para o keychain do SO, nunca para o banco.
 
@@ -244,7 +281,9 @@ irrelevante: 421M params e 20 ms ao lado de 27 GB de VRAM livres.
 
 | Classe | Exemplo | Resposta |
 |---|---|---|
-| Infra | emulador morreu, forward caiu, MCP mudo | daemon reinicia e re-sonda; tarefa volta à fila |
+| Infra (device) | emulador morreu, MCP mudo | daemon reinicia, re-sonda, faz lease de porta se a antiga estiver presa; tarefa volta à fila |
+| **Infra (frota)** | **adb server morto, todos os forwards caíram** | **reconcilia a frota inteira contra o registro; pausa o scheduler até a sonda passar em todos** |
+| Versão do app | `versionName` mudou desde o último job | device não fica pronto; avisa antes de executar; fixtures do CI marcadas como suspeitas |
 | Deriva de UI | nó esperado sumiu | retry com estado novo → modelo forte → `needs-human` |
 | Nível de app | rate limit, checkpoint, captcha, deslogou | **para a identidade; não tenta de novo** |
 | Semântico | agiu, mas errado | verificação pós-ação: tela esperada × real |
@@ -263,7 +302,9 @@ continuarem o objetivo.
 - **Unitário** na lógica pura: scheduler, alocação de portas, redução de árvore, checagens
   determinísticas. TDD normal.
 - **Record-replay** como espinha dorsal do CI: fixtures de respostas reais do MCP, loop do
-  worker contra telas gravadas com modelo stub. Determinístico, sem emulador.
+  worker contra telas gravadas com modelo stub. Determinístico, sem emulador. **Cada fixture
+  grava o `versionName` do app de origem**; quando a versão instalada diverge, o CI falha
+  dizendo que a fixture envelheceu, em vez de passar testando uma UI que não existe mais.
 - **Integração golden-path** com emulador real, em app próprio, sob demanda — nunca no CI.
 - **Suíte de eval** do modelo: pares (tela, decisão esperada). O mesmo ativo vira o dataset de
   fine-tune do Laya.
@@ -273,8 +314,9 @@ continuarem o objetivo.
 
 SQLite, escritor único (daemon).
 
-- **identity** — id, nome, avd_name, system_image, console_port, mcp_host_port, app_alvo,
-  handle_da_conta, estado, ultimo_snapshot, notas. Token e credenciais no keychain, referenciados
+- **identity** — id, nome, avd_name, system_image, console_port, mcp_host_port (ambas
+  **alocadas por lease e persistidas**, não derivadas do índice), app_alvo,
+  app_version_name (comparada pela sonda), handle_da_conta, estado, ultimo_snapshot, notas. Token e credenciais no keychain, referenciados
   por handle.
 - **goal** — id, texto, padrao_decomposicao, estado, criado_em, custo_total.
 - **task** — id, goal_id, identity_id (nulo = qualquer), instrucao, estado, tentativas,
@@ -286,7 +328,8 @@ SQLite, escritor único (daemon).
 
 ## 9. Faseamento
 
-1. **Fundação** — daemon, modelo de dados, ciclo de vida do AVD, sonda de prontidão, portas.
+1. **Fundação** — daemon com adb server isolado e binário pinado, modelo de dados, ciclo de
+   vida do AVD, sonda de prontidão de 5 sinais, lease de portas com detecção de colisão.
    Uma identidade, um device.
 2. **Cockpit** — grid, ampliação com input, provisionamento manual assistido.
 3. **Execução** — worker único com LLM, loop de passos, poda de histórico, gate determinístico.
