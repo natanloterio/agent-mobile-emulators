@@ -80,7 +80,7 @@ export function Cockpit(p: CockpitProps) {
     <div className="screen">
       <header className="screen__header">
         <div className="screen__title">
-          <Heading size={isMobile ? 'h3' : 'h2'}>Cockpit</Heading>
+          <Heading size={isMobile ? 'h3' : 'h2'}>{t('shell.nav.cockpit')}</Heading>
           <p className="screen__lede">{t('cockpit.lede')}</p>
         </div>
         <div className="screen__actions">

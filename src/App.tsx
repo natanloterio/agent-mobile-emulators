@@ -129,7 +129,7 @@ export function App() {
       case 'ids':
         return (
           <Identities
-            rows={isLive ? selectLiveIdRows(live?.identities ?? [], state.requests, Date.now()) : selectIdRows(state, fleetSize)}
+            rows={isLive ? selectLiveIdRows(live?.identities ?? [], state.requests, Date.now(), i18n) : selectIdRows(state, fleetSize, i18n)}
             isMobile={isMobile}
             provisionReq={requestOf(state, 'provision')}
             onProvision={(pin) => (isLive ? void identity.provision(pin) : actions.provision())}
@@ -142,7 +142,7 @@ export function App() {
         const vram = isLive ? liveVram(live?.host, fleetSize, i18n) : null;
         return (
           <Providers
-            roles={liveRoles(selectRoles(state), live)}
+            roles={liveRoles(selectRoles(state, i18n), live, i18n)}
             fleetSize={fleetSize}
             kvLeft={vram?.kvLeft ?? kvCacheLeftGiB(fleetSize, i18n)}
             vramEmuShare={vram?.emuShare ?? vramEmulatorShare(fleetSize)}

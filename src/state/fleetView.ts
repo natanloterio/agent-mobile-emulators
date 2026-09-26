@@ -35,7 +35,7 @@ export function buildFleetView(
       meters: hostMeters(DEMO_FLEET_SIZE, i18n), goal: null,
     };
   }
-  const ids = live ? mergeLive(s.ids, live, frames) : [];
+  const ids = live ? mergeLive(s.ids, live, frames, i18n) : [];
   const killed = live?.killed ?? false;
   const tiles = selectTiles({ ...s, ids, killed }, ids.length, i18n);
   return {
@@ -69,7 +69,7 @@ export function buildDeviceView(s: FleetState, v: FleetView, live: FleetSnapshot
   const inputErr = requestOf(s, inputKey(id)).error;
   return {
     control, paused: sel.live?.paused ?? false, streamLabel: streamLabel(sel.video, control, i18n),
-    log: liveLogFor(live, sel.id), stats: selectLiveSelStats(sel, i18n), busy: req.busy,
+    log: liveLogFor(live, sel.id, i18n), stats: selectLiveSelStats(sel, i18n), busy: req.busy,
     errors: [req.error, inputErr].filter((e): e is string => !!e),
   };
 }

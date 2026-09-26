@@ -5,6 +5,7 @@ import { createInitialState, fleetReducer, type FleetState } from './fleetReduce
 import { createGoalActions, type GoalActions } from './goalActions';
 import { createIdentityActions, type IdentityActions } from './identityActions';
 import { createProviderActions } from './providerActions';
+import { useI18n } from '../i18n/I18nProvider';
 
 export { bridgeMessage } from './providerActions';
 
@@ -103,8 +104,12 @@ export function useFleet(): UseFleet {
     [],
   );
 
+  // Idioma lido a cada chamada: as ações nascem uma vez, mas as mensagens geradas na UI seguem o seletor.
+  const i18n = useI18n();
+  const i18nRef = useRef(i18n);
+  i18nRef.current = i18n;
   const live = useMemo(() => {
-    const deps = { dispatch, getBridge: () => window.enxame };
+    const deps = { dispatch, getBridge: () => window.enxame, getI18n: () => i18nRef.current };
     return { goal: createGoalActions(deps), identity: createIdentityActions({ ...deps, confirm: (m: string) => window.confirm(m) }) };
   }, []);
 

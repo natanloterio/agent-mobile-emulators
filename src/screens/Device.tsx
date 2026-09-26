@@ -85,7 +85,7 @@ export function Device(p: DeviceProps) {
     <div className="screen">
       <header className="screen__header" style={{ alignItems: 'center' }}>
         <div className="screen__title" style={{ gap: 20 }}>
-          <button type="button" className="device__back" onClick={p.onBack}>← Cockpit</button>
+          <button type="button" className="device__back" onClick={p.onBack}>← {t('shell.nav.cockpit')}</button>
           <Heading size={isMobile ? 'h3' : 'h2'}>{sel.name}</Heading>
           <span className="device__sub">{sel.handle} · {sel.app} {sel.version}</span>
         </div>
