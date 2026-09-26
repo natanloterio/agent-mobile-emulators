@@ -92,4 +92,16 @@ describe('recordStep — proveniência (incremento 2)', () => {
     expect(s).toMatchObject({ provider: 'local:qwen3.5:27b', gen_ms: 812, invalid_call: 1 });
     expect(s.result_excerpt).toMatch(/^ERRO/);
   });
+  it('marca invalid_call=1 na linha de tool-error de parâmetro (incremento 3)', () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { taskId } = createGoalAndTask(db, 'conta1', 'objetivo');
+    const pending = new Map<string, number>();
+    pending.set('c1', writeIntent(db, taskId, 'android_conta1_scroll', { amount: '500' }, `${taskId}:c1`));
+    recordStep(db, taskId, { stepNumber: 1, text: '', usage: { inputTokens: 1, outputTokens: 1 }, content: [
+      { type: 'tool-call', toolCallId: 'c1', toolName: 'android_conta1_scroll', input: { amount: '500' } },
+      { type: 'tool-error', toolCallId: 'c1', toolName: 'android_conta1_scroll', error: new Error("Error executing tool android_conta1_scroll: Parameter 'amount' must be one of: small, medium, large. Got: '500'") },
+    ] } as never, PRICING, pending, { provider: 'local:gpt-oss:20b', genMs: 1 });
+    const s = db.prepare('select invalid_call, error from step where task_id=?').get(taskId) as { invalid_call: number; error: string };
+    expect(s.invalid_call).toBe(1); expect(s.error).toMatch(/Parameter 'amount'/);
+  });
 });
