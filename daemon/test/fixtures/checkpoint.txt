@@ -1,0 +1,10 @@
+screen:1080x2400 density:420 orientation:portrait
+--- window:9 type:APPLICATION pkg:com.instagram.android title:Instagram activity:com.instagram.android.activity.MainTabActivity layer:0 focused:true ---
+node_id	class	text	desc	res_id	bounds	flags
+node_a1	TextView	Confirme que é você	-	-	100,600,980,700	on,ena
+node_a2	TextView	Detectamos uma atividade incomum nesta conta.	-	-	100,720,980,800	on,ena
+node_a3	Button	Continuar	-	-	100,900,980,1000	on,clk,foc,ena
+hierarchy:
+node_a1
+node_a2
+node_a3
