@@ -51,7 +51,7 @@ export function Cockpit({ tiles, goalStats, goalPct, showCost, fullTiles, isMobi
 
       <section className="tiles">
         {tiles.map((t) => (
-          <button type="button" className={`tile tile--${t.cardTone}`} key={t.name} onClick={() => onOpen(t.index)}>
+          <button type="button" className={`tile tile--${t.cardTone}`} key={t.id ?? t.name} onClick={() => onOpen(t.index)}>
             <PhoneMock
               variant="tile"
               handle={t.handle}

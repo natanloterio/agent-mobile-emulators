@@ -58,16 +58,19 @@ export function PhoneMock({ handle, streamLabel, variant, overlay, draft, contro
   const cls = ['phone', `phone--${variant}`, controlled ? 'phone--controlled' : ''].filter(Boolean).join(' ');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [videoAt, setVideoAt] = useState<number | null>(null);
+  const lastSetRef = useRef<number | null>(null);
   const now = useNow(1000);
   useEffect(() => {
     const canvas = canvasRef.current; if (!videoId || !bus || !canvas) return;
-    const sink = createH264Sink(canvas);
-    const off = bus.subscribe(videoId, (p) => {
-      sink.push(p);
-      const t = sink.lastFrameAt();
-      if (t !== null) setVideoAt((prev) => (prev === null || t - prev > VIDEO_AT_THROTTLE_MS ? t : prev));
-    });
-    return () => { off(); sink.close(); setVideoAt(null); };
+    // Chamado pelo `output` do decoder (assíncrono); só re-renderiza a cada ≥ 500 ms, nunca a 30 fps.
+    const onFrame = (t: number) => {
+      const prev = lastSetRef.current;
+      if (prev !== null && t - prev < VIDEO_AT_THROTTLE_MS) return;
+      lastSetRef.current = t; setVideoAt(t);
+    };
+    const sink = createH264Sink(canvas, { onFrame });
+    const off = bus.subscribe(videoId, (p) => sink.push(p));
+    return () => { off(); sink.close(); lastSetRef.current = null; setVideoAt(null); };
   }, [videoId, bus]);
   const hasVideo = videoAt !== null;
   const label = hasVideo ? frameAgeLabel(videoAt, now) : screen ? frameAgeLabel(screen.at, now) : streamLabel;
