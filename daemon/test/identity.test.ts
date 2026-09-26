@@ -12,6 +12,7 @@ const adbSpy = () => {
     forward: async (s, h, d) => { calls.push(`forward ${s} ${h} ${d}`); },
     broadcastConfigure: async (_s, e) => { calls.push(`configure ${Object.keys(e).sort().join(',')}`); },
     startTrampoline: async (_s, a) => { calls.push(`trampoline ${a}`); },
+    screencap: async () => Buffer.alloc(0),
   };
   return { adb, calls };
 };

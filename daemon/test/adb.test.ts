@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AdbError, createAdb, type Exec } from '../src/device/adb.js';
+import { AdbError, createAdb, type Exec, type ExecBuffer } from '../src/device/adb.js';
 
 function fakeExec(map: Record<string, { stdout?: string; code?: number; stderr?: string }>): { exec: Exec; calls: string[][] } {
   const calls: string[][] = [];
@@ -53,5 +53,22 @@ describe.skipIf(!process.env.ENXAME_INTEGRATION)('adb real (ENXAME_INTEGRATION=1
     const adb = createAdb();
     expect(await adb.devices()).toContain('emulator-5554');
     expect(await adb.getprop('emulator-5554', 'sys.boot_completed')).toBe('1');
+  });
+});
+
+describe('adb — screencap (incremento 4)', () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  it('chama exec-out screencap -p com -s <serial> e devolve o Buffer bruto', async () => {
+    const calls: string[][] = [];
+    const execBuffer: ExecBuffer = async (_f, args) => { calls.push([...args]); return { stdout: PNG, stderr: '', code: 0 }; };
+    const out = await createAdb({ execBuffer }).screencap('emulator-5554');
+    expect(Buffer.isBuffer(out)).toBe(true); expect(out.equals(PNG)).toBe(true);
+    expect(calls[0]).toEqual(['-s', 'emulator-5554', 'exec-out', 'screencap', '-p']);
+  });
+  it('device ausente → AdbError device-missing; outra falha → command', async () => {
+    const missing: ExecBuffer = async () => ({ stdout: Buffer.alloc(0), stderr: "adb: device 'emulator-5554' not found", code: 1 });
+    await expect(createAdb({ execBuffer: missing }).screencap('emulator-5554')).rejects.toMatchObject({ kind: 'device-missing' });
+    const boom: ExecBuffer = async () => ({ stdout: Buffer.alloc(0), stderr: 'error: closed', code: 1 });
+    await expect(createAdb({ execBuffer: boom }).screencap('emulator-5554')).rejects.toMatchObject({ kind: 'command' });
   });
 });

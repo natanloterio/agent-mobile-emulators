@@ -14,6 +14,8 @@ export const CONFIG = {
   targetApp: { package: 'com.instagram.android', versionName: '448.0.0.52.84' },
   ports: { consoleFrom: 5554, consoleMax: 5584, mcpHostFrom: 8080 },
   worker: { stepBudget: 30, keepScreens: 2, qualityFloor: 3 },
+  /** Miniatura ao vivo (spec inc. 4): captura por identidade, só com alguém assistindo. */
+  screen: { intervalMs: 500, retryMs: 5000 },
 } as const;
 
 const EnvSchema = z.object({ ANTHROPIC_API_KEY: z.string().min(20, 'ANTHROPIC_API_KEY ausente ou curta') });

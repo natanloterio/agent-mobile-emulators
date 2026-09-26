@@ -13,7 +13,7 @@ const okAdb = (over: Partial<Adb> = {}): Adb => ({
   getprop: async () => '1',
   settingsGetSecure: async () => 'com.danielealbano.androidremotecontrolmcp.gms.debug/com.danielealbano.androidremotecontrolmcp.services.accessibility.McpAccessibilityService',
   versionName: async () => '448.0.0.52.84',
-  forward: async () => {}, broadcastConfigure: async () => {}, startTrampoline: async () => {},
+  forward: async () => {}, broadcastConfigure: async () => {}, startTrampoline: async () => {}, screencap: async () => Buffer.alloc(0),
   ...over,
 });
 const okMcp = async () => ({
