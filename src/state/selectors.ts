@@ -1,7 +1,9 @@
 import { DISK_PCT_BY_INDEX, LIFECYCLE_BY_NAME, RECENT_TOOLS, TARGET_APP, TARGET_APP_VERSION } from '../data/identities';
-import { endpointFor, modelFor, ROLES, testResultFor, type TestResultRow } from '../data/providers';
+import { endpointFor, modelFor, ROLES, roleName, roleVolume, testResultFor, type TestResultRow } from '../data/providers';
 import { TASK_INSTRUCTION } from '../data/goals';
-import { ptDecimal, usd } from '../lib/format';
+import { PT, type I18n } from '../i18n/translate';
+import { LOCALE_TAGS } from '../i18n/locales';
+import { usd } from '../lib/format';
 import type { DeviceState, Identity, ProviderMode, RoleKey } from '../types/fleet';
 import type { FleetState } from './fleetReducer';
 import { appLabel, offlineOverlay, streamLabel } from './liveSelectors';
@@ -176,23 +178,44 @@ export function selectCostRows(tiles: readonly TileVM[]): readonly CostRow[] {
   return tiles.map((d) => ({ name: d.name, costFmt: usd(d.cost), pct: Math.round((d.cost / max) * 100) }));
 }
 
-function snapshotLabel(i: number): string {
-  if (i === 9) return '23 dias · restore-unsafe';
-  if (i === 2) return 'há 2 dias';
-  return `hoje, 09:1${i}`;
+function snapshotLabel(i: number, { t }: I18n): string {
+  if (i === 9) return t('identities.snap.unsafe', { count: 23 });
+  if (i === 2) return t('identities.snap.ago', { count: 2 });
+  return t('identities.snap.today', { time: `09:1${i}` });
 }
 
-function actionForActive(d: Identity, i: number, diskPct: number): string {
-  if (d.state === 'needs') return 'Abrir device';
-  if (i === 9) return 'Confirmar restore';
-  if (diskPct > 70) return 'Re-baseline';
+function actionForActive(d: Identity, i: number, diskPct: number, { t }: I18n): string {
+  if (d.state === 'needs') return t('identities.action.open');
+  if (i === 9) return t('identities.action.restore');
+  if (diskPct > 70) return t('identities.action.rebaseline');
   return '';
 }
 
-export function selectIdRows(s: FleetState, fleetSize: number): readonly IdRow[] {
+/** Dia/mês no formato do idioma (demo: "banida em 12/09"). */
+const dayMonth = (day: number, month: number, i18n: I18n) =>
+  new Intl.DateTimeFormat(LOCALE_TAGS[i18n.locale], { day: '2-digit', month: '2-digit' }).format(new Date(2000, month - 1, day));
+
+/**
+ * Textos das identidades extras do demo (vêm em português de data/identities e do reducer): traduz os conhecidos,
+ * o resto passa como veio.
+ */
+function demoText(pt: string, i18n: I18n): string {
+  const { t, fmt } = i18n;
+  const banned = /^banida em (\d\d)\/(\d\d)$/.exec(pt);
+  if (banned) return t('identities.snap.bannedOn', { date: dayMonth(Number(banned[1]), Number(banned[2]), i18n) });
+  const disk = /^(\d+),(\d) \/ 8 GB( presos)?$/.exec(pt);
+  if (disk) return t(disk[3] ? 'identities.disk.stuck' : 'identities.disk.value', { used: fmt.decimal(Number(`${disk[1]}.${disk[2]}`)) });
+  const known: Readonly<Record<string, string>> = {
+    'Liberar disco': t('identities.action.discard'), 'Fazer login': t('identities.action.login'), 'agora': t('identities.snap.now'),
+    'sem conta': t('identities.handle.none'), '0 GB · AVD descartado': t('identities.disk.discarded'),
+  };
+  return known[pt] ?? pt;
+}
+
+export function selectIdRows(s: FleetState, fleetSize: number, i18n: I18n = PT): readonly IdRow[] {
   const active: IdRow[] = s.ids.map((d, i) => {
     const diskPct = DISK_PCT_BY_INDEX[i] ?? 40;
-    const action = actionForActive(d, i, diskPct);
+    const action = actionForActive(d, i, diskPct, i18n);
     return {
       ...DEMO_ROW,
       key: d.name,
@@ -200,9 +223,9 @@ export function selectIdRows(s: FleetState, fleetSize: number): readonly IdRow[]
       handle: d.handle,
       lc: LIFECYCLE_BY_NAME[d.name] ?? 'logged-in',
       app: TARGET_APP,
-      version: d.state === 'offline' ? '449.0 ≠ registro' : TARGET_APP_VERSION,
-      snap: snapshotLabel(i),
-      disk: `${ptDecimal(diskPct * 0.08)} / 8 GB`,
+      version: d.state === 'offline' ? i18n.t('identities.version.mismatch', { version: '449.0' }) : TARGET_APP_VERSION,
+      snap: snapshotLabel(i, i18n),
+      disk: i18n.t('identities.disk.value', { used: i18n.fmt.decimal(diskPct * 0.08) }),
       diskPct,
       ports: `${5554 + i * 2} · ${8080 + i}`,
       dimmed: false,
@@ -213,16 +236,16 @@ export function selectIdRows(s: FleetState, fleetSize: number): readonly IdRow[]
     ...DEMO_ROW,
     key: e.name,
     name: e.name,
-    handle: e.handle,
+    handle: demoText(e.handle, i18n),
     lc: e.lc,
     app: e.app,
     version: e.version,
-    snap: e.snap,
-    disk: e.disk,
+    snap: demoText(e.snap, i18n),
+    disk: demoText(e.disk, i18n),
     diskPct: e.diskPct,
     ports: e.ports,
     dimmed: e.lc === 'banned',
-    actions: e.action ? [{ kind: 'extra', label: e.action, index: k }] : [],
+    actions: e.action ? [{ kind: 'extra', label: demoText(e.action, i18n), index: k }] : [],
   }));
   return [...active, ...extra];
 }
@@ -247,15 +270,15 @@ export interface RoleVM {
   readonly putError: string | null;
 }
 
-export function selectRoles(s: FleetState): readonly RoleVM[] {
+export function selectRoles(s: FleetState, i18n: I18n = PT): readonly RoleVM[] {
   return ROLES.map((r) => {
     const mode = s.modes[r.key];
     const stage = s.tests[r.key];
     const model = modelFor(r.key, mode);
     return {
       key: r.key,
-      name: r.name,
-      volume: r.volume,
+      name: roleName(r.key, i18n),
+      volume: roleVolume(r.key, i18n),
       tone: r.tone,
       mode,
       model,
@@ -264,9 +287,9 @@ export function selectRoles(s: FleetState): readonly RoleVM[] {
       error: s.providerErrors[r.key] ?? s.providerModelsErrors[r.key] ?? null,
       putError: s.providerErrors[r.key] ?? null,
       endpoint: endpointFor(mode),
-      testLabel: stage === 'run' ? 'Rodando tool-call canônico em conta1…' : 'Testar conexão',
+      testLabel: stage === 'run' ? i18n.t('providers.test.running', { account: 'conta1' }) : i18n.t('providers.test.idle'),
       testing: stage === 'run',
-      result: stage === 'done' ? testResultFor(mode) : null,
+      result: stage === 'done' ? testResultFor(mode, i18n) : null,
     };
   });
 }

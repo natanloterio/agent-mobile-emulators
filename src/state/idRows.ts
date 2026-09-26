@@ -1,4 +1,4 @@
-import { ptDecimal } from '../lib/format';
+import { PT, type I18n } from '../i18n/translate';
 import type { LiveIdentity } from '../live/types';
 import type { RequestStatus } from './fleetReducer';
 import { idKey } from './identityActions';
@@ -45,54 +45,53 @@ function parseUtc(at: string): number {
   return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(at) ? at : `${at.replace(' ', 'T')}Z`);
 }
 const startOfDay = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
-const hhmm = (t: number) => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
-export function snapshotLabel(at: string | null | undefined, restoreUnsafe: boolean, now: number): string {
+export function snapshotLabel(at: string | null | undefined, restoreUnsafe: boolean, now: number, i18n: I18n = PT): string {
   if (!at) return '—';
   const t = parseUtc(at);
   if (!Number.isFinite(t)) return '—';
   const days = Math.max(0, Math.round((startOfDay(now) - startOfDay(t)) / DAY_MS));
-  if (restoreUnsafe) return `${days} dias · restore-unsafe`;
-  if (days === 0) return `hoje, ${hhmm(t)}`;
-  return days === 1 ? 'há 1 dia' : `há ${days} dias`;
+  if (restoreUnsafe) return i18n.t('identities.snap.unsafe', { count: days });
+  if (days === 0) return i18n.t('identities.snap.today', { time: i18n.fmt.time(new Date(t)) });
+  return i18n.t('identities.snap.ago', { count: days });
 }
 
-export function diskView(bytes: number | null | undefined): { disk: string; diskPct: number; high: boolean } {
+export function diskView(bytes: number | null | undefined, i18n: I18n = PT): { disk: string; diskPct: number; high: boolean } {
   if (bytes === null || bytes === undefined) return { disk: '—', diskPct: 0, high: false };
   const ratio = bytes / DISK_CAP_BYTES;
-  return { disk: `${ptDecimal(bytes / GiB)} / 8 GB`, diskPct: Math.min(100, Math.round(ratio * 100)), high: ratio > DISK_HIGH };
+  return { disk: i18n.t('identities.disk.value', { used: i18n.fmt.decimal(bytes / GiB) }), diskPct: Math.min(100, Math.round(ratio * 100)), high: ratio > DISK_HIGH };
 }
 
-function liveRowActions(l: LiveIdentity, tileIndex: number): readonly RowAction[] {
+function liveRowActions(l: LiveIdentity, tileIndex: number, { t }: I18n): readonly RowAction[] {
   if (l.discardedAt) return [];
   const lc = l.lifecycle ?? l.state;
-  if (lc === 'banned') return [{ kind: 'discard', label: 'Liberar disco' }];
+  if (lc === 'banned') return [{ kind: 'discard', label: t('identities.action.discard') }];
   const out: RowAction[] = [];
-  if (lc === 'blank' || lc === 'provisioned') out.push({ kind: 'boot-window', label: 'Subir com janela' }, { kind: 'login', label: 'Login feito' });
-  if (lc === 'offline') out.push({ kind: 'boot', label: 'Subir' });
-  if (lc === 'needs-human') out.push({ kind: 'open', label: 'Abrir device', index: tileIndex });
-  if (l.restoreUnsafe) out.push({ kind: 'restore', label: 'Confirmar restore' });
-  if (diskView(l.diskBytes).high) out.push({ kind: 'rebaseline', label: 'Re-baseline' });
+  if (lc === 'blank' || lc === 'provisioned') out.push({ kind: 'boot-window', label: t('identities.action.bootWindow') }, { kind: 'login', label: t('identities.action.loginDone') });
+  if (lc === 'offline') out.push({ kind: 'boot', label: t('identities.action.boot') });
+  if (lc === 'needs-human') out.push({ kind: 'open', label: t('identities.action.open'), index: tileIndex });
+  if (l.restoreUnsafe) out.push({ kind: 'restore', label: t('identities.action.restore') });
+  if (diskView(l.diskBytes).high) out.push({ kind: 'rebaseline', label: t('identities.action.rebaseline') });
   // Daemon destrava sozinho com o PIN; sem ele, um reboot deixa o device parado na tela de bloqueio.
-  if (l.hasPin === false) out.push({ kind: 'pin', label: 'Registrar PIN' });
+  if (l.hasPin === false) out.push({ kind: 'pin', label: t('identities.action.pin') });
   return out;
 }
 
 /** Todas as identidades do snapshot, descartadas inclusive (esmaecidas); o índice do tile ignora as descartadas. */
 export function selectLiveIdRows(
-  identities: readonly LiveIdentity[], requests: Readonly<Record<string, RequestStatus>>, now: number,
+  identities: readonly LiveIdentity[], requests: Readonly<Record<string, RequestStatus>>, now: number, i18n: I18n = PT,
 ): readonly IdRow[] {
   let tile = 0;
   return identities.map((l) => {
     const tileIndex = l.discardedAt ? -1 : tile++;
-    const { disk, diskPct } = diskView(l.diskBytes);
+    const { disk, diskPct } = diskView(l.diskBytes, i18n);
     const req = requests[idKey(l.id)];
     return {
-      key: l.id, id: l.id, name: l.name, handle: l.handle || 'sem conta', lc: l.lifecycle ?? l.state,
+      key: l.id, id: l.id, name: l.name, handle: l.handle || i18n.t('identities.handle.none'), lc: l.lifecycle ?? l.state,
       app: appLabel(l.appPackage), version: l.appVersionName || '—',
-      snap: snapshotLabel(l.snapshotTakenAt, l.restoreUnsafe ?? false, now), disk, diskPct,
+      snap: snapshotLabel(l.snapshotTakenAt, l.restoreUnsafe ?? false, now, i18n), disk, diskPct,
       ports: l.consolePort && l.mcpHostPort ? `${l.consolePort} · ${l.mcpHostPort}` : '—',
-      dimmed: !!l.discardedAt, actions: liveRowActions(l, tileIndex),
+      dimmed: !!l.discardedAt, actions: liveRowActions(l, tileIndex, i18n),
       error: req?.error ?? null, busy: req?.busy ?? false,
     };
   });
