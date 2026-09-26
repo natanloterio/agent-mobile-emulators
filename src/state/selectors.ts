@@ -178,10 +178,10 @@ export function selectCostRows(tiles: readonly TileVM[]): readonly CostRow[] {
   return tiles.map((d) => ({ name: d.name, costFmt: usd(d.cost), pct: Math.round((d.cost / max) * 100) }));
 }
 
-function snapshotLabel(i: number, { t }: I18n): string {
+function snapshotLabel(i: number, { t, fmt }: I18n): string {
   if (i === 9) return t('identities.snap.unsafe', { count: 23 });
   if (i === 2) return t('identities.snap.ago', { count: 2 });
-  return t('identities.snap.today', { time: `09:1${i}` });
+  return t('identities.snap.today', { time: fmt.time(new Date(2026, 0, 1, 9, 10 + i)) });
 }
 
 function actionForActive(d: Identity, i: number, diskPct: number, { t }: I18n): string {
