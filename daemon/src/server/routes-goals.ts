@@ -1,16 +1,18 @@
 import { z } from 'zod';
+import { LANGS, type Lang } from '../leader/lang.js';
 import type { GoalPlan } from '../leader/types.js';
 import { GoalText, type Route } from './api.js';
 
-const PlanBody = z.object({ text: GoalText });
+/** `lang` opcional: idioma da interface, em que o líder escreve justificativa e instruções. */
+const PlanBody = z.object({ text: GoalText, lang: z.enum(LANGS).optional() });
 
 export interface GoalsRoutesOpts {
   /** Líder + sonda da frota (produção: `planGoal`). */
-  readonly plan: (text: string) => Promise<GoalPlan>;
+  readonly plan: (text: string, lang?: Lang) => Promise<GoalPlan>;
 }
 
 /**
- * `POST /goals/plan {text}` → GoalPlan (spec inc. 5 §3.2). 400 corpo inválido; 409 com objetivo em execução
+ * `POST /goals/plan {text, lang?}` → GoalPlan (spec inc. 5 §3.2). 400 corpo inválido; 409 com objetivo em execução
  * ou outro planejamento em curso (dois planos sondariam os mesmos devices ao mesmo tempo).
  */
 export function goalsRoutes(o: GoalsRoutesOpts): Route {
@@ -22,7 +24,7 @@ export function goalsRoutes(o: GoalsRoutesOpts): Route {
     const release = ctx.lock();
     if (!release) { ctx.send(409, { error: 'objetivo, teste ou planejamento em execução' }); return true; }
     try {
-      const plan = await o.plan(parsed.data.text);
+      const plan = await o.plan(parsed.data.text, parsed.data.lang);
       ctx.send(200, plan);
     } catch (e) {
       console.error('[daemon] planejamento falhou:', e);

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, setIdentityFlags, setIdentityState, upsertIdentity, type IdentityRow } from '../src/db/identities.js';
 import type { ProbeResult } from '../src/device/probe.js';
+import { LANGS } from '../src/leader/lang.js';
 import { deterministicPlan, planGoal } from '../src/leader/plan.js';
 import { GoalPlanSchema } from '../src/leader/types.js';
 
@@ -116,6 +117,44 @@ describe('deterministicPlan', () => {
   it('trabalho preso à conta → fan-out com o texto do objetivo', () => {
     const d = deterministicPlan('Responder comentários da própria caixa', ['a', 'b']);
     expect(d.pattern).toBe('fan-out'); expect(d.instructions.get('b')).toBe('Responder comentários da própria caixa');
+  });
+});
+
+describe('líder no idioma do usuário', () => {
+  it('prompt pede justificativa e instruções no idioma pedido; sem lang, português', async () => {
+    const out = json({ pattern: 'fan-out', rationale: 'Each account owns its inbox.', instructions: [] });
+    const en = new MockLanguageModelV4({ doGenerate: [out] as never });
+    await planGoal('Reply to comments', { db: fleet(1), ensureReady: probeBy({}).ensureReady, model: en, providers: PROVIDERS }, 'en');
+    const enPrompt = JSON.stringify(en.doGenerateCalls[0].prompt);
+    expect(enPrompt).toMatch(/frases curtas em inglês \(English\)/); expect(enPrompt).toMatch(/lista, em inglês \(English\)/);
+    const zh = new MockLanguageModelV4({ doGenerate: [out] as never });
+    await planGoal('回复评论', { db: fleet(1), ensureReady: probeBy({}).ensureReady, model: zh, providers: PROVIDERS }, 'zh');
+    expect(JSON.stringify(zh.doGenerateCalls[0].prompt)).toMatch(/简体中文/);
+    const pt = new MockLanguageModelV4({ doGenerate: [out] as never });
+    await planGoal('Responder comentários', { db: fleet(1), ensureReady: probeBy({}).ensureReady, model: pt, providers: PROVIDERS });
+    const ptPrompt = JSON.stringify(pt.doGenerateCalls[0].prompt);
+    expect(ptPrompt).toMatch(/frases curtas em português\)/); expect(ptPrompt).not.toMatch(/English/);
+  });
+  it('erro do modelo → regra determinística traduzida', async () => {
+    const model = new MockLanguageModelV4({ doGenerate: async () => { throw new Error('overloaded_error'); } });
+    const plan = await planGoal('Reply to comments', { db: fleet(1), ensureReady: probeBy({}).ensureReady, model, providers: PROVIDERS }, 'de');
+    expect(plan.rationale).toBe('Deterministische Regel: Die Arbeit gehört zu jedem Konto → fan-out, eine Aufgabe pro Identität.');
+    expect(plan.tasks[0].instruction).toBe('Reply to comments');
+  });
+  it('deterministicPlan: justificativa e fatia do sharding nos 6 idiomas; o objetivo fica como veio', () => {
+    expect(deterministicPlan('Responder comentários', ['a']).rationale).toMatch(/^Regra determinística: o trabalho pertence/);
+    const en = deterministicPlan('Handle the queue of 30 profiles (fila)', ['a', 'b'], 'en');
+    expect(en.rationale).toBe('Deterministic rule: shared queue of items → sharding, one slice per ready identity.');
+    expect(en.instructions.get('b')).toBe('Handle the queue of 30 profiles (fila)\nYour slice 2 of 2: handle only the items at positions 2, 4, 6… of the queue (counting from 1).');
+    const pt = deterministicPlan('Tratar a lista de 30 perfis', ['a', 'b']);
+    expect(pt.instructions.get('a')).toBe('Tratar a lista de 30 perfis\nSua fatia 1 de 2: trate só os itens nas posições 1, 3, 5… da fila (contando a partir de 1).');
+    expect(deterministicPlan('fila', ['a', 'b'], 'zh').instructions.get('a')).toBe('fila\n你的分片 1/2：只处理队列中第 1、3、5… 位的条目（从 1 开始计数）。');
+    for (const lang of LANGS) {
+      const fan = deterministicPlan('x', ['a'], lang); const shard = deterministicPlan('fila', ['a', 'b'], lang);
+      expect(fan.rationale.length).toBeGreaterThan(10); expect(shard.rationale).not.toBe(fan.rationale);
+      expect(shard.instructions.get('b')).toMatch(/2\D+2/);
+      if (lang !== 'pt') expect(shard.rationale).not.toBe(deterministicPlan('fila', ['a'], 'pt').rationale);
+    }
   });
 });
 

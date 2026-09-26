@@ -1,9 +1,9 @@
 import { demoText, DISK_PCT_BY_INDEX, LIFECYCLE_BY_NAME, RECENT_TOOLS, TARGET_APP, TARGET_APP_VERSION } from '../data/identities';
 import { endpointFor, modelFor, ROLES, roleName, roleVolume, testResultFor, type TestResultRow } from '../data/providers';
-import { TASK_INSTRUCTION } from '../data/goals';
+import { taskInstruction } from '../data/goals';
+import type { MessageKey } from '../i18n/messages';
 import { PT, type I18n } from '../i18n/translate';
 import { LOCALE_TAGS } from '../i18n/locales';
-import { usd } from '../lib/format';
 import type { DeviceState, Identity, ProviderMode, RoleKey } from '../types/fleet';
 import type { FleetState } from './fleetReducer';
 import { appLabel, offlineOverlay, streamLabel } from './liveSelectors';
@@ -143,36 +143,44 @@ export interface PlanTask {
   readonly readyLabel: string;
 }
 
-export function selectPlanTasks(tiles: readonly TileVM[]): readonly PlanTask[] {
+export function selectPlanTasks(tiles: readonly TileVM[], i18n: I18n = PT): readonly PlanTask[] {
   return tiles.map((d) => ({
     name: d.name,
     handle: d.handle,
-    instr: TASK_INSTRUCTION,
+    instr: taskInstruction(i18n),
     signalsOk: d.state === 'offline' ? 4 : 5,
-    readyLabel: d.state === 'offline' ? 'versão mudou · fora' : 'pronto',
+    readyLabel: i18n.t(d.state === 'offline' ? 'goal.ready.versionChanged' : 'goal.ready.ready'),
   }));
 }
 
-export function selectEstimate(tiles: readonly TileVM[], fleetSize: number): readonly Stat[] {
+export function selectEstimate(tiles: readonly TileVM[], fleetSize: number, i18n: I18n = PT): readonly Stat[] {
+  const { t } = i18n;
   const ready = tiles.filter((d) => d.state !== 'offline').length;
   return [
-    { label: 'Tarefas', value: `${ready} de ${fleetSize} (${fleetSize - ready} fora da sonda)` },
-    { label: 'Passos por conta', value: '40–60' },
-    { label: 'Tokens por conta', value: '~330k (poda + subset)' },
-    { label: 'Frota pronta em', value: '~3 min, starts escalonados' },
+    { label: t('goal.est.tasks'), value: t('goal.est.tasksValue', { ready, total: fleetSize, out: fleetSize - ready }) },
+    { label: t('goal.est.stepsPerAccount'), value: '40–60' },
+    { label: t('goal.est.tokensPerAccount'), value: t('goal.est.tokensValue') },
+    { label: t('goal.est.fleetReady'), value: t('goal.est.fleetReadyDemo') },
   ];
 }
 
-export interface ReportCard extends Stat { readonly tone: Tone }
+export interface ReportCard extends Stat {
+  readonly tone: Tone;
+  /** Como refazer o card em outro idioma dentro da tela (chave do rótulo e, no custo, o valor em dólar). */
+  readonly localize?: { readonly labelKey: MessageKey; readonly usd?: number };
+}
 
-export function selectReportCards(tiles: readonly TileVM[]): readonly ReportCard[] {
+export function selectReportCards(tiles: readonly TileVM[], i18n: I18n = PT): readonly ReportCard[] {
+  const { t, fmt } = i18n;
   const done = tiles.filter((d) => d.state === 'idle' && d.steps > 0).length + 3;
   const total = tiles.reduce((a, d) => a + d.cost, 0);
+  const card = (value: string, labelKey: MessageKey, tone: Tone, usdValue?: number): ReportCard =>
+    ({ value, label: t(labelKey), tone, localize: usdValue === undefined ? { labelKey } : { labelKey, usd: usdValue } });
   return [
-    { value: String(done), label: 'tarefas concluídas', tone: 'grey' },
-    { value: '87', label: 'comentários respondidos', tone: 'green' },
-    { value: String(selectNeedsCount(tiles)), label: 'precisam de você', tone: 'dark' },
-    { value: usd(total), label: 'custo do objetivo', tone: 'white' },
+    card(String(done), 'report.cards.done', 'grey'),
+    card('87', 'report.cards.replies', 'green'),
+    card(String(selectNeedsCount(tiles)), 'report.cards.needs', 'dark'),
+    card(fmt.usd(total), 'report.cards.cost', 'white', total),
   ];
 }
 
@@ -180,11 +188,12 @@ export function selectNeedsList(tiles: readonly TileVM[]): readonly TileVM[] {
   return tiles.filter((d) => d.state === 'needs' || d.state === 'offline');
 }
 
-export interface CostRow { readonly name: string; readonly costFmt: string; readonly pct: number }
+/** `cost` em dólar cru: a tela reformata no idioma dela. */
+export interface CostRow { readonly name: string; readonly cost: number; readonly costFmt: string; readonly pct: number }
 
-export function selectCostRows(tiles: readonly TileVM[]): readonly CostRow[] {
+export function selectCostRows(tiles: readonly TileVM[], i18n: I18n = PT): readonly CostRow[] {
   const max = Math.max(...tiles.map((d) => d.cost), 0.01);
-  return tiles.map((d) => ({ name: d.name, costFmt: usd(d.cost), pct: Math.round((d.cost / max) * 100) }));
+  return tiles.map((d) => ({ name: d.name, cost: d.cost, costFmt: i18n.fmt.usd(d.cost), pct: Math.round((d.cost / max) * 100) }));
 }
 
 function snapshotLabel(i: number, { t, fmt }: I18n): string {

@@ -14,7 +14,7 @@ const PLAN: GoalPlan = {
   estimate: { tasks: 1, outOfProbe: 0, stepBudget: 30, fleetReadyMs: 8000 }, leader: { model: 'claude-sonnet-5', costUsd: 0.01, error: null },
 };
 
-async function mk(o: { onGoal?: (text: string, plan: GoalPlan | null) => Promise<GoalStart>; plan?: (text: string) => Promise<GoalPlan> } = {}) {
+async function mk(o: { onGoal?: (text: string, plan: GoalPlan | null) => Promise<GoalStart>; plan?: (text: string, lang?: string) => Promise<GoalPlan> } = {}) {
   const calls: { text: string; plan: GoalPlan | null }[] = [];
   const planned: string[] = [];
   const s = await startServer({
@@ -36,6 +36,15 @@ describe('POST /goals/plan', () => {
     const r = await post('/goals/plan', { text: 'Responder comentários' });
     expect(r.status).toBe(200); expect(await r.json()).toEqual(PLAN);
     expect(planned).toEqual(['Responder comentários']);
+  });
+  it('lang opcional: um dos 6 idiomas vai ao líder; outro valor → 400', async () => {
+    const langs: (string | undefined)[] = [];
+    const { post } = await mk({ plan: async (t, lang) => { langs.push(lang); return { ...PLAN, text: t }; } });
+    expect((await post('/goals/plan', { text: 'Reply to comments', lang: 'en' })).status).toBe(200);
+    expect((await post('/goals/plan', { text: 'Responder comentários' })).status).toBe(200);
+    expect((await post('/goals/plan', { text: 'Responder comentários', lang: 'ja' })).status).toBe(400);
+    expect((await post('/goals/plan', { text: 'Responder comentários', lang: 7 })).status).toBe(400);
+    expect(langs).toEqual(['en', undefined]);
   });
   it('409 com objetivo em execução', async () => {
     let release!: () => void; const gate = new Promise<void>((r) => { release = r; });
