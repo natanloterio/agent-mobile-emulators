@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { CONFIG, loadEnv } from './config.js';
 import { createAdb } from './device/adb.js';
+import { createDeviceInput } from './device/input.js';
 import { openDb } from './db/open.js';
 import { getIdentity, listIdentities, upsertIdentity } from './db/identities.js';
 import { createScreenCapture } from './device/screen.js';
@@ -11,6 +12,7 @@ import { readProviderConfig } from './provider/config.js';
 import { createOllamaSupervisor } from './provider/ollama.js';
 import { recordProviderTest, testProvider } from './provider/probe.js';
 import { startServer } from './server/api.js';
+import { controlRoutes } from './server/routes-control.js';
 import { runTask } from './worker/run.js';
 
 const env = loadEnv();
@@ -46,6 +48,8 @@ process.on('exit', () => { video.stop(); screen.stop(); ollama.stop(); });
 const daemonToken = randomUUID();
 const server = await startServer({
   db, token: daemonToken, screen, video, videoState: (id) => video.state(id),
+  // Controle humano (spec inc. 5 §3.2): `controlled` no banco para o worker; input via `adb shell input`.
+  routes: [controlRoutes({ input: createDeviceInput(adb) })],
   // Kill switch derruba o Ollama que é nosso (spec §4.3); /resume + próximo objetivo o sobem de novo.
   onKill: () => { ollama.stop(); server.broadcast(); },
   onGoal: async (text) => {
