@@ -12,23 +12,26 @@ const VIDEO_STATES: readonly string[] = ['idle', 'starting', 'streaming', 'retry
 const toVideoState = (v: string | undefined): VideoStreamState | undefined =>
   v !== undefined && VIDEO_STATES.includes(v) ? (v as VideoStreamState) : undefined;
 
-const toIdentity = (base: Identity | undefined, l: LiveIdentity, f: LiveFrame | undefined): Identity => ({
-  ...(base ?? {}), id: l.id, name: l.name, handle: l.handle, state: STATE_MAP[l.state] ?? 'offline',
-  task: l.degraded ? `${l.task} · degradada` : l.task, steps: l.steps, budget: l.budget, cost: l.costUsd, error: l.error,
+const toIdentity = (l: LiveIdentity, f: LiveFrame | undefined): Identity => ({
+  id: l.id, name: l.name, handle: l.handle, state: l.paused ? 'paused' : STATE_MAP[l.state] ?? 'offline',
+  task: l.degraded ? `${l.task} · degradada` : l.task, steps: l.steps, budget: l.budget, cost: l.costUsd, error: l.error || (l.bannedReason ? `banida: ${l.bannedReason}` : ''),
   genMs: l.genMs ?? 0, degraded: l.degraded ?? false, earlyStopRemaining: l.earlyStopRemaining ?? 0,
-  video: toVideoState(l.video),
+  video: toVideoState(l.video), live: l,
   ...(f ? { screen: { dataUrl: `data:image/png;base64,${f.png}`, at: f.at } } : {}),
 });
-/** Sobrepõe cada identidade viva ao tile de mesma posição; posters casam por id (spec inc. 4 §4.3). Tiles além da lista viva ficam mock. */
+/**
+ * Frota do modo vivo: só as identidades do snapshot (todas, sem teto e sem completar com demo), menos as descartadas;
+ * posters casam por id (spec inc. 4 §4.3). Sem snapshot (Vite no browser) devolve o demo intacto.
+ */
 export function mergeLive(ids: readonly Identity[], live: FleetSnapshot | null, frames: Readonly<Record<string, LiveFrame>> = {}): readonly Identity[] {
-  if (!live || live.identities.length === 0) return ids;
-  const merged = live.identities.map((l, i) => toIdentity(ids[i], l, frames[l.id]));
-  return [...merged, ...ids.slice(live.identities.length)];
+  if (!live) return ids;
+  return live.identities.filter((l) => !l.discardedAt).map((l) => toIdentity(l, frames[l.id]));
 }
 
-export function liveLogFor(live: FleetSnapshot | null, name: string): readonly LogRow[] | null {
-  const l = live?.identities.find((i) => i.name === name);
-  if (!l || l.lastTools.length === 0) return null;
+/** Passos recentes reais da identidade; vazio quando ainda não há passos. */
+export function liveLogFor(live: FleetSnapshot | null, id: string | undefined): readonly LogRow[] {
+  const l = live?.identities.find((i) => i.id === id);
+  if (!l) return [];
   return l.lastTools.map((t) => ({ i: String(t.idx), tool: t.tool, desc: t.provider ? `[${t.provider.split(':')[0]}] ${t.excerpt}` : t.excerpt, tokens: `${(t.tokens / 1000).toFixed(1)}k tok`, tag: t.gate ? 'gate' : 'ok' }));
 }
 

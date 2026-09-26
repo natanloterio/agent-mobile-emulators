@@ -1,3 +1,5 @@
+import type { LiveIdentity } from '../live/types';
+
 export type DeviceState = 'running' | 'idle' | 'needs' | 'offline' | 'paused';
 
 export type Lifecycle =
@@ -35,6 +37,8 @@ export interface Identity {
   readonly screen?: { readonly dataUrl: string; readonly at: string };
   /** Estado do stream de vídeo no daemon; 'streaming' = ao vivo mesmo com a tela parada. */
   readonly video?: VideoStreamState;
+  /** Linha crua do snapshot (modo vivo); ausente no demo. */
+  readonly live?: LiveIdentity;
 }
 
 /** Identidade fora da frota ativa (banida, em provisionamento). */

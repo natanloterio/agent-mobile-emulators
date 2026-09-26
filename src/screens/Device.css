@@ -39,3 +39,4 @@
   .log__desc { white-space: normal; line-height: 19px; }
   .log__tool { font-size: 11px; }
 }
+.log__empty { padding: 12px 0; border-top: 1px solid var(--color-dark); font-size: 15px; }

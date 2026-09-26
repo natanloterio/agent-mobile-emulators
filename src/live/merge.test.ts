@@ -11,11 +11,26 @@ describe('mergeLive', () => {
   it('sem snapshot devolve o mock intacto', () => {
     expect(mergeLive(IDENTITIES, null)).toBe(IDENTITIES);
   });
-  it('sobrepõe só a identidade 0 e traduz needs-human → needs', () => {
+  it('modo vivo mostra só as identidades vivas (nada do demo) e traduz needs-human → needs', () => {
     const out = mergeLive(IDENTITIES, live);
+    expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ handle: '@p1t41a.meta.test', state: 'needs', steps: 12, budget: 30, error: 'checkpoint' });
-    expect(out[1]).toBe(IDENTITIES[1]);
+    expect(out[0].live).toBe(live.identities[0]);
     expect(IDENTITIES[0].handle).toBe('@aurora.moda');
+  });
+  it('snapshot com zero identidades devolve lista vazia (estado vazio, sem completar com demo)', () => {
+    expect(mergeLive(IDENTITIES, { ...live, identities: [] })).toEqual([]);
+  });
+  it('descartadas saem da frota; pausada vira o estado pausado', () => {
+    const out = mergeLive(IDENTITIES, { ...live, identities: [
+      { ...live.identities[0], id: 'a', name: 'a', discardedAt: '2026-09-20 10:00:00' },
+      { ...live.identities[0], id: 'b', name: 'b', state: 'idle', paused: true },
+    ] });
+    expect(out.map((d) => d.id)).toEqual(['b']); expect(out[0].state).toBe('paused');
+  });
+  it('banida sem erro mostra o motivo do banimento', () => {
+    const out = mergeLive(IDENTITIES, { ...live, identities: [{ ...live.identities[0], state: 'banned', error: '', bannedReason: 'checkpoint' }] });
+    expect(out[0].error).toBe('banida: checkpoint');
   });
   it('traduz offline e idle/running/logged-in', () => {
     const st = (s: string) => mergeLive(IDENTITIES, { ...live, identities: [{ ...live.identities[0], state: s }] })[0].state;
@@ -35,7 +50,8 @@ describe('mergeLive — incremento 3', () => {
   });
   it('liveLogFor mostra o provedor curto por linha', () => {
     const rows = liveLogFor({ ...live, identities: [{ ...live.identities[0], lastTools: [{ idx: 1, tool: 't', excerpt: 'x', tokens: 1000, gate: false, provider: 'local:gpt-oss:20b' }] }] }, 'conta1');
-    expect(rows?.[0].desc).toMatch(/^\[local\] /);
+    expect(rows[0].desc).toMatch(/^\[local\] /);
+    expect(liveLogFor(live, 'conta1')).toEqual([]); expect(liveLogFor(null, 'conta1')).toEqual([]);
   });
 });
 
@@ -72,16 +88,16 @@ describe('liveRoles', () => {
 describe('mergeLive — incremento 4 (várias identidades e posters por id)', () => {
   const two = { ...live, identities: [{ ...live.identities[0], id: 'conta1', name: 'conta1' }, { ...live.identities[0], id: 'conta2', name: 'conta2', handle: '@segunda', state: 'running' }] };
   const frames = { conta2: { id: 'conta2', at: '2026-09-26T00:00:02.000Z', png: 'QkJC' }, conta1: { id: 'conta1', at: '2026-09-26T00:00:01.000Z', png: 'QUFB' } };
-  it('sobrepõe a i-ésima identidade viva no i-ésimo tile e casa o poster pelo id, não pela ordem', () => {
+  it('casa o poster pelo id, não pela ordem; nenhum campo do demo vaza', () => {
     const out = mergeLive(IDENTITIES, two, frames);
     expect(out[0]).toMatchObject({ id: 'conta1', screen: { dataUrl: 'data:image/png;base64,QUFB', at: '2026-09-26T00:00:01.000Z' } });
     expect(out[1]).toMatchObject({ id: 'conta2', handle: '@segunda', state: 'running', screen: { dataUrl: 'data:image/png;base64,QkJC' } });
-    expect(out[2]).toBe(IDENTITIES[2]); expect(out).toHaveLength(IDENTITIES.length);
+    expect(out).toHaveLength(2);
   });
-  it('sem poster não põe screen; sem snapshot devolve o mock intacto; identidades vivas extras são acrescentadas', () => {
+  it('sem poster não põe screen; sem snapshot devolve o mock intacto; todas as vivas entram (sem teto de 8)', () => {
     expect(mergeLive(IDENTITIES, two, {})[0].screen).toBeUndefined();
     expect(mergeLive(IDENTITIES, null, frames)).toBe(IDENTITIES);
-    const many = { ...live, identities: IDENTITIES.map((_, i) => ({ ...live.identities[0], id: `c${i}`, name: `c${i}` })).concat([{ ...live.identities[0], id: 'extra', name: 'extra' }]) };
-    expect(mergeLive(IDENTITIES, many, {})).toHaveLength(IDENTITIES.length + 1);
+    const many = { ...live, identities: Array.from({ length: 12 }, (_, i) => ({ ...live.identities[0], id: `c${i}`, name: `c${i}` })) };
+    expect(mergeLive(IDENTITIES, many, {})).toHaveLength(12);
   });
 });
