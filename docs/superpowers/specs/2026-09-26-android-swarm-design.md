@@ -147,7 +147,11 @@ permissões concedidas, `auto_start_on_boot` ligado, auto-update da Play Store d
 `hw.ramSize`, `dataPartition.size` e a configuração de GPU **fixadas e versionadas** (hoje
 `hw.gpu.enabled=no` no `config.ini` coexiste com `-gpu host` na linha de comando, e o consumo
 de VRAM da seção 3 depende de qual dos dois venceu),
-nenhuma conta de terceiro. **Sem token e sem `device_slug`** — ver abaixo. Snapshot.
+nenhuma conta de terceiro, **e sem bloqueio de tela por credencial** (PIN/padrão/senha): com credencial, o
+Android segura o storage criptografado do usuário até o primeiro desbloqueio manual (Direct Boot, tela
+`FallbackHome`) e nenhum app de terceiro resolve — um reboot deixa a identidade inoperante até alguém
+digitar o PIN, o que anula a recuperação headless. Observado em 2026-09-26 no relançamento do emulador.
+**Sem token e sem `device_slug`** — ver abaixo. Snapshot.
 
 **Materialização.** Clonar o AVD-base, novo nome e serial. **Token e `device_slug` são
 gerados por identidade neste momento, nunca na imagem-base:** o servidor MCP gera o token
@@ -584,6 +588,8 @@ descoberta terá sido uma identidade e alguns dias, não seis fases.
   mesmo tempo. Mitigado pela sonda de 5 sinais, nunca eliminado.
 - **Snapshot envelhecido é risco ativo, não inerte:** restaurar um ponto antigo pode provocar
   o checkpoint que a restauração tentava resolver. Ver seção 4.1.
+- **Bloqueio de tela por credencial** numa identidade transforma qualquer reboot em intervenção manual.
+  A imagem-base não pode ter lock; login no Google/Instagram costuma sugerir criar um — recusar.
 - **Injeção de input pelo scrcpy não está demonstrada** no Android 14 com a versão escolhida.
   Bloqueia a fase 2 até o spike.
 - **Fine-tune do Laya depende de volume de dados** que só existe depois da fase 3. Se o volume
