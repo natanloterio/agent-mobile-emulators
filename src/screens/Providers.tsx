@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Heading } from '../components/Heading';
+import { useI18n } from '../i18n/I18nProvider';
 import type { RoleVM } from '../state/selectors';
 import type { ProviderMode, RoleKey } from '../types/fleet';
 import { shouldSubmitEndpoint } from './endpointSubmit';
@@ -19,56 +20,58 @@ interface ProvidersProps {
   readonly onLoadModels: (role: RoleKey) => void;
 }
 
-const MODES: readonly { readonly key: ProviderMode; readonly label: string }[] = [
-  { key: 'nuvem', label: 'Nuvem' },
-  { key: 'local', label: 'Local' },
-];
+const MODES: readonly ProviderMode[] = ['nuvem', 'local'];
+
+/** Marcador que não aparece em texto: separa o valor em negrito do resto da frase traduzida. */
+const SLOT = '\u0000';
 
 export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, isMobile, onPickMode, onTest, onSetField, onLoadModels }: ProvidersProps) {
   // Recarrega a lista de modelos quando a tela abre e quando algum papel troca de modo.
+  const { t } = useI18n();
   const modeKey = roles.map((r) => `${r.key}:${r.mode}`).join('|');
+  const [kvBefore, kvAfter = ''] = t('providers.vram.kvLeft', { kv: SLOT, n: fleetSize }).split(SLOT);
   useEffect(() => { roles.forEach((r) => onLoadModels(r.key)); }, [modeKey]);
 
   return (
     <div className="screen">
       <header className="screen__title">
-        <Heading size={isMobile ? 'h3' : 'h2'}>Provedores</Heading>
-        <p className="screen__lede">Modelo configurado por papel, não global. Local ganha onde há volume: no worker.</p>
+        <Heading size={isMobile ? 'h3' : 'h2'}>{t('providers.title')}</Heading>
+        <p className="screen__lede">{t('providers.lede')}</p>
       </header>
 
       <div className="roles">
         {roles.map((r) => (
           <div className={`card card--${r.tone} card--shadow role`} key={r.key}>
             <div className="role__head"><span className="role__name">{r.name}</span><span className="role__volume">{r.volume}</span></div>
-            <div className="role__toggle" role="radiogroup" aria-label={`Provedor do papel ${r.name}`}>
+            <div className="role__toggle" role="radiogroup" aria-label={t('providers.role.aria', { role: r.name })}>
               {MODES.map((m) => (
                 <button
-                  key={m.key}
+                  key={m}
                   type="button"
                   role="radio"
-                  aria-checked={r.mode === m.key}
-                  className={`role__mode${r.mode === m.key ? ' role__mode--active' : ''}`}
-                  onClick={() => onPickMode(r.key, m.key)}
+                  aria-checked={r.mode === m}
+                  className={`role__mode${r.mode === m ? ' role__mode--active' : ''}`}
+                  onClick={() => onPickMode(r.key, m)}
                 >
-                  {m.label}
+                  {t(`providers.mode.${m}`)}
                 </button>
               ))}
             </div>
-            <label className="role__field"><span>Modelo</span>
-              <select className="role__select" value={r.model} onChange={(e) => onSetField(r.key, { model: e.target.value })} aria-label={`Modelo do papel ${r.name}`}>
+            <label className="role__field"><span>{t('providers.field.model')}</span>
+              <select className="role__select" value={r.model} onChange={(e) => onSetField(r.key, { model: e.target.value })} aria-label={t('providers.model.aria', { role: r.name })}>
                 {(r.models.includes(r.model) ? r.models : [r.model, ...r.models]).map((m) => (
-                  <option key={m} value={m}>{m === r.model && !r.models.includes(m) ? `${m} (atual)` : m}</option>
+                  <option key={m} value={m}>{m === r.model && !r.models.includes(m) ? t('providers.model.current', { model: m }) : m}</option>
                 ))}
               </select>
             </label>
             {r.mode === 'local' ? (
-              <label className="role__field"><span>Endpoint</span>
-                <input className="role__input" defaultValue={r.endpoint} key={r.endpoint} aria-label={`Endpoint do papel ${r.name}`}
+              <label className="role__field"><span>{t('providers.field.endpoint')}</span>
+                <input className="role__input" defaultValue={r.endpoint} key={r.endpoint} aria-label={t('providers.endpoint.aria', { role: r.name })}
                   onBlur={(e) => { if (shouldSubmitEndpoint(e.target.value, r.endpoint, r.putError)) onSetField(r.key, { endpoint: e.target.value }); }}
                   onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
               </label>
             ) : (
-              <div className="role__field"><span>Endpoint</span><div className="role__box role__box--mono">{r.endpoint}</div></div>
+              <div className="role__field"><span>{t('providers.field.endpoint')}</span><div className="role__box role__box--mono">{r.endpoint}</div></div>
             )}
             {r.error && <div className="role__error" role="alert">{r.error}</div>}
             <button
@@ -92,16 +95,16 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, i
 
       <div className="card card--grey vram">
         <div className="row-between">
-          <Heading size="h4" variant="black">VRAM disputada · {vramTotal}</Heading>
-          <span className="muted-15">KV cache restante: <b>{kvLeft}</b> para {fleetSize} sequências de ~13k tokens</span>
+          <Heading size="h4" variant="black">{t('providers.vram.title', { total: vramTotal })}</Heading>
+          <span className="muted-15">{kvBefore}<b>{kvLeft}</b>{kvAfter}</span>
         </div>
-        <div className="vram__stack" aria-label="Distribuição da VRAM">
-          <div className="vram__seg vram__seg--emu" style={{ width: vramEmuShare }}>Emuladores</div>
-          <div className="vram__seg vram__seg--weights" style={{ width: '59%' }}>Pesos 30B 4-bit · 19 GiB</div>
+        <div className="vram__stack" aria-label={t('providers.vram.aria')}>
+          <div className="vram__seg vram__seg--emu" style={{ width: vramEmuShare }}>{t('providers.vram.emu')}</div>
+          <div className="vram__seg vram__seg--weights" style={{ width: '59%' }}>{t('providers.vram.weights')}</div>
           <div className="vram__seg vram__seg--kv">KV</div>
         </div>
         <span className="vram__floor">
-          Piso de qualidade: 3 erros de tool call numa tarefa → worker escala para nuvem e a tarefa fica marcada como degradada.
+          {t('providers.vram.floor')}
         </span>
       </div>
     </div>

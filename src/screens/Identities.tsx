@@ -4,6 +4,7 @@ import { Heading } from '../components/Heading';
 import { Notice } from '../components/Notice';
 import { Pill } from '../components/Pill';
 import { LIFECYCLE_ORDER } from '../data/identities';
+import { useI18n } from '../i18n/I18nProvider';
 import type { RequestStatus } from '../state/fleetReducer';
 import { lifecycleTone, type IdRow, type RowAction } from '../state/idRows';
 import './Identities.css';
@@ -30,15 +31,16 @@ function DiskBar({ pct }: { readonly pct: number }) {
 type InlineKind = 'login' | 'pin';
 
 function InlineForm({ kind, onSubmit, onCancel }: { readonly kind: InlineKind; readonly onSubmit: (value: string) => void; readonly onCancel: () => void }) {
+  const { t } = useI18n();
   const [handle, setHandle] = useState('');
   const pin = kind === 'pin';
   return (
     <form className="idrow__login" onSubmit={(e) => { e.preventDefault(); onSubmit(handle); }}>
-      <input className="idrow__input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder={pin ? 'PIN do device' : '@conta'}
-        aria-label={pin ? 'PIN de bloqueio do device' : '@ da conta logada'} inputMode={pin ? 'numeric' : undefined} type={pin ? 'password' : 'text'} autoFocus />
+      <input className="idrow__input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder={t(pin ? 'identities.inline.pinPlaceholder' : 'identities.inline.handlePlaceholder')}
+        aria-label={t(pin ? 'identities.inline.pinAria' : 'identities.inline.handleAria')} inputMode={pin ? 'numeric' : undefined} type={pin ? 'password' : 'text'} autoFocus />
       <div className="idrow__login-btns">
-        <Button size="sm" type="submit">Confirmar</Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>Cancelar</Button>
+        <Button size="sm" type="submit">{t('identities.inline.confirm')}</Button>
+        <Button size="sm" variant="ghost" onClick={onCancel}>{t('identities.inline.cancel')}</Button>
       </div>
     </form>
   );
@@ -64,6 +66,7 @@ function RowActions({ row, logging, mobile, onPick, onLogin, onCancel }: RowActi
 }
 
 export function Identities({ rows, isMobile, provisionReq, onProvision, onAction, onLoginDone, onRegisterPin }: IdentitiesProps) {
+  const { t } = useI18n();
   const [inline, setInline] = useState<{ key: string; kind: InlineKind } | null>(null);
   const [newPin, setNewPin] = useState('');
   const pick = (r: IdRow, a: RowAction) => (a.kind === 'login' || a.kind === 'pin' ? setInline({ key: r.key, kind: a.kind }) : onAction(r, a));
@@ -80,25 +83,25 @@ export function Identities({ rows, isMobile, provisionReq, onProvision, onAction
     <div className="screen">
       <header className="screen__header" style={{ alignItems: 'center' }}>
         <div className="screen__title">
-          <Heading size={isMobile ? 'h3' : 'h2'}>Identidades</Heading>
-          <p className="screen__lede" style={{ maxWidth: 420 }}>Cada identidade é um AVD que pertence a uma conta e envelhece com ela.</p>
+          <Heading size={isMobile ? 'h3' : 'h2'}>{t('identities.title')}</Heading>
+          <p className="screen__lede" style={{ maxWidth: 420 }}>{t('identities.lede')}</p>
         </div>
         <form className="ids__provision" onSubmit={(e) => { e.preventDefault(); onProvision(newPin); }}>
-          <input className="idrow__input" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="PIN (opcional)"
-            aria-label="PIN de bloqueio da identidade nova" inputMode="numeric" type="password" />
-          <Button type="submit" disabled={provisionReq.busy}>{provisionReq.busy ? 'Clonando AVD…' : 'Provisionar identidade'}</Button>
+          <input className="idrow__input" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder={t('identities.provision.pinPlaceholder')}
+            aria-label={t('identities.provision.pinAria')} inputMode="numeric" type="password" />
+          <Button type="submit" disabled={provisionReq.busy}>{t(provisionReq.busy ? 'identities.provision.busy' : 'identities.provision.submit')}</Button>
         </form>
       </header>
-      {provisionReq.error && <Notice>Provisionamento falhou: {provisionReq.error}</Notice>}
+      {provisionReq.error && <Notice>{t('identities.provision.failed', { error: provisionReq.error })}</Notice>}
 
       <div className="ids__cycle">
-        <span className="ids__cycle-label">Ciclo:</span>
+        <span className="ids__cycle-label">{t('identities.cycle.label')}</span>
         {LIFECYCLE_ORDER.map((lc) => (
           <Pill key={lc} tone={lc === 'running' ? 'green' : lc === 'banned' ? 'dark' : 'white'}>{lc}</Pill>
         ))}
       </div>
 
-      {rows.length === 0 && <div className="card card--white empty"><span className="empty__title">Nenhuma identidade ainda.</span><span>Provisione a primeira: o daemon clona o AVD-base.</span></div>}
+      {rows.length === 0 && <div className="card card--white empty"><span className="empty__title">{t('identities.empty.title')}</span><span>{t('identities.empty.body')}</span></div>}
 
       {isMobile ? (
         <div className="ids__cards">
@@ -109,10 +112,10 @@ export function Identities({ rows, isMobile, provisionReq, onProvision, onAction
                 <Pill tone={lifecycleTone(r.lc)}>{r.lc}</Pill>
               </div>
               <div className="idcard__grid">
-                <div className="idcard__cell"><span className="idcard__cell-label">App alvo</span><span>{r.app} {r.version}</span></div>
-                <div className="idcard__cell"><span className="idcard__cell-label">Snapshot</span><span>{r.snap}</span></div>
-                <div className="idcard__cell" style={{ gap: 5 }}><span className="idcard__cell-label">Disco · {r.disk}</span><DiskBar pct={r.diskPct} /></div>
-                <div className="idcard__cell"><span className="idcard__cell-label">Portas</span><span className="idrow__ports">{r.ports}</span></div>
+                <div className="idcard__cell"><span className="idcard__cell-label">{t('identities.col.app')}</span><span>{r.app} {r.version}</span></div>
+                <div className="idcard__cell"><span className="idcard__cell-label">{t('identities.col.snapshot')}</span><span>{r.snap}</span></div>
+                <div className="idcard__cell" style={{ gap: 5 }}><span className="idcard__cell-label">{t('identities.card.disk', { disk: r.disk })}</span><DiskBar pct={r.diskPct} /></div>
+                <div className="idcard__cell"><span className="idcard__cell-label">{t('identities.col.ports')}</span><span className="idrow__ports">{r.ports}</span></div>
               </div>
               {actionsOf(r)}
               {r.error && <Notice>{r.error}</Notice>}
@@ -122,7 +125,8 @@ export function Identities({ rows, isMobile, provisionReq, onProvision, onAction
       ) : rows.length > 0 && (
         <div className="card card--white ids__table">
           <div className="idrow idrow--head">
-            <span>Identidade</span><span>Ciclo</span><span>App alvo</span><span>Snapshot</span><span>Disco</span><span>Portas</span><span />
+            <span>{t('identities.col.identity')}</span><span>{t('identities.col.cycle')}</span><span>{t('identities.col.app')}</span>
+            <span>{t('identities.col.snapshot')}</span><span>{t('identities.col.disk')}</span><span>{t('identities.col.ports')}</span><span />
           </div>
           {rows.map((r) => (
             <div className={`idrow idrow--body${r.dimmed ? ' idrow--dimmed' : ''}`} key={r.key}>
