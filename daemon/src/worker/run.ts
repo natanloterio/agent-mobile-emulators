@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { CONFIG } from '../config.js';
 import { setIdentityState, type IdentityRow } from '../db/identities.js';
-import { createGoalAndTask, ledgerHas, ledgerPut, markDegraded, setEarlyStop, setTaskState, writeIntent } from '../db/tasks.js';
+import { createGoalAndTask, createTask, finishGoal, ledgerHas, ledgerPut, markDegraded, setEarlyStop, setTaskState, startTask, writeIntent } from '../db/tasks.js';
 import { providerLabel, readProviderConfig, type ProviderConfig, type ProviderRow } from '../provider/config.js';
 import { isLocalInfraError, ProviderError } from '../provider/errors.js';
 import { buildModel as defaultBuildModel, pricingFor, providerOptionsFor } from '../provider/factory.js';
@@ -12,19 +12,29 @@ import { createQualityFloor } from '../provider/quality.js';
 import { connectMcp } from '../device/mcp.js';
 import { detectPlatformBlock } from '../screen/checks.js';
 import { parseScreen, type ScreenState, type ScreenWindow } from '../screen/parse.js';
+import { createPacer, type Pacer, type PacingConfig } from '../swarm/pacing.js';
 import { buildToolApproval } from './gate.js';
 import { ESCALATION_NOTE, SYSTEM_PROMPT, taskInstruction } from './prompt.js';
 import { isScreenTool, pruneScreens } from './prune.js';
 import { readUsage, recordStep, textOf, type StepLike } from './record.js';
-import { pickWorkerTools } from './tools.js';
+import { ACTION_TOOL, pickWorkerTools } from './tools.js';
+import { humanStopped, settleIdentity } from './stop.js';
 
 export interface RunTaskOpts {
   readonly db: DatabaseSync; readonly identity: IdentityRow; readonly goalText: string; readonly apiKey: string;
   readonly isKilled: () => boolean; readonly onStep: () => void; readonly stepBudget?: number;
   readonly providers?: ProviderConfig;
+  /**
+   * Scheduler (spec inc. 5): objetivo/tarefa já criados e a instrução da fatia desta identidade.
+   * Sem `taskId`, a tarefa é criada aqui (dentro de `goalId`, ou num objetivo próprio que runTask fecha ao terminar).
+   */
+  readonly goalId?: string; readonly taskId?: string; readonly instruction?: string;
+  /** Pacing entre passos e teto de ações/hora (spec §4.3). Ausente = sem pacing (CLI/bench medem o worker cru). */
+  readonly pacing?: PacingConfig;
 }
 export interface RunTaskResult {
-  readonly taskId: string; readonly outcome: 'done' | 'budget' | 'killed' | 'platform-block' | 'infra' | 'failed' | 'quality-floor';
+  /** `interrupted` = pausa ou controle humano no meio (spec inc. 5 §3.2): tarefa volta a todo. */
+  readonly taskId: string; readonly outcome: 'done' | 'budget' | 'killed' | 'interrupted' | 'platform-block' | 'infra' | 'failed' | 'quality-floor';
   readonly costUsd: number; readonly usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number };
   readonly platformBlock: string | null; readonly summary: string;
   readonly degraded: boolean; readonly escalatedAtStep: number | null; readonly provider: string; readonly genMs: number; readonly invalidCalls: number;
@@ -38,13 +48,14 @@ export interface RunTaskDeps {
   readonly escModel?: LanguageModel;
   readonly ollama?: OllamaSupervisor;
   readonly buildModel?: typeof defaultBuildModel;
+  /** Pacer pronto (teste); ausente, é criado a partir de `opts.pacing`. */
+  readonly pacer?: Pacer;
 }
 
 /** Paradas: bloqueio de plataforma, auth do MCP (token rotacionado — retry não resolve) e infra (device/rede). */
 type Halt = { kind: 'platform-block' | 'auth' | 'infra' | 'infra-local'; text: string } | null;
 
 const MAX_SCREEN_PAGES = 5;
-const ACTION_TOOL = /_(click_node|tap_node|scroll|scroll_to_node|press_back|open_app|type_append_text|type_replace_text|type_clear_text|swipe|long_press|press_key)$/;
 
 /** Só erros vindos do MCP/device são classificados; erro benigno de tool (ex.: "Node not found within timeout") fica como tool-error. */
 export function classifyMcpError(e: unknown): Halt {
@@ -115,13 +126,24 @@ function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
   }));
 }
 
+/** Tarefa do scheduler (taskId), tarefa nova num objetivo existente (goalId) ou objetivo+tarefa próprios (assinatura antiga). */
+function openTask(db: DatabaseSync, identityId: string, o: RunTaskOpts): { taskId: string; ownGoalId: string | null } {
+  if (o.taskId) { startTask(db, o.taskId); return { taskId: o.taskId, ownGoalId: null }; }
+  if (o.goalId) return { taskId: createTask(db, o.goalId, identityId, o.instruction ?? o.goalText, 'running'), ownGoalId: null };
+  const { goalId, taskId } = createGoalAndTask(db, identityId, o.instruction ?? o.goalText);
+  return { taskId, ownGoalId: goalId };
+}
+
 export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise<RunTaskResult> {
   const deps = { connect: depsIn.connect ?? connectMcp, generate: depsIn.generate ?? generateText, buildModel: depsIn.buildModel ?? defaultBuildModel, ollama: depsIn.ollama ?? createOllamaSupervisor() };
   const { db, identity } = o;
   const budget = o.stepBudget ?? Number(process.env.ENXAME_STEP_BUDGET ?? CONFIG.worker.stepBudget);
   const cfg = o.providers ?? readProviderConfig(db);
-  const { taskId } = createGoalAndTask(db, identity.id, o.goalText);
+  const { taskId, ownGoalId } = openTask(db, identity.id, o);
   setIdentityState(db, identity.id, 'running', { lastError: null });
+  // Parada por kill switch OU por pausa/controle humano desta identidade (lido do banco a cada passo).
+  const stopped = () => o.isKilled() || humanStopped(db, identity.id);
+  const pacer = depsIn.pacer ?? (o.pacing ? createPacer(db, identity.id, o.pacing, { shouldStop: stopped }) : null);
 
   let lastScreen: ScreenState | null = null; let halt: Halt = null; let costUsd = 0; let genMsTotal = 0; let lastGenMs: number | null = null;
   let degraded = false; let escalatedAtStep: number | null = null; let stepsUsed = 0;
@@ -131,12 +153,16 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
   const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
   const finish = (outcome: RunTaskResult['outcome'], summary: string): RunTaskResult => {
     const h = halt as Halt;
-    // infra-local (Ollama) não é problema do device: identidade volta a idle e a tarefa fica para repetir (spec §7).
-    const idState = h?.kind === 'platform-block' ? 'needs-human' : h && h.kind !== 'infra-local' ? 'offline' : 'idle';
-    setIdentityState(db, identity.id, idState, { lastError: h?.text ?? (outcome === 'failed' || outcome === 'quality-floor' ? summary.slice(0, 200) : null) });
+    if (outcome === 'interrupted') settleIdentity(db, identity.id); // o humano manda: flags e estado dele ficam
+    else {
+      // infra-local (Ollama) não é problema do device: identidade volta a idle e a tarefa fica para repetir (spec §7).
+      const idState = h?.kind === 'platform-block' ? 'needs-human' : h && h.kind !== 'infra-local' ? 'offline' : 'idle';
+      setIdentityState(db, identity.id, idState, { lastError: h?.text ?? (outcome === 'failed' || outcome === 'quality-floor' ? summary.slice(0, 200) : null) });
+    }
     const taskState = outcome === 'platform-block' ? 'needs-human' : outcome === 'failed' || outcome === 'quality-floor' ? 'failed'
-      : outcome === 'infra' ? (h?.kind === 'auth' ? 'failed' : 'todo') : 'done';
+      : outcome === 'infra' ? (h?.kind === 'auth' ? 'failed' : 'todo') : outcome === 'interrupted' ? 'todo' : 'done';
     setTaskState(db, taskId, taskState);
+    if (ownGoalId) finishGoal(db, ownGoalId);
     const earlyStopRemaining = outcome === 'done' ? Math.max(0, budget - stepsUsed) : 0;
     setEarlyStop(db, taskId, earlyStopRemaining);
     return { taskId, outcome, costUsd, usage, platformBlock: h?.kind === 'platform-block' ? h.text : null, summary,
@@ -154,7 +180,11 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       providerOptions: providerOptionsFor(row) as never,
       toolApproval: buildToolApproval(slug, () => lastScreen, 'read-only') as never,
       stopWhen: [stepCountIs(steps), stopIfHalted, () => floor.tripped() && row.role === 'worker'],
-      prepareStep: ({ messages: m }) => ({ messages: pruneScreens(m, CONFIG.worker.keepScreens) }),
+      // Pacing antes de cada passo (spec §4.3). Parada durante a espera: o passo roda sem tools (não age) e o stopWhen encerra.
+      prepareStep: async ({ messages: m }) => {
+        const go = pacer ? await pacer.beforeStep() : 'go';
+        return { messages: pruneScreens(m, CONFIG.worker.keepScreens), ...(go === 'stop' ? { activeTools: [] } : {}) };
+      },
       onLanguageModelCallEnd: (e) => { lastGenMs = Math.round((e as { performance?: { responseTimeMs?: number } }).performance?.responseTimeMs ?? 0); },
       onStepFinish: (step) => {
         stepsUsed += 1;
@@ -186,13 +216,13 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       execute: async (i) => { const already = ledgerHas(db, identity.id, i.item_key); if (!already) ledgerPut(db, identity.id, i.item_key, 'comment', `@${i.author}: ${i.excerpt} → rascunho: ${i.draft_reply}`, taskId); return { already }; },
     });
     const tools: ToolSet = { ...mcpTools, ledger_record: ledgerTool };
-    const stopIfHalted: StopCondition<ToolSet> = () => halt !== null || o.isKilled();
-    const messages: ModelMessage[] = [{ role: 'user', content: taskInstruction(o.goalText) }];
+    const stopIfHalted: StopCondition<ToolSet> = () => halt !== null || stopped();
+    const messages: ModelMessage[] = [{ role: 'user', content: taskInstruction(o.instruction ?? o.goalText) }];
 
     let result = await segment(cfg.worker, model, tools, messages, stopIfHalted, slug, budget);
 
     const remaining = budget - stepsUsed;
-    if (floor.tripped() && !halt && !o.isKilled() && remaining > 0) {
+    if (floor.tripped() && !halt && !stopped() && remaining > 0) {
       const canEscalate = cfg.esc.mode === 'nuvem' && !!o.apiKey;
       if (!canEscalate) return finish('quality-floor', `piso de qualidade: ${floor.count()} tool calls inválidas com ${providerLabel(cfg.worker)}; sem escalonamento na nuvem`);
       degraded = true; escalatedAtStep = stepsUsed; markDegraded(db, taskId, stepsUsed);
@@ -206,6 +236,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     if (h?.kind === 'platform-block') return finish('platform-block', result.text);
     if (h) return finish('infra', result.text);
     if (o.isKilled()) return finish('killed', result.text);
+    if (humanStopped(db, identity.id)) return finish('interrupted', result.text);
     return finish(stepsUsed >= budget ? 'budget' : 'done', result.text);
   } catch (e) {
     // Erro fora das tools (ex.: chave da Anthropic inválida) é falha da tarefa, não do device.

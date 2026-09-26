@@ -8,6 +8,35 @@ export function createGoalAndTask(db: DatabaseSync, identityId: string, text: st
   return { goalId, taskId };
 }
 
+export type GoalPattern = 'fan-out' | 'sharding';
+export type GoalState = 'running' | 'done' | 'partial' | 'failed';
+
+/** Objetivo do scheduler (spec inc. 5 §3.3): padrão, justificativa e o plano inteiro em JSON. */
+export function createGoal(db: DatabaseSync, g: { text: string; pattern: GoalPattern; rationale: string; planJson: string }): string {
+  const goalId = randomUUID();
+  db.prepare("insert into goal (id, text, pattern, state, rationale, plan_json) values (?, ?, ?, 'running', ?, ?)").run(goalId, g.text, g.pattern, g.rationale, g.planJson);
+  return goalId;
+}
+
+export function createTask(db: DatabaseSync, goalId: string, identityId: string, instruction: string, state: 'todo' | 'running' = 'todo'): string {
+  const taskId = randomUUID();
+  db.prepare('insert into task (id, goal_id, identity_id, instruction, state, attempts) values (?, ?, ?, ?, ?, ?)').run(taskId, goalId, identityId, instruction, state, state === 'running' ? 1 : 0);
+  return taskId;
+}
+
+/** Tarefa criada pelo scheduler ('todo') começa: vira 'running' e conta a tentativa. */
+export function startTask(db: DatabaseSync, taskId: string): void {
+  db.prepare("update task set state='running', attempts=attempts+1 where id=?").run(taskId);
+}
+
+/** Estado final do objetivo pelas tarefas: todas done → done; alguma done → partial; senão failed. Grava finished_at. */
+export function finishGoal(db: DatabaseSync, goalId: string): GoalState {
+  const c = db.prepare("select count(*) as total, coalesce(sum(state='done'), 0) as done from task where goal_id=?").get(goalId) as { total: number; done: number };
+  const state: GoalState = c.total > 0 && c.done === c.total ? 'done' : c.done > 0 ? 'partial' : 'failed';
+  db.prepare("update goal set state=?, finished_at=datetime('now') where id=?").run(state, goalId);
+  return state;
+}
+
 export function setTaskState(db: DatabaseSync, taskId: string, state: 'todo' | 'running' | 'done' | 'failed' | 'needs-human'): void {
   db.prepare("update task set state=?, finished_at=case when ? in ('done','failed','needs-human') then datetime('now') else finished_at end where id=?").run(state, state, taskId);
 }
