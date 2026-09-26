@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Heading } from '../components/Heading';
 import type { RoleVM } from '../state/selectors';
 import type { ProviderMode, RoleKey } from '../types/fleet';
@@ -11,6 +12,8 @@ interface ProvidersProps {
   readonly isMobile: boolean;
   readonly onPickMode: (role: RoleKey, mode: ProviderMode) => void;
   readonly onTest: (role: RoleKey) => void;
+  readonly onSetField: (role: RoleKey, patch: { model?: string; endpoint?: string }) => void;
+  readonly onLoadModels: (role: RoleKey) => void;
 }
 
 const MODES: readonly { readonly key: ProviderMode; readonly label: string }[] = [
@@ -18,7 +21,11 @@ const MODES: readonly { readonly key: ProviderMode; readonly label: string }[] =
   { key: 'local', label: 'Local' },
 ];
 
-export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, isMobile, onPickMode, onTest }: ProvidersProps) {
+export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, isMobile, onPickMode, onTest, onSetField, onLoadModels }: ProvidersProps) {
+  // Recarrega a lista de modelos quando a tela abre e quando algum papel troca de modo.
+  const modeKey = roles.map((r) => `${r.key}:${r.mode}`).join('|');
+  useEffect(() => { roles.forEach((r) => onLoadModels(r.key)); }, [modeKey]);
+
   return (
     <div className="screen">
       <header className="screen__title">
@@ -44,8 +51,23 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, isMobile, on
                 </button>
               ))}
             </div>
-            <div className="role__field"><span>Modelo</span><div className="role__box">{r.model}</div></div>
-            <div className="role__field"><span>Endpoint</span><div className="role__box role__box--mono">{r.endpoint}</div></div>
+            <label className="role__field"><span>Modelo</span>
+              <select className="role__select" value={r.model} onChange={(e) => onSetField(r.key, { model: e.target.value })} aria-label={`Modelo do papel ${r.name}`}>
+                {(r.models.includes(r.model) ? r.models : [r.model, ...r.models]).map((m) => (
+                  <option key={m} value={m}>{m === r.model && !r.models.includes(m) ? `${m} (atual)` : m}</option>
+                ))}
+              </select>
+            </label>
+            {r.mode === 'local' ? (
+              <label className="role__field"><span>Endpoint</span>
+                <input className="role__input" defaultValue={r.endpoint} key={r.endpoint} aria-label={`Endpoint do papel ${r.name}`}
+                  onBlur={(e) => { if (e.target.value !== r.endpoint) onSetField(r.key, { endpoint: e.target.value }); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
+              </label>
+            ) : (
+              <div className="role__field"><span>Endpoint</span><div className="role__box role__box--mono">{r.endpoint}</div></div>
+            )}
+            {r.error && <div className="role__error" role="alert">{r.error}</div>}
             <button
               type="button"
               className={`role__test${r.key === 'esc' ? ' role__test--green' : ''}`}

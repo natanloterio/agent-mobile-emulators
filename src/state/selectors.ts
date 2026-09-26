@@ -46,7 +46,7 @@ export function decorateTile(d: Identity, index: number, killed: boolean): TileV
     pillTone: STATE_TONE[effState],
     pillGreenBorder: needs,
     cardTone: needs ? 'dark' : d.state === 'running' ? 'grey' : 'white',
-    costFmt: usd(d.cost),
+    costFmt: d.genMs ? `${usd(d.cost)} · ${(d.genMs / 1000).toFixed(1).replace('.', ',')} s GPU` : usd(d.cost),
     app: TARGET_APP,
     version: TARGET_APP_VERSION,
     needs,
@@ -109,7 +109,7 @@ export function selectLog(sel: TileVM): readonly LogRow[] {
 
 export function selectSelStats(sel: TileVM): readonly Stat[] {
   return [
-    { value: `${sel.steps}/${sel.budget}`, label: 'passos do orçamento' },
+    { value: sel.earlyStopRemaining ? `${sel.steps}/${sel.budget} · ${sel.earlyStopRemaining} sobrando` : `${sel.steps}/${sel.budget}`, label: 'passos do orçamento' },
     { value: String(Math.max(0, Math.floor(sel.steps / 3.4))), label: 'itens no ledger' },
     { value: usd(sel.cost), label: 'custo da tarefa' },
     { value: '1,4k', label: 'tokens de tools (11)' },
@@ -252,19 +252,24 @@ export interface RoleVM {
   readonly testLabel: string;
   readonly testing: boolean;
   readonly result: readonly TestResultRow[] | null;
+  readonly models: readonly string[];
+  readonly error: string | null;
 }
 
 export function selectRoles(s: FleetState): readonly RoleVM[] {
   return ROLES.map((r) => {
     const mode = s.modes[r.key];
     const stage = s.tests[r.key];
+    const model = modelFor(r.key, mode);
     return {
       key: r.key,
       name: r.name,
       volume: r.volume,
       tone: r.tone,
       mode,
-      model: modelFor(r.key, mode),
+      model,
+      models: s.providerModels[r.key] ?? [model],
+      error: s.providerErrors[r.key] ?? null,
       endpoint: endpointFor(mode),
       testLabel: stage === 'run' ? 'Rodando tool-call canônico em conta1…' : 'Testar conexão',
       testing: stage === 'run',

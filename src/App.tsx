@@ -109,6 +109,8 @@ export function App() {
             isMobile={isMobile}
             onPickMode={actions.pickMode}
             onTest={actions.testConnection}
+            onSetField={actions.setProviderField}
+            onLoadModels={actions.loadProviderModels}
           />
         );
     }

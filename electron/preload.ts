@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('enxame', {
   kill: () => ipcRenderer.invoke('enxame:kill'),
   setProvider: (role: string, patch: unknown) => ipcRenderer.invoke('enxame:setProvider', role, patch),
   testProvider: (role: string) => ipcRenderer.invoke('enxame:testProvider', role),
+  getProviderModels: (role: string) => ipcRenderer.invoke('enxame:getProviderModels', role),
 });

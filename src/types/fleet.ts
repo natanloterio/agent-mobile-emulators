@@ -26,6 +26,9 @@ export interface Identity {
   readonly budget: number;
   readonly cost: number;
   readonly error: string;
+  readonly genMs?: number;
+  readonly degraded?: boolean;
+  readonly earlyStopRemaining?: number;
 }
 
 /** Identidade fora da frota ativa (banida, em provisionamento). */

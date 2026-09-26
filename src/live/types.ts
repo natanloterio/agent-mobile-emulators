@@ -2,7 +2,7 @@ export interface LiveToolRow { readonly idx: number; readonly tool: string; read
 export interface LiveIdentity {
   readonly id: string; readonly name: string; readonly handle: string; readonly state: string; readonly task: string;
   readonly steps: number; readonly budget: number; readonly costUsd: number; readonly error: string; readonly lastTools: readonly LiveToolRow[];
-  readonly degraded?: boolean; readonly genMs?: number;
+  readonly degraded?: boolean; readonly genMs?: number; readonly earlyStopRemaining?: number;
 }
 export type LiveRoleKey = 'lider' | 'worker' | 'esc';
 export interface LiveProviderTest { readonly role: LiveRoleKey; readonly model: string; readonly latencyMs: number; readonly tokensPerSec: number | null; readonly argsValid: boolean; readonly warning: string | null; readonly error: string | null; readonly at: string }
@@ -14,4 +14,5 @@ export interface EnxameBridge {
   readonly kill: () => Promise<void>;
   readonly setProvider: (role: LiveRoleKey, patch: { mode?: 'nuvem' | 'local'; model?: string; endpoint?: string }) => Promise<void>;
   readonly testProvider: (role: LiveRoleKey) => Promise<LiveProviderTest>;
+  readonly getProviderModels: (role: LiveRoleKey) => Promise<{ source: string; models: readonly string[]; error: string | null }>;
 }

@@ -16,6 +16,8 @@ export interface FleetState {
   readonly tests: Readonly<Record<RoleKey, TestStage>>;
   readonly modes: Readonly<Record<RoleKey, ProviderMode>>;
   readonly tick: number;
+  readonly providerErrors: Partial<Record<RoleKey, string>>;
+  readonly providerModels: Partial<Record<RoleKey, readonly string[]>>;
 }
 
 export type FleetAction =
@@ -35,6 +37,8 @@ export type FleetAction =
   | { type: 'pickMode'; role: RoleKey; mode: ProviderMode }
   | { type: 'testStart'; role: RoleKey }
   | { type: 'testDone'; role: RoleKey }
+  | { type: 'providerError'; role: RoleKey; message: string | null }
+  | { type: 'providerModels'; role: RoleKey; models: readonly string[] }
   | { type: 'provision' }
   | { type: 'extraAction'; index: number };
 
@@ -51,6 +55,8 @@ export function createInitialState(screen: Screen = 'cockpit'): FleetState {
   tests: { lider: null, worker: null, esc: null },
   modes: DEFAULT_MODES,
   tick: 0,
+  providerErrors: {},
+  providerModels: {},
   };
 }
 
@@ -139,6 +145,12 @@ export function fleetReducer(s: FleetState, a: FleetAction): FleetState {
       return { ...s, tests: { ...s.tests, [a.role]: 'run' } };
     case 'testDone':
       return s.tests[a.role] === 'run' ? { ...s, tests: { ...s.tests, [a.role]: 'done' } } : s;
+    case 'providerError': {
+      const { [a.role]: _drop, ...rest } = s.providerErrors;
+      return { ...s, providerErrors: a.message ? { ...s.providerErrors, [a.role]: a.message } : rest };
+    }
+    case 'providerModels':
+      return { ...s, providerModels: { ...s.providerModels, [a.role]: a.models } };
     case 'provision':
       return { ...s, extra: [...s.extra, newProvisionedIdentity(s.extra.length)] };
     case 'extraAction':

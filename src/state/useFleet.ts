@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { DEFAULT_GOAL_TEXT } from '../data/goals';
 import type { ProviderMode, RoleKey, Screen } from '../types/fleet';
 import { createInitialState, fleetReducer, type FleetState } from './fleetReducer';
@@ -7,6 +7,9 @@ const TICK_MS = 2600;
 const DECOMPOSE_MS = 1200;
 const TEST_MS = 1400;
 const SCREENS: readonly Screen[] = ['cockpit', 'device', 'new', 'report', 'ids', 'prov'];
+
+/** O bridge lança `Error('/providers/x → 409: {"error":"…"}')`; a tela mostra só a linha legível. */
+const bridgeMessage = (e: Error) => e.message.replace(/^.*→ \d+: /, '').replace(/^\{"error":"|"\}$/g, '');
 
 /** `?screen=report` abre direto numa tela. Valor desconhecido cai no cockpit. */
 function initialScreenFromUrl(): Screen {
@@ -28,6 +31,8 @@ export interface FleetActions {
   readonly launch: (fleetSize: number) => void;
   readonly pickMode: (role: RoleKey, mode: ProviderMode) => void;
   readonly testConnection: (role: RoleKey) => void;
+  readonly setProviderField: (role: RoleKey, patch: { model?: string; endpoint?: string }) => void;
+  readonly loadProviderModels: (role: RoleKey) => void;
   readonly provision: () => void;
   readonly extraAction: (index: number) => void;
 }
@@ -62,6 +67,15 @@ export function useFleet(): UseFleet {
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [runningKey]);
 
+  // Sem bridge (Vite no browser) não há lista real: o seletor oferece só o modelo atual.
+  const loadProviderModels = useCallback((role: RoleKey) => {
+    const get = window.enxame?.getProviderModels; if (!get) return;
+    get(role).then((r) => {
+      dispatch({ type: 'providerModels', role, models: r.models });
+      if (r.error) dispatch({ type: 'providerError', role, message: r.error });
+    }).catch(() => undefined);
+  }, []);
+
   const actions = useMemo<FleetActions>(
     () => ({
       go: (screen) => dispatch({ type: 'go', screen }),
@@ -79,9 +93,20 @@ export function useFleet(): UseFleet {
       pickMode: (role, mode) => {
         const set = window.enxame?.setProvider;
         if (!set) { dispatch({ type: 'pickMode', role, mode }); return; }
-        // 409 (frota ocupada) ou 400 não mudam a tela: o snapshot que o daemon emite após o PUT é a verdade.
-        set(role, { mode }).then(() => dispatch({ type: 'pickMode', role, mode })).catch(() => undefined);
+        // 409 (frota ocupada) ou 400 não mudam o modo: o erro aparece no card do papel.
+        set(role, { mode }).then(() => {
+          dispatch({ type: 'pickMode', role, mode });
+          dispatch({ type: 'providerError', role, message: null });
+          loadProviderModels(role);
+        }).catch((e: Error) => dispatch({ type: 'providerError', role, message: bridgeMessage(e) }));
       },
+      setProviderField: (role, patch) => {
+        const set = window.enxame?.setProvider; if (!set) return;
+        set(role, patch)
+          .then(() => dispatch({ type: 'providerError', role, message: null }))
+          .catch((e: Error) => dispatch({ type: 'providerError', role, message: bridgeMessage(e) }));
+      },
+      loadProviderModels,
       testConnection: (role) => {
         dispatch({ type: 'testStart', role });
         const test = window.enxame?.testProvider;
@@ -91,7 +116,7 @@ export function useFleet(): UseFleet {
       provision: () => dispatch({ type: 'provision' }),
       extraAction: (index) => dispatch({ type: 'extraAction', index }),
     }),
-    [],
+    [loadProviderModels],
   );
 
   return { state, actions };

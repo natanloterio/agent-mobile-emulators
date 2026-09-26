@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IDENTITIES } from '../data/identities';
-import { mergeLive } from './merge';
+import { liveLogFor, mergeLive } from './merge';
 
 const live = {
   killed: false, updatedAt: 'x',
@@ -23,13 +23,25 @@ describe('mergeLive', () => {
   });
 });
 
+describe('mergeLive — incremento 3', () => {
+  it('aplica degraded, genMs e earlyStopRemaining na identidade viva e o sufixo na task', () => {
+    const out = mergeLive(IDENTITIES, { ...live, identities: [{ ...live.identities[0], degraded: true, genMs: 33900, earlyStopRemaining: 13 }] });
+    expect(out[0]).toMatchObject({ degraded: true, genMs: 33900, earlyStopRemaining: 13 });
+    expect(out[0].task).toMatch(/· degradada$/);
+  });
+  it('liveLogFor mostra o provedor curto por linha', () => {
+    const rows = liveLogFor({ ...live, identities: [{ ...live.identities[0], lastTools: [{ idx: 1, tool: 't', excerpt: 'x', tokens: 1000, gate: false, provider: 'local:gpt-oss:20b' }] }] }, 'conta1');
+    expect(rows?.[0].desc).toMatch(/^\[local\] /);
+  });
+});
+
 import { liveRoles } from './merge';
 import type { RoleVM } from '../state/selectors';
 
 const roles: readonly RoleVM[] = [
-  { key: 'lider', name: 'Líder', volume: 'v', tone: 'grey', mode: 'nuvem', model: 'Claude Sonnet', endpoint: 'api.anthropic.com', testLabel: 'Testar conexão', testing: false, result: null },
-  { key: 'worker', name: 'Worker', volume: 'v', tone: 'green', mode: 'local', model: 'mock', endpoint: 'mock', testLabel: 'Testar conexão', testing: false, result: null },
-  { key: 'esc', name: 'Esc', volume: 'v', tone: 'dark', mode: 'nuvem', model: 'mock', endpoint: 'mock', testLabel: 'Testar conexão', testing: false, result: null },
+  { key: 'lider', name: 'Líder', volume: 'v', tone: 'grey', mode: 'nuvem', model: 'Claude Sonnet', endpoint: 'api.anthropic.com', testLabel: 'Testar conexão', testing: false, result: null, models: [], error: null },
+  { key: 'worker', name: 'Worker', volume: 'v', tone: 'green', mode: 'local', model: 'mock', endpoint: 'mock', testLabel: 'Testar conexão', testing: false, result: null, models: [], error: null },
+  { key: 'esc', name: 'Esc', volume: 'v', tone: 'dark', mode: 'nuvem', model: 'mock', endpoint: 'mock', testLabel: 'Testar conexão', testing: false, result: null, models: [], error: null },
 ];
 const snap = { ...live, providers: {
   lider: { role: 'lider', mode: 'nuvem', model: 'claude-sonnet-5', endpoint: 'anthropic', lastTest: null },
