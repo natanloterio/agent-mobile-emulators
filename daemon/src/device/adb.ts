@@ -53,6 +53,10 @@ export interface Adb {
   broadcastConfigure(serial: string, extras: Record<string, string | number | boolean>): Promise<void>;
   startTrampoline(serial: string, action: 'start' | 'stop'): Promise<void>;
   screencap(serial: string): Promise<Buffer>;
+  /** Console do emulador via `adb emu` (snapshot save/load, kill). Resposta `KO:` vira AdbError mesmo com código 0. */
+  emu(serial: string, args: readonly string[]): Promise<string>;
+  /** `pm trim-caches 999G`: libera o cache dos apps antes do re-baseline (spec inc. 5 §3.2). */
+  trimCaches(serial: string): Promise<void>;
 }
 
 export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: Spawn; adbPath?: string; serverPort?: number } = {}): Adb {
@@ -97,5 +101,12 @@ export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: 
     },
     startTrampoline: async (serial, action) => { await shell(serial, ['am', 'start', '-n', `${MCP_PKG}/${TRAMPOLINE}`, '--es', 'action', action]); },
     screencap: (serial) => runBuffer(['-s', serial, 'exec-out', 'screencap', '-p']),
+    emu: async (serial, args) => {
+      const out = await run(['-s', serial, 'emu', ...args]);
+      const ko = /^KO:?\s*(.*)$/m.exec(out);
+      if (ko) throw new AdbError('command', `adb emu ${args.join(' ')}: ${ko[1] || 'KO'}`);
+      return out;
+    },
+    trimCaches: async (serial) => { await shell(serial, ['pm', 'trim-caches', '999G']); },
   };
 }

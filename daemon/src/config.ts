@@ -27,6 +27,13 @@ export const CONFIG = {
   swarm: { staggerMs: 8000, jitterMs: 3000, stepDelayMs: 1500, stepJitterMs: 1000, maxActionsPerHour: 120 },
   /** Ciclo de vida (spec inc. 5 §2): snapshot mais velho que isto exige confirmação humana para restaurar. */
   identity: { restoreUnsafeDays: 14 },
+  /** Provisionamento, boot, disco e snapshot (spec inc. 5 §2). */
+  avd: {
+    home: process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd'),
+    base: 'mcp_test_playstore',
+    emulatorPath: '/home/loterio/Android/Sdk/emulator/emulator',
+    bootTimeoutMs: 180_000, diskCacheMs: 60_000, snapshotName: 'enxame',
+  },
   /** Miniatura ao vivo (spec inc. 4): captura por identidade, só com alguém assistindo. */
   screen: { intervalMs: 500, retryMs: 5000 },
   /** scrcpy-server empacotado (spec inc. 4 §4.1). O caminho vale a partir de `daemon/src` (vitest) e de `dist-daemon` (build). */

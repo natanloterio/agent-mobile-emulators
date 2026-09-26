@@ -107,3 +107,24 @@ describe('adb — shell genérico (incremento 5)', () => {
     await expect(createAdb({ exec }).shell('emulator-5554', ['input', 'tap', '1', '2'])).rejects.toMatchObject({ kind: 'command', message: 'error: closed' });
   });
 });
+
+describe('adb — console do emulador (incremento 5)', () => {
+  it('emu monta -s <serial> emu <args> e devolve a saída', async () => {
+    const { exec, calls } = fakeExec({ 'snapshot save': { stdout: 'OK\r\n' } });
+    expect(await createAdb({ exec }).emu('emulator-5556', ['avd', 'snapshot', 'save', 'enxame'])).toBe('OK');
+    expect(calls[0]).toEqual(['-s', 'emulator-5556', 'emu', 'avd', 'snapshot', 'save', 'enxame']);
+  });
+  it('KO: com código 0 vira AdbError command com o motivo', async () => {
+    const { exec } = fakeExec({ 'snapshot load': { stdout: 'KO: snapshot enxame not found\n' } });
+    await expect(createAdb({ exec }).emu('emulator-5556', ['avd', 'snapshot', 'load', 'enxame'])).rejects.toMatchObject({ kind: 'command', message: expect.stringContaining('snapshot enxame not found') });
+  });
+  it('device ausente no emu → device-missing', async () => {
+    const { exec } = fakeExec({ emu: { code: 1, stderr: "adb: device 'emulator-5556' not found" } });
+    await expect(createAdb({ exec }).emu('emulator-5556', ['kill'])).rejects.toMatchObject({ kind: 'device-missing' });
+  });
+  it('trimCaches roda pm trim-caches 999G', async () => {
+    const { exec, calls } = fakeExec({});
+    await createAdb({ exec }).trimCaches('emulator-5556');
+    expect(calls[0]).toEqual(['-s', 'emulator-5556', 'shell', 'pm', 'trim-caches', '999G']);
+  });
+});

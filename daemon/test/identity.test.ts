@@ -15,7 +15,7 @@ const adbSpy = () => {
     shellSpawn: () => ({ pid: 1, kill: () => true, on: () => undefined }), shell: async () => '',
     broadcastConfigure: async (_s, e) => { calls.push(`configure ${Object.keys(e).sort().join(',')}`); },
     startTrampoline: async (_s, a) => { calls.push(`trampoline ${a}`); },
-    screencap: async () => Buffer.alloc(0),
+    screencap: async () => Buffer.alloc(0), emu: async () => 'OK', trimCaches: async () => undefined,
   };
   return { adb, calls };
 };
