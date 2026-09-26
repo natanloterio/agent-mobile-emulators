@@ -30,20 +30,24 @@ export function createScreenCapture(deps: ScreenDeps): ScreenCapture {
   let active = false;
   let generation = 0;
 
-  const captureOnce = async (t: ScreenTarget): Promise<number> => {
+  const captureOnce = async (t: ScreenTarget, gen: number): Promise<number> => {
+    let png: Buffer;
     try {
-      const png = await deps.adb.screencap(t.serial);
-      const frame: Frame = { id: t.id, at: now().toISOString(), png: png.toString('base64') };
-      frames.set(t.id, frame);
-      for (const cb of listeners) cb(frame);
-      return intervalMs;
+      png = await deps.adb.screencap(t.serial);
     } catch { return retryMs; } // device ausente ou adb falhou: mantém o último quadro
+    if (gen !== generation) return intervalMs; // stop()/start() ocorreu com a captura em voo: descarta o quadro atrasado
+    const frame: Frame = { id: t.id, at: now().toISOString(), png: png.toString('base64') };
+    frames.set(t.id, frame);
+    for (const cb of listeners) {
+      try { cb(frame); } catch (e) { console.error('[screen] listener falhou:', e); }
+    }
+    return intervalMs;
   };
 
   const loop = async (t: ScreenTarget, gen: number): Promise<void> => {
     while (gen === generation) {
       if (!active) { await sleep(IDLE_POLL_MS); continue; }
-      const wait = await captureOnce(t);
+      const wait = await captureOnce(t, gen);
       if (gen !== generation) return;
       await sleep(wait);
     }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AdbError } from '../src/device/adb.js';
 import { createScreenCapture, type Frame } from '../src/device/screen.js';
 
@@ -49,6 +49,37 @@ describe('createScreenCapture', () => {
     const n = calls.length;
     cap.start([{ id: 'B', serial: 'b' }]); await c.tick(1);
     expect(calls.slice(n)).toEqual(['b']); expect(cap.last('A')).toBeNull();
+    cap.stop();
+  });
+  it('descarta captura que resolve depois de stop() (generation obsoleta)', async () => {
+    const c = clock(); const frames: Frame[] = [];
+    let resolveCap: (b: Buffer) => void = () => {};
+    const cap = createScreenCapture({ adb: { screencap: () => new Promise<Buffer>((r) => { resolveCap = r; }) }, sleep: c.sleep });
+    cap.onFrame((f) => frames.push(f));
+    cap.setActive(true);
+    cap.start([{ id: 'A', serial: 'a' }]);
+    await new Promise((r) => setImmediate(r));
+    cap.stop();
+    resolveCap(png(1));
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    expect(cap.last('A')).toBeNull();
+    expect(frames).toEqual([]);
+  });
+  it('listener que lança não é confundido com falha de captura; outros listeners seguem recebendo', async () => {
+    const c = clock(); const received: Frame[] = [];
+    const cap = createScreenCapture({ adb: { screencap: async () => png(1) }, sleep: c.sleep, intervalMs: 500, retryMs: 5000 });
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    cap.onFrame(() => { throw new Error('boom'); });
+    cap.onFrame((f) => received.push(f));
+    cap.setActive(true);
+    cap.start([{ id: 'A', serial: 'a' }]);
+    await c.tick(1);
+    expect(received).toHaveLength(1);
+    expect(received[0]?.id).toBe('A');
+    expect(c.waits[0]?.ms).toBe(500);
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
     cap.stop();
   });
 });
