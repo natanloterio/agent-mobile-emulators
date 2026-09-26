@@ -1,14 +1,19 @@
 import http from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
+import { ProviderPatch, readProviderConfig, ROLE_KEYS, updateProvider, type RoleKey } from '../provider/config.js';
+import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import { buildSnapshot } from './snapshot.js';
 import { attachWs } from './ws.js';
 
 const GoalBody = z.object({ text: z.string().min(3).max(2000) });
+const PROVIDERS_ROUTE = /^\/providers(?:\/([a-z]+))?(\/test)?$/;
+const isRole = (x: string): x is RoleKey => (ROLE_KEYS as readonly string[]).includes(x);
 
 export interface ServerOpts {
   readonly db: DatabaseSync; readonly port?: number; readonly token: string;
   readonly onGoal: (text: string) => Promise<void>; readonly onKill: () => void;
+  readonly onProviderTest: (role: RoleKey) => Promise<ProviderTest>;
 }
 
 function readJson(req: http.IncomingMessage): Promise<unknown> {
@@ -35,6 +40,25 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
     }
     if (req.method === 'POST' && url.pathname === '/kill') { killed = true; o.onKill(); return send(res, 200, { killed: true }); }
     if (req.method === 'POST' && url.pathname === '/resume') { killed = false; return send(res, 200, { killed: false }); }
+    const prov = PROVIDERS_ROUTE.exec(url.pathname);
+    if (prov) {
+      const [, role, isTest] = prov;
+      if (req.method === 'GET' && !role) return send(res, 200, { config: readProviderConfig(o.db), tests: lastProviderTests(o.db) });
+      if (!role || !isRole(role)) return send(res, 404, { error: 'papel desconhecido' });
+      // Trocar modelo no meio de uma conversa muda prefixo e comportamento; teste e tarefa disputam o mesmo device.
+      if (inFlight) return send(res, 409, { error: 'objetivo ou teste em execução; troca de provedor só com a frota parada' });
+      if (req.method === 'PUT' && !isTest) {
+        const parsed = ProviderPatch.safeParse(await readJson(req));
+        if (!parsed.success) return send(res, 400, { error: parsed.error.issues.map((i) => i.message) });
+        return send(res, 200, updateProvider(o.db, role, parsed.data));
+      }
+      if (req.method === 'POST' && isTest) {
+        inFlight = true;
+        try { return send(res, 200, await o.onProviderTest(role)); }
+        catch (e) { return send(res, 500, { error: String((e as Error).message ?? e) }); }
+        finally { inFlight = false; }
+      }
+    }
     return send(res, 404, { error: 'not found' });
   });
   const ws = attachWs(server, o.token, () => buildSnapshot(o.db, killed));

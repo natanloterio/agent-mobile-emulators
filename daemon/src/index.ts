@@ -5,6 +5,9 @@ import { createAdb } from './device/adb.js';
 import { openDb } from './db/open.js';
 import { getIdentity, upsertIdentity } from './db/identities.js';
 import { ensureIdentityReady } from './fleet/identity.js';
+import { readProviderConfig } from './provider/config.js';
+import { createOllamaSupervisor } from './provider/ollama.js';
+import { testProvider } from './provider/probe.js';
 import { startServer } from './server/api.js';
 import { runTask } from './worker/run.js';
 
@@ -12,6 +15,10 @@ const env = loadEnv();
 mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath);
 const adb = createAdb();
+// Supervisor do Ollama: só mata o processo que ele mesmo subiu (spec §4.3).
+const ollama = createOllamaSupervisor();
+for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { ollama.stop(); process.exit(0); });
+process.on('exit', () => ollama.stop());
 
 // Identidade 0: o emulador já provisionado. Token vem do arquivo salvo na sessão de setup ou é gerado agora.
 const tokenFile = '/tmp/claude-1000/-media-loterio-workspace-workspace-pitaia-research/mcp-token.txt';
@@ -32,8 +39,15 @@ const server = await startServer({
     const id = getIdentity(db, 'conta1'); if (!id) return;
     const probe = await ensureIdentityReady(db, id, { adb }); server.broadcast();
     if (!probe.ready) return;
-    await runTask({ db, identity: getIdentity(db, 'conta1')!, goalText: text, apiKey: env.anthropicApiKey, isKilled: () => server.isKilled(), onStep: () => server.broadcast() });
+    await runTask({ db, identity: getIdentity(db, 'conta1')!, goalText: text, apiKey: env.anthropicApiKey, isKilled: () => server.isKilled(), onStep: () => server.broadcast() }, { ollama });
     server.broadcast();
+  },
+  onProviderTest: async (role) => {
+    const id = getIdentity(db, 'conta1')!;
+    const probe = await ensureIdentityReady(db, id, { adb }); server.broadcast();
+    if (!probe.ready) return { role, model: readProviderConfig(db)[role].model, latencyMs: 0, tokensPerSec: null, argsValid: false, warning: null, error: `identidade não pronta: ${probe.details.join('; ')}`, at: new Date().toISOString() };
+    const t = await testProvider(db, readProviderConfig(db)[role], getIdentity(db, 'conta1')!, { anthropicApiKey: env.anthropicApiKey }, { ollama });
+    server.broadcast(); return t;
   },
 });
 writeFileSync(CONFIG.daemonInfoPath, JSON.stringify({ port: server.port, token: daemonToken, pid: process.pid }));
