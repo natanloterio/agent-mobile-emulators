@@ -21,7 +21,8 @@ export interface ProbeDeps {
 
 const EXTERNAL_WARNING = 'contexto desconhecido (Ollama externo, não subido pelo daemon — garanta OLLAMA_CONTEXT_LENGTH ≥ 32768)';
 
-function save(db: DatabaseSync, t: ProviderTest): ProviderTest {
+/** Grava um resultado de teste (do probe ou produzido pelo daemon, ex.: identidade não pronta) para o snapshot/tela. */
+export function recordProviderTest(db: DatabaseSync, t: ProviderTest): ProviderTest {
   db.prepare('insert into provider_test (role, model, latency_ms, tokens_per_sec, args_valid, warning, error) values (?, ?, ?, ?, ?, ?, ?)')
     .run(t.role, t.model, t.latencyMs, t.tokensPerSec, t.argsValid ? 1 : 0, t.warning, t.error);
   return t;
@@ -51,10 +52,10 @@ export async function testProvider(db: DatabaseSync, row: ProviderRow, identity:
     const invalid = step ? invalidCallIds(step as never).length > 0 : true;
     const executed = !!step && step.content.some((p) => p.type === 'tool-result');
     const out = r.usage.outputTokens ?? 0;
-    return save(db, { ...base, latencyMs: Date.now() - t0, tokensPerSec: genMs > 0 ? Math.round((out / (genMs / 1000)) * 10) / 10 : null, argsValid: !invalid && executed, warning });
+    return recordProviderTest(db, { ...base, latencyMs: Date.now() - t0, tokensPerSec: genMs > 0 ? Math.round((out / (genMs / 1000)) * 10) / 10 : null, argsValid: !invalid && executed, warning });
   } catch (e) {
     const msg = ProviderError.isInstance(e) ? `${e.kind}: ${e.message}` : String((e as Error).message ?? e);
-    return save(db, { ...base, latencyMs: Date.now() - t0, error: msg.slice(0, 300) });
+    return recordProviderTest(db, { ...base, latencyMs: Date.now() - t0, error: msg.slice(0, 300) });
   } finally { await client?.close().catch(() => undefined); }
 }
 

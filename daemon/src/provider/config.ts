@@ -10,11 +10,15 @@ export const ROLE_KEYS: readonly RoleKey[] = ['lider', 'worker', 'esc'];
 export const LOCAL_ENDPOINT_DEFAULT = 'http://127.0.0.1:11434/v1';
 export const CLOUD_ENDPOINT = 'anthropic';
 
+/** Modelos default por papel na nuvem e o local vencedor do bake-off (spec §8, 2026-09-26). */
+export const CLOUD_MODEL: Readonly<Record<RoleKey, string>> = { lider: 'claude-sonnet-5', worker: 'claude-haiku-4-5', esc: 'claude-haiku-4-5' };
+export const LOCAL_MODEL_DEFAULT = 'gpt-oss:20b';
+
 /** Default de fábrica (spec §8, benchmark de 2026-09-26): gpt-oss:20b venceu o bake-off e completou a tarefa sem disparar o piso. */
 export const PROVIDER_DEFAULTS: ProviderConfig = {
-  lider: { role: 'lider', mode: 'nuvem', model: 'claude-sonnet-5', endpoint: CLOUD_ENDPOINT },
-  worker: { role: 'worker', mode: 'local', model: 'gpt-oss:20b', endpoint: LOCAL_ENDPOINT_DEFAULT },
-  esc: { role: 'esc', mode: 'nuvem', model: 'claude-haiku-4-5', endpoint: CLOUD_ENDPOINT },
+  lider: { role: 'lider', mode: 'nuvem', model: CLOUD_MODEL.lider, endpoint: CLOUD_ENDPOINT },
+  worker: { role: 'worker', mode: 'local', model: LOCAL_MODEL_DEFAULT, endpoint: LOCAL_ENDPOINT_DEFAULT },
+  esc: { role: 'esc', mode: 'nuvem', model: CLOUD_MODEL.esc, endpoint: CLOUD_ENDPOINT },
 };
 
 export const ProviderPatch = z.object({
@@ -43,8 +47,11 @@ export function updateProvider(db: DatabaseSync, role: RoleKey, patchIn: Provide
   const patch = ProviderPatch.parse(patchIn);
   const cur = readProviderConfig(db)[role];
   const mode = patch.mode ?? cur.mode;
-  const endpoint = patch.endpoint ?? (patch.mode && patch.mode !== cur.mode ? (mode === 'local' ? LOCAL_ENDPOINT_DEFAULT : CLOUD_ENDPOINT) : cur.endpoint);
-  const next: ProviderRow = { role, mode, model: patch.model ?? cur.model, endpoint };
+  const modeChanged = patch.mode !== undefined && patch.mode !== cur.mode;
+  // Trocar o modo sem dizer o modelo não pode deixar "nuvem/gpt-oss:20b" nem "local/claude-haiku-4-5" (revisão final, Important 4).
+  const endpoint = patch.endpoint ?? (modeChanged ? (mode === 'local' ? LOCAL_ENDPOINT_DEFAULT : CLOUD_ENDPOINT) : cur.endpoint);
+  const model = patch.model ?? (modeChanged ? (mode === 'local' ? LOCAL_MODEL_DEFAULT : CLOUD_MODEL[role]) : cur.model);
+  const next: ProviderRow = { role, mode, model, endpoint };
   db.prepare("update provider_config set mode=?, model=?, endpoint=?, updated_at=datetime('now') where role=?").run(next.mode, next.model, next.endpoint, role);
   return next;
 }

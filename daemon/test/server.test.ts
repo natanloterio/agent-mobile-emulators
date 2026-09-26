@@ -89,3 +89,18 @@ describe('servidor — provedores (incremento 2)', () => {
     release();
   });
 });
+
+describe('servidor — revisão final do incremento 2', () => {
+  const h = { authorization: 'Bearer seg', 'content-type': 'application/json' };
+  it('PUT /providers dispara broadcast do snapshot com o registro novo (Important 5)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const ws = new WebSocket(`ws://127.0.0.1:${s.port}/ws?token=seg`); const msgs: string[] = [];
+    await new Promise<void>((r) => { ws.on('message', (m) => { msgs.push(String(m)); if (msgs.length === 1) r(); }); });
+    await fetch(`http://127.0.0.1:${s.port}/providers/worker`, { method: 'PUT', headers: h, body: JSON.stringify({ mode: 'nuvem' }) });
+    await new Promise((r) => setTimeout(r, 80));
+    expect(msgs.length).toBe(2);
+    expect((JSON.parse(msgs[1]).data as { providers: { worker: { mode: string; model: string } } }).providers.worker).toMatchObject({ mode: 'nuvem', model: 'claude-haiku-4-5' });
+    ws.close();
+  });
+});

@@ -32,4 +32,11 @@ describe('provider_config', () => {
     expect(cols('step')).toEqual(expect.arrayContaining(['provider', 'gen_ms', 'invalid_call']));
     expect(cols('task')).toEqual(expect.arrayContaining(['degraded', 'escalated_at_step']));
   });
+
+  it('trocar o modo sem informar modelo aplica o modelo default do (papel, modo) (revisão final, Important 4)', () => {
+    const db = openDb(':memory:');
+    expect(updateProvider(db, 'worker', { mode: 'nuvem' })).toMatchObject({ mode: 'nuvem', model: 'claude-haiku-4-5', endpoint: 'anthropic' });
+    expect(updateProvider(db, 'esc', { mode: 'local' })).toMatchObject({ mode: 'local', model: 'gpt-oss:20b', endpoint: LOCAL_ENDPOINT_DEFAULT });
+    expect(updateProvider(db, 'lider', { mode: 'nuvem', model: 'claude-opus-5' }).model).toBe('claude-opus-5');
+  });
 });

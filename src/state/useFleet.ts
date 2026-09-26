@@ -76,7 +76,12 @@ export function useFleet(): UseFleet {
       resetPlan: () => dispatch({ type: 'resetPlan' }),
       launch: (fleetSize) => dispatch({ type: 'launch', fleetSize }),
       // Com daemon: persiste no registro e o teste é real; sem daemon (Vite no browser) segue o mock com timer.
-      pickMode: (role, mode) => { window.enxame?.setProvider?.(role, { mode }).catch(() => undefined); dispatch({ type: 'pickMode', role, mode }); },
+      pickMode: (role, mode) => {
+        const set = window.enxame?.setProvider;
+        if (!set) { dispatch({ type: 'pickMode', role, mode }); return; }
+        // 409 (frota ocupada) ou 400 não mudam a tela: o snapshot que o daemon emite após o PUT é a verdade.
+        set(role, { mode }).then(() => dispatch({ type: 'pickMode', role, mode })).catch(() => undefined);
+      },
       testConnection: (role) => {
         dispatch({ type: 'testStart', role });
         const test = window.enxame?.testProvider;

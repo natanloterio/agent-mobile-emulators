@@ -35,3 +35,9 @@ export function renderComparison(a: RunSummary, b: RunSummary): string {
     line('custo', (s) => (s.costUsd > 0 ? `US$ ${s.costUsd.toFixed(4)}` : `${s.genS} s·GPU`)), line('pico de VRAM (MiB)', (s) => s.vramPeakMiB ?? '—'),
     line('bloqueio de plataforma', (s) => s.platformBlock ?? 'nenhum')].join('\n');
 }
+
+/** Review Focus 1: o benchmark só vale com o Ollama subido pelo daemon (contexto conhecido). */
+export function assertDaemonOllama(tests: readonly { readonly warning: string | null }[]): void {
+  const w = tests.find((t) => t.warning);
+  if (w) throw new Error(`Ollama externo detectado (${w.warning}); o benchmark exige o processo subido pelo daemon (spec §12)`);
+}

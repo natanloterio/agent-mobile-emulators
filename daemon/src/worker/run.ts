@@ -5,7 +5,7 @@ import { CONFIG } from '../config.js';
 import { setIdentityState, type IdentityRow } from '../db/identities.js';
 import { createGoalAndTask, ledgerHas, ledgerPut, markDegraded, setTaskState, writeIntent } from '../db/tasks.js';
 import { providerLabel, readProviderConfig, type ProviderConfig, type ProviderRow } from '../provider/config.js';
-import { ProviderError } from '../provider/errors.js';
+import { isLocalInfraError, ProviderError } from '../provider/errors.js';
 import { buildModel as defaultBuildModel, pricingFor, providerOptionsFor } from '../provider/factory.js';
 import { createOllamaSupervisor, type OllamaSupervisor } from '../provider/ollama.js';
 import { createQualityFloor } from '../provider/quality.js';
@@ -124,6 +124,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
 
   let lastScreen: ScreenState | null = null; let halt: Halt = null; let costUsd = 0; let genMsTotal = 0; let lastGenMs: number | null = null;
   let degraded = false; let escalatedAtStep: number | null = null; let stepsUsed = 0;
+  let activeMode: ProviderRow['mode'] | null = null; // papel em execução, para classificar erro de API do provedor local
   const floor = createQualityFloor(CONFIG.worker.qualityFloor);
   const pending = new Map<string, number>();
   const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
@@ -140,8 +141,9 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
   };
 
   /** Um segmento = um generateText sobre `messages` com um papel do registro (spec §5). */
-  const segment = (row: ProviderRow, model: LanguageModel, tools: ToolSet, messages: ModelMessage[], stopIfHalted: StopCondition<ToolSet>, slug: string | null, steps: number) =>
-    deps.generate({
+  const segment = (row: ProviderRow, model: LanguageModel, tools: ToolSet, messages: ModelMessage[], stopIfHalted: StopCondition<ToolSet>, slug: string | null, steps: number) => {
+    activeMode = row.mode;
+    return deps.generate({
       model, tools, messages,
       // ai@7 rejeita role:'system' em messages; o system vai em instructions.
       instructions: SYSTEM_PROMPT,
@@ -160,6 +162,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
         o.onStep();
       },
     });
+  };
 
   let client: Awaited<ReturnType<typeof deps.connect>> | null = null;
   try {
@@ -206,6 +209,8 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     if (h?.kind === 'platform-block') return finish('platform-block', String((e as Error).message ?? e));
     if (h) return finish('infra', String((e as Error).message ?? e));
     if (ProviderError.isInstance(e)) { halt = { kind: e.kind, text: e.message }; return finish(e.kind === 'auth' ? 'failed' : 'infra', e.message); }
+    // Ollama caiu/recusou/OOM no meio da tarefa: infra-local → tarefa volta a todo, identidade idle (spec §7).
+    if (activeMode === 'local' && isLocalInfraError(e)) { const text = String((e as Error).message ?? e).slice(0, 200); halt = { kind: 'infra-local', text }; return finish('infra', text); }
     return finish('failed', String((e as Error).message ?? e));
   } finally {
     await client?.close().catch(() => undefined);

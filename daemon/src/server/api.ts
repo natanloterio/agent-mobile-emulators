@@ -50,11 +50,11 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
       if (req.method === 'PUT' && !isTest) {
         const parsed = ProviderPatch.safeParse(await readJson(req));
         if (!parsed.success) return send(res, 400, { error: parsed.error.issues.map((i) => i.message) });
-        return send(res, 200, updateProvider(o.db, role, parsed.data));
+        const row = updateProvider(o.db, role, parsed.data); send(res, 200, row); ws.broadcast(); return;
       }
       if (req.method === 'POST' && isTest) {
         inFlight = true;
-        try { return send(res, 200, await o.onProviderTest(role)); }
+        try { const t = await o.onProviderTest(role); send(res, 200, t); ws.broadcast(); return; }
         catch (e) { return send(res, 500, { error: String((e as Error).message ?? e) }); }
         finally { inFlight = false; }
       }

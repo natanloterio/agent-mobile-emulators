@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { median, pickWinner, renderBakeoffTable, renderComparison, type BakeoffRow, type RunSummary } from '../src/bench/stats.js';
+import { assertDaemonOllama, median, pickWinner, renderBakeoffTable, renderComparison, type BakeoffRow, type RunSummary } from '../src/bench/stats.js';
 import { startVramSampler } from '../src/bench/vram.js';
 
 const row = (model: string, tps: number | null, argsValid: number, runs = 3): BakeoffRow => ({ model, latencyMs: 1000, tokensPerSec: tps, argsValid, runs, eliminated: argsValid < runs, reason: argsValid < runs ? 'args inválidos' : null });
@@ -25,5 +25,12 @@ describe('bench/vram', () => {
     const s = startVramSampler(async () => outs[Math.min(i++, outs.length - 1)], 1);
     await new Promise((r) => setTimeout(r, 30));
     expect(s.stop()).toBe(21000);
+  });
+});
+
+describe('bench — Review Focus 1 (Important 8)', () => {
+  it('assertDaemonOllama recusa quando algum teste veio de Ollama externo (warning) e aceita quando não', () => {
+    expect(() => assertDaemonOllama([{ warning: null }, { warning: 'contexto desconhecido (Ollama externo…)' }])).toThrow(/externo/);
+    expect(() => assertDaemonOllama([{ warning: null }])).not.toThrow();
   });
 });

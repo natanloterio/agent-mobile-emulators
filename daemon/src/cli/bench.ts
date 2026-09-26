@@ -6,7 +6,7 @@ import { createAdb } from '../device/adb.js';
 import { openDb } from '../db/open.js';
 import { getIdentity } from '../db/identities.js';
 import { ensureIdentityReady } from '../fleet/identity.js';
-import { median, pickWinner, renderBakeoffTable, renderComparison, type BakeoffRow, type RunSummary } from '../bench/stats.js';
+import { assertDaemonOllama, median, pickWinner, renderBakeoffTable, renderComparison, type BakeoffRow, type RunSummary } from '../bench/stats.js';
 import { startVramSampler } from '../bench/vram.js';
 import { LOCAL_ENDPOINT_DEFAULT, readProviderConfig, updateProvider } from '../provider/config.js';
 import { createOllamaSupervisor } from '../provider/ollama.js';
@@ -24,6 +24,10 @@ const db = openDb(CONFIG.dbPath); const adb = createAdb(); const ollama = create
 const id = () => getIdentity(db, 'conta1')!;
 const probe = await ensureIdentityReady(db, id(), { adb });
 if (!probe.ready) { console.error('sonda falhou:', probe.details); process.exit(2); }
+// O bench muta o registro do worker; restaura o que havia antes ao sair por qualquer caminho (revisão final, Important 7).
+const before = readProviderConfig(db).worker;
+const restore = () => { updateProvider(db, 'worker', { mode: before.mode, model: before.model, endpoint: before.endpoint === 'anthropic' ? undefined : before.endpoint }); };
+process.on('exit', restore);
 
 // 1) bake-off (spec §8): 3 testes de conexão por modelo; args válidos em 3/3 é pré-requisito.
 const rows: BakeoffRow[] = [];
@@ -31,7 +35,7 @@ for (const model of MODELS) {
   updateProvider(db, 'worker', { mode: 'local', model, endpoint: LOCAL_ENDPOINT_DEFAULT });
   const tests = [];
   for (let i = 0; i < RUNS; i++) tests.push(await testProvider(db, readProviderConfig(db).worker, id(), env, { ollama }));
-  if (tests.some((t) => t.warning)) { console.error('Ollama externo detectado; o benchmark exige o processo subido pelo daemon (spec §12).'); process.exit(3); }
+  try { assertDaemonOllama(tests); } catch (e) { console.error(String((e as Error).message)); process.exit(3); }
   const valid = tests.filter((t) => t.argsValid).length; const err = tests.find((t) => t.error)?.error ?? null;
   const tps = tests.map((t) => t.tokensPerSec).filter((x): x is number => x !== null);
   rows.push({ model, latencyMs: median(tests.map((t) => t.latencyMs)), tokensPerSec: tps.length ? median(tps) : null, argsValid: valid, runs: RUNS, eliminated: valid < RUNS, reason: err ?? (valid < RUNS ? 'args inválidos' : null) });
@@ -55,7 +59,7 @@ const run = async (label: string, local: boolean): Promise<RunSummary> => {
 };
 let local: RunSummary | null = null;
 if (winner) { updateProvider(db, 'worker', { mode: 'local', model: winner.model, endpoint: LOCAL_ENDPOINT_DEFAULT }); local = await run(`local:${winner.model}`, true); }
-// O registro volta ao default de fábrica; a Task 10 decide se muda com o relatório na mão.
+// Controle na nuvem; o registro original é restaurado no exit.
 updateProvider(db, 'worker', { mode: 'nuvem', model: 'claude-haiku-4-5' });
 const cloud = process.env.BENCH_SKIP_CLOUD ? null : await run('nuvem:claude-haiku-4-5', false);
 

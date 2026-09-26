@@ -7,7 +7,7 @@ import { getIdentity, upsertIdentity } from './db/identities.js';
 import { ensureIdentityReady } from './fleet/identity.js';
 import { readProviderConfig } from './provider/config.js';
 import { createOllamaSupervisor } from './provider/ollama.js';
-import { testProvider } from './provider/probe.js';
+import { recordProviderTest, testProvider } from './provider/probe.js';
 import { startServer } from './server/api.js';
 import { runTask } from './worker/run.js';
 
@@ -33,7 +33,8 @@ upsertIdentity(db, {
 const daemonToken = randomUUID();
 const server = await startServer({
   db, token: daemonToken,
-  onKill: () => server.broadcast(),
+  // Kill switch derruba o Ollama que é nosso (spec §4.3); /resume + próximo objetivo o sobem de novo.
+  onKill: () => { ollama.stop(); server.broadcast(); },
   onGoal: async (text) => {
     if (server.isKilled()) return; // kill switch acionado: retomar via POST /resume antes de novo objetivo
     const id = getIdentity(db, 'conta1'); if (!id) return;
@@ -45,7 +46,7 @@ const server = await startServer({
   onProviderTest: async (role) => {
     const id = getIdentity(db, 'conta1')!;
     const probe = await ensureIdentityReady(db, id, { adb }); server.broadcast();
-    if (!probe.ready) return { role, model: readProviderConfig(db)[role].model, latencyMs: 0, tokensPerSec: null, argsValid: false, warning: null, error: `identidade não pronta: ${probe.details.join('; ')}`, at: new Date().toISOString() };
+    if (!probe.ready) return recordProviderTest(db, { role, model: readProviderConfig(db)[role].model, latencyMs: 0, tokensPerSec: null, argsValid: false, warning: null, error: `identidade não pronta: ${probe.details.join('; ')}`, at: new Date().toISOString() });
     const t = await testProvider(db, readProviderConfig(db)[role], getIdentity(db, 'conta1')!, { anthropicApiKey: env.anthropicApiKey }, { ollama });
     server.broadcast(); return t;
   },

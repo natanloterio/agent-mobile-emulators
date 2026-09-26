@@ -268,3 +268,20 @@ describe('runTask — incremento 2: provedor, piso e escalonamento', () => {
     expect(r.genMs).toBeGreaterThanOrEqual(0); expect(r.provider).toBe('local:qwen3.5:27b');
   });
 });
+
+describe('runTask — revisão final do incremento 2', () => {
+  it('Important 6: erro de API do Ollama no meio da tarefa → infra-local (task todo, identidade idle)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const boom = Object.assign(new Error('Cannot connect to API: fetch failed ECONNREFUSED 127.0.0.1:11434'), { name: 'AI_APICallError' });
+    const generate = (async () => { throw boom; }) as never;
+    const r = await runTask({ ...opts(db), providers: providers() }, { connect: mkMcp(tools()), model: new MockLanguageModelV4({ doGenerate: [] as never }), ollama: okOllama, generate });
+    expect(r.outcome).toBe('infra'); expect(taskState(db, r.taskId)).toBe('todo'); expect(getIdentity(db, 'conta1')?.state).toBe('idle');
+    expect(getIdentity(db, 'conta1')?.lastError).toMatch(/ECONNREFUSED/);
+  });
+  it('Important 6b: o mesmo erro vindo do provedor de nuvem continua sendo failed (não é infra-local)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const boom = Object.assign(new Error('fetch failed'), { name: 'AI_APICallError' });
+    const r = await runTask({ ...opts(db) }, { connect: mkMcp(tools()), model: new MockLanguageModelV4({ doGenerate: [] as never }), generate: (async () => { throw boom; }) as never });
+    expect(r.outcome).toBe('failed'); expect(taskState(db, r.taskId)).toBe('failed');
+  });
+});

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { openDb } from '../src/db/open.js';
 import { upsertIdentity } from '../src/db/identities.js';
 import { createOllamaSupervisor } from '../src/provider/ollama.js';
-import { lastProviderTests, testProvider } from '../src/provider/probe.js';
+import { lastProviderTests, recordProviderTest, testProvider } from '../src/provider/probe.js';
 
 const row = { id: 'conta1', name: 'conta1', handle: '@a', avdName: 'x', serial: 's', consolePort: 5554, mcpHostPort: 8080, mcpToken: 't', deviceSlug: 'conta1', appPackage: 'p', appVersionName: '1', state: 'idle' as const };
 const LOCAL = { role: 'worker' as const, mode: 'local' as const, model: 'qwen3.5:27b', endpoint: 'http://127.0.0.1:11434/v1' };
@@ -55,5 +55,14 @@ describe('testProvider', () => {
     const db = openDb(':memory:'); upsertIdentity(db, row);
     const t = await testProvider(db, { role: 'esc', mode: 'nuvem', model: 'claude-haiku-4-5', endpoint: 'anthropic' }, row, {}, { connect });
     expect(t.error).toMatch(/ANTHROPIC_API_KEY/); expect(t.argsValid).toBe(false);
+  });
+});
+
+describe('recordProviderTest (revisão final, Important 5)', () => {
+  it('grava um resultado produzido fora do probe (identidade não pronta) e ele aparece em lastProviderTests', () => {
+    const db = openDb(':memory:');
+    const t = recordProviderTest(db, { role: 'worker', model: 'm', latencyMs: 0, tokensPerSec: null, argsValid: false, warning: null, error: 'identidade não pronta: boot', at: 'x' });
+    expect(t.error).toMatch(/não pronta/);
+    expect(lastProviderTests(db).worker).toMatchObject({ argsValid: false, error: 'identidade não pronta: boot' });
   });
 });
