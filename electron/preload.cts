@@ -6,6 +6,22 @@ import { contextBridge, ipcRenderer } from 'electron';
 let lastSnapshot: unknown = null;
 ipcRenderer.on('enxame:snapshot', (_e, data: unknown) => { lastSnapshot = data; });
 
+// Idem para o pôster (frame) mais recente por identidade.
+const lastFrames = new Map<string, unknown>();
+ipcRenderer.on('enxame:frame', (_e, f: unknown) => { const id = (f as { id?: unknown })?.id; if (typeof id === 'string') lastFrames.set(id, f); });
+
+// GOP de vídeo por identidade — mesma regra de electron/gop-buffer.ts, copiada aqui porque o
+// preload é CommonJS isolado e não pode importar módulos ESM do main.
+type Packet = { id: string; key: boolean };
+const MAX_GOP = 400;
+const gops = new Map<string, Packet[]>();
+ipcRenderer.on('enxame:video', (_e, p: Packet) => {
+  if (p.key) { gops.set(p.id, [p]); return; }
+  const g = gops.get(p.id); if (!g) return;
+  if (g.length >= MAX_GOP) { gops.delete(p.id); return; } // GOP truncado não decodifica: descarta até o próximo key
+  gops.set(p.id, [...g, p]);
+});
+
 contextBridge.exposeInMainWorld('enxame', {
   platform: process.platform,
   version: '0.1.0',
@@ -14,6 +30,18 @@ contextBridge.exposeInMainWorld('enxame', {
     ipcRenderer.on('enxame:snapshot', listener);
     if (lastSnapshot !== null) cb(lastSnapshot);
     return () => ipcRenderer.removeListener('enxame:snapshot', listener);
+  },
+  onFrame: (cb: (f: unknown) => void) => {
+    const listener = (_e: unknown, data: unknown) => cb(data);
+    ipcRenderer.on('enxame:frame', listener);
+    for (const f of lastFrames.values()) cb(f);
+    return () => ipcRenderer.removeListener('enxame:frame', listener);
+  },
+  onVideo: (cb: (p: unknown) => void) => {
+    const listener = (_e: unknown, data: unknown) => cb(data);
+    ipcRenderer.on('enxame:video', listener);
+    for (const g of gops.values()) for (const p of g) cb(p);
+    return () => ipcRenderer.removeListener('enxame:video', listener);
   },
   startGoal: (text: string) => ipcRenderer.invoke('enxame:startGoal', text),
   kill: () => ipcRenderer.invoke('enxame:kill'),

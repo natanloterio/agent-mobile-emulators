@@ -16,8 +16,11 @@ export type ProviderMode = 'nuvem' | 'local';
 export type TestStage = 'run' | 'done' | null;
 export type PlanStage = 0 | 1 | 2;
 
+export type VideoStreamState = 'idle' | 'starting' | 'streaming' | 'retrying';
+
 /** Identidade ativa na frota: um AVD preso a uma conta. */
 export interface Identity {
+  readonly id?: string;
   readonly name: string;
   readonly handle: string;
   readonly state: DeviceState;
@@ -29,6 +32,9 @@ export interface Identity {
   readonly genMs?: number;
   readonly degraded?: boolean;
   readonly earlyStopRemaining?: number;
+  readonly screen?: { readonly dataUrl: string; readonly at: string };
+  /** Estado do stream de vídeo no daemon; 'streaming' = ao vivo mesmo com a tela parada. */
+  readonly video?: VideoStreamState;
 }
 
 /** Identidade fora da frota ativa (banida, em provisionamento). */

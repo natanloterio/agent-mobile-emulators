@@ -41,7 +41,7 @@ export async function ensureIdentityReady(
   }
   const probe = deps.probe ?? probeIdentity;
   try {
-    await deps.adb.forward(id.serial, id.mcpHostPort, MCP_DEVICE_PORT);
+    await deps.adb.forward(id.serial, id.mcpHostPort, `tcp:${MCP_DEVICE_PORT}`);
     await deps.adb.broadcastConfigure(id.serial, { bearer_token: id.mcpToken, bearer_token_enabled: true, device_slug: id.deviceSlug });
     let result = await probe(id, { adb: deps.adb });
     if (needsServerRestart(result)) result = await restartMcpServer(id, deps.adb, probe, sleep);

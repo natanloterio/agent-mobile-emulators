@@ -2,6 +2,7 @@ import { Button } from '../components/Button';
 import { Heading } from '../components/Heading';
 import { PhoneMock } from '../components/PhoneMock';
 import { Pill } from '../components/Pill';
+import type { VideoBus } from '../live/videoBus';
 import type { LogRow, Stat, TileVM } from '../state/selectors';
 import './Device.css';
 
@@ -15,9 +16,10 @@ interface DeviceProps {
   readonly onToggleControl: () => void;
   readonly onTogglePause: () => void;
   readonly onResolve: () => void;
+  readonly bus?: VideoBus | null;
 }
 
-export function Device({ sel, log, stats, control, isMobile, onBack, onToggleControl, onTogglePause, onResolve }: DeviceProps) {
+export function Device({ sel, log, stats, control, isMobile, onBack, onToggleControl, onTogglePause, onResolve, bus }: DeviceProps) {
   const streamLabel = control ? '1080p · 60 fps · input ligado' : '1080p · 30 fps · input desligado';
   return (
     <div className="screen">
@@ -32,7 +34,7 @@ export function Device({ sel, log, stats, control, isMobile, onBack, onToggleCon
 
       <div className="device__grid">
         <div className="device__left">
-          <PhoneMock variant="full" handle={sel.handle} streamLabel={streamLabel} draft={sel.replyDraft} controlled={control} />
+          <PhoneMock variant="full" handle={sel.handle} streamLabel={streamLabel} draft={sel.replyDraft} controlled={control} videoId={sel.id} bus={bus} screen={sel.screen} video={sel.video} />
           <div className="device__controls">
             <Button variant={control ? 'tertiary' : 'primary'} grow onClick={onToggleControl}>
               {control ? 'Devolver ao agente' : 'Assumir controle'}

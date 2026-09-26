@@ -1,23 +1,29 @@
 import type { TestResultRow } from '../data/providers';
 import type { LogRow, RoleVM } from '../state/selectors';
-import type { DeviceState, Identity } from '../types/fleet';
-import type { FleetSnapshot, LiveProviderTest } from './types';
+import type { DeviceState, Identity, VideoStreamState } from '../types/fleet';
+import type { FleetSnapshot, LiveFrame, LiveIdentity, LiveProviderTest } from './types';
 
 const STATE_MAP: Readonly<Record<string, DeviceState>> = {
   running: 'running', idle: 'idle', 'logged-in': 'idle', restored: 'idle', dirty: 'idle', provisioned: 'idle', blank: 'idle',
   'needs-human': 'needs', banned: 'needs', offline: 'offline',
 };
 
-/** Sobrepõe a identidade viva (índice 0) ao mock, sem tocar nas demais. */
-export function mergeLive(ids: readonly Identity[], live: FleetSnapshot | null): readonly Identity[] {
-  const l = live?.identities[0];
-  if (!l || ids.length === 0) return ids;
-  const first: Identity = {
-    ...ids[0], name: l.name, handle: l.handle, state: STATE_MAP[l.state] ?? 'offline',
-    task: l.degraded ? `${l.task} · degradada` : l.task, steps: l.steps, budget: l.budget, cost: l.costUsd, error: l.error,
-    genMs: l.genMs ?? 0, degraded: l.degraded ?? false, earlyStopRemaining: l.earlyStopRemaining ?? 0,
-  };
-  return [first, ...ids.slice(1)];
+const VIDEO_STATES: readonly string[] = ['idle', 'starting', 'streaming', 'retrying'];
+const toVideoState = (v: string | undefined): VideoStreamState | undefined =>
+  v !== undefined && VIDEO_STATES.includes(v) ? (v as VideoStreamState) : undefined;
+
+const toIdentity = (base: Identity | undefined, l: LiveIdentity, f: LiveFrame | undefined): Identity => ({
+  ...(base ?? {}), id: l.id, name: l.name, handle: l.handle, state: STATE_MAP[l.state] ?? 'offline',
+  task: l.degraded ? `${l.task} · degradada` : l.task, steps: l.steps, budget: l.budget, cost: l.costUsd, error: l.error,
+  genMs: l.genMs ?? 0, degraded: l.degraded ?? false, earlyStopRemaining: l.earlyStopRemaining ?? 0,
+  video: toVideoState(l.video),
+  ...(f ? { screen: { dataUrl: `data:image/png;base64,${f.png}`, at: f.at } } : {}),
+});
+/** Sobrepõe cada identidade viva ao tile de mesma posição; posters casam por id (spec inc. 4 §4.3). Tiles além da lista viva ficam mock. */
+export function mergeLive(ids: readonly Identity[], live: FleetSnapshot | null, frames: Readonly<Record<string, LiveFrame>> = {}): readonly Identity[] {
+  if (!live || live.identities.length === 0) return ids;
+  const merged = live.identities.map((l, i) => toIdentity(ids[i], l, frames[l.id]));
+  return [...merged, ...ids.slice(live.identities.length)];
 }
 
 export function liveLogFor(live: FleetSnapshot | null, name: string): readonly LogRow[] | null {

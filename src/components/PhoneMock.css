@@ -32,3 +32,6 @@
   height: 44px; border-radius: var(--radius-control); border: 1px solid var(--color-green); color: var(--color-green);
   font-size: 14px; display: flex; align-items: center; padding: 0 14px;
 }
+
+.phone__video, .phone__screen { flex: 1; min-height: 0; width: 100%; object-fit: contain; object-position: top center; border-radius: 7px; background: #000; }
+.phone--full .phone__video, .phone--full .phone__screen { border-radius: var(--radius-control); }

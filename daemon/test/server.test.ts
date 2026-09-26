@@ -3,6 +3,8 @@ import WebSocket from 'ws';
 import { openDb } from '../src/db/open.js';
 import { upsertIdentity } from '../src/db/identities.js';
 import { startServer } from '../src/server/api.js';
+import type { Frame, ScreenCapture } from '../src/device/screen.js';
+import type { VideoPacket, VideoStreams } from '../src/device/video.js';
 
 let stop: (() => Promise<void>) | null = null;
 afterEach(async () => { await stop?.(); stop = null; });
@@ -166,5 +168,53 @@ describe('servidor — erro depois da resposta enviada', () => {
       await new Promise((res) => setTimeout(res, 20));
       expect(errors.some((a) => a[0] === '[daemon] erro após resposta enviada:')).toBe(true);
     } finally { spy.mockRestore(); }
+  });
+});
+
+function fakeScreen(initial: readonly Frame[] = []): ScreenCapture & { emit(f: Frame): void; active: boolean[] } {
+  const frames = new Map(initial.map((f) => [f.id, f])); const cbs = new Set<(f: Frame) => void>(); const active: boolean[] = [];
+  return { start: () => {}, stop: () => {}, pause: () => {}, resume: () => {}, last: (id) => frames.get(id) ?? null, all: () => [...frames.values()],
+    onFrame: (cb) => { cbs.add(cb); return () => { cbs.delete(cb); }; }, setActive: (a) => { active.push(a); }, active, emit: (f) => { frames.set(f.id, f); for (const cb of cbs) cb(f); } };
+}
+function fakeVideo(): VideoStreams & { emit(p: VideoPacket): void; active: boolean[] } {
+  const cbs = new Set<(p: VideoPacket) => void>(); const active: boolean[] = [];
+  return { start: () => {}, stop: () => {}, state: () => 'idle', setActive: (a) => { active.push(a); }, active,
+    onPacket: (cb) => { cbs.add(cb); return () => { cbs.delete(cb); }; }, emit: (p) => { for (const cb of cbs) cb(p); } };
+}
+const collect = (ws: WebSocket, n: number) => new Promise<{ type: string; data: unknown }[]>((r) => { const out: { type: string; data: unknown }[] = []; ws.on('message', (m) => { out.push(JSON.parse(String(m))); if (out.length === n) r(out); }); });
+
+describe('ws — quadros e vídeo (incremento 4)', () => {
+  it('cliente novo recebe snapshot e os posters; frame e video são repassados; setActive de ambos segue os clientes', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const screen = fakeScreen([{ id: 'conta1', at: '2026-09-26T00:00:00.000Z', png: 'AAA=' }, { id: 'conta2', at: '2026-09-26T00:00:01.000Z', png: 'BBB=' }]);
+    const video = fakeVideo();
+    const s = await startServer({ db, port: 0, token: 'seg', screen, video, onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const ws = new WebSocket(`ws://127.0.0.1:${s.port}/ws?token=seg`);
+    const msgs = await collect(ws, 3);
+    expect(msgs.map((m) => m.type)).toEqual(['snapshot', 'frame', 'frame']);
+    expect(screen.active).toEqual([true]); expect(video.active).toEqual([true]);
+    const next = collect(ws, 2);
+    screen.emit({ id: 'conta1', at: '2026-09-26T00:00:02.000Z', png: 'CCC=' });
+    video.emit({ id: 'conta1', seq: 7, key: true, data: Buffer.from([0, 0, 0, 1, 0x65]) });
+    const got = await next;
+    expect(got[0]).toEqual({ type: 'frame', data: { id: 'conta1', at: '2026-09-26T00:00:02.000Z', png: 'CCC=' } });
+    expect(got[1]).toEqual({ type: 'video', data: { id: 'conta1', seq: 7, key: true, nal: Buffer.from([0, 0, 0, 1, 0x65]).toString('base64') } });
+    ws.close(); await new Promise((r) => setTimeout(r, 100));
+    expect(screen.active).toEqual([true, false]); expect(video.active).toEqual([true, false]);
+  });
+  it('GET /state traz o estado do stream por identidade (videoState); sem o getter, idle', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const base = { db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async (): Promise<never> => { throw new Error('n/a'); } };
+    const get = async (port: number) => (await (await fetch(`http://127.0.0.1:${port}/state`, { headers: { authorization: 'Bearer seg' } })).json()) as { identities: { video: string }[] };
+    const s1 = await startServer({ ...base, videoState: () => 'streaming' });
+    try { expect((await get(s1.port)).identities[0].video).toBe('streaming'); } finally { await s1.close(); }
+    const s2 = await startServer(base); stop = s2.close;
+    expect((await get(s2.port)).identities[0].video).toBe('idle');
+  });
+  it('sem screen/video o servidor continua igual (só snapshot ao conectar)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => {}, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); } }); stop = s.close;
+    const ws = new WebSocket(`ws://127.0.0.1:${s.port}/ws?token=seg`);
+    expect((await collect(ws, 1))[0].type).toBe('snapshot'); ws.close();
   });
 });

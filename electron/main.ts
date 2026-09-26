@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectSnapshots, ensureDaemon, post, request, waitForInfo } from './daemon-bridge.js';
+import { createGopBuffer } from './gop-buffer.js';
 import { providerRoute } from './provider-route.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -14,6 +15,10 @@ app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
 // O daemon manda um snapshot ao conectar e depois só em eventos; guardamos o último para
 // reenviar a cada carga da janela (did-finish-load), senão a tela fica no mock até o próximo evento.
 let lastSnapshot: unknown = null;
+// Idem para o pôster (frame) mais recente por identidade e o GOP de vídeo, para não deixar a
+// janela recarregada sem miniatura/vídeo até o próximo evento do daemon.
+const lastFrames = new Map<string, unknown>();
+const gop = createGopBuffer();
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -34,6 +39,8 @@ function createWindow(): void {
 
   win.webContents.on('did-finish-load', () => {
     if (lastSnapshot !== null) win.webContents.send('enxame:snapshot', lastSnapshot);
+    for (const f of lastFrames.values()) win.webContents.send('enxame:frame', f);
+    for (const p of gop.replay()) win.webContents.send('enxame:video', p);
   });
 
   if (devServerUrl) {
@@ -54,7 +61,12 @@ app.whenReady().then(() => {
   const projectRoot = path.join(here, '..');
   ensureDaemon(projectRoot);
   waitForInfo().then((info) => {
-    connectSnapshots(info, (data) => { lastSnapshot = data; for (const w of BrowserWindow.getAllWindows()) w.webContents.send('enxame:snapshot', data); });
+    const broadcast = (ch: string, d: unknown) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send(ch, d); };
+    connectSnapshots(info, {
+      onSnapshot: (data) => { lastSnapshot = data; broadcast('enxame:snapshot', data); },
+      onFrame: (f) => { const id = (f as { id?: unknown })?.id; if (typeof id === 'string') lastFrames.set(id, f); broadcast('enxame:frame', f); },
+      onVideo: (p) => { gop.push(p as never); broadcast('enxame:video', p); },
+    });
     ipcMain.handle('enxame:startGoal', (_e, text: string) => post(info, '/goals', { text }));
     ipcMain.handle('enxame:kill', () => post(info, '/kill'));
     ipcMain.handle('enxame:setProvider', (_e, role: string, patch: unknown) => request(info, 'PUT', providerRoute(role, 'put'), patch));

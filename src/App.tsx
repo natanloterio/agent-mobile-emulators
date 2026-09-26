@@ -27,9 +27,9 @@ const SHOW_COST = true;
 export function App() {
   const { state, actions } = useFleet();
   const isMobile = useIsMobile();
-  const live = useLiveFleet();
+  const { snap: live, frames, bus } = useLiveFleet();
 
-  const mergedIds = useMemo(() => mergeLive(state.ids, live), [state.ids, live]);
+  const mergedIds = useMemo(() => mergeLive(state.ids, live, frames), [state.ids, live, frames]);
   const tiles = useMemo(() => selectTiles({ ...state, ids: mergedIds }, FLEET_SIZE), [state, mergedIds]);
   const sel = selectSelected(tiles, state.sel);
   const needsCount = selectNeedsCount(tiles);
@@ -41,6 +41,7 @@ export function App() {
         return (
           <Cockpit
             tiles={tiles}
+            bus={bus}
             goalStats={selectGoalStats(tiles, FLEET_SIZE, SHOW_COST)}
             goalPct={selectGoalPct(tiles)}
             showCost={SHOW_COST}
@@ -55,6 +56,7 @@ export function App() {
         return (
           <Device
             sel={sel}
+            bus={bus}
             log={liveLogFor(live, sel.name) ?? selectLog(sel)}
             stats={selectSelStats(sel)}
             control={state.control}
