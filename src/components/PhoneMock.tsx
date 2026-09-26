@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useI18n } from '../i18n/I18nProvider';
 import { phoneLabel } from '../live/frameAge';
 import { createH264Sink } from '../live/h264Sink';
 import type { InputGesture } from '../live/types';
@@ -30,9 +31,9 @@ interface PhoneMockProps {
   readonly onInput?: (g: InputGesture) => void;
 }
 
-const NAV_KEYS: readonly { readonly key: 'back' | 'home' | 'recents'; readonly label: string }[] = [
-  { key: 'back', label: 'Voltar' }, { key: 'home', label: 'Início' }, { key: 'recents', label: 'Recentes' },
-];
+const NAV_KEYS = [
+  { key: 'back', label: 'device.phone.back' }, { key: 'home', label: 'device.phone.home' }, { key: 'recents', label: 'device.phone.recents' },
+] as const;
 
 /** Esqueleto da tela (sem dados vivos), mantido idêntico ao anterior. */
 function Skeleton({ variant }: { readonly variant: 'tile' | 'full' }) {
@@ -70,6 +71,8 @@ export function PhoneMock({ handle, streamLabel, variant, overlay, draft, contro
   const [videoAt, setVideoAt] = useState<number | null>(null);
   const lastSetRef = useRef<number | null>(null);
   const now = useNow(1000);
+  const i18n = useI18n();
+  const { t } = i18n;
   useEffect(() => {
     const canvas = canvasRef.current; if (!videoId || !bus || !canvas) return;
     // Chamado pelo `output` do decoder (assíncrono); só re-renderiza a cada ≥ 500 ms, nunca a 30 fps.
@@ -86,17 +89,17 @@ export function PhoneMock({ handle, streamLabel, variant, overlay, draft, contro
   const interactive = controlled && !!onInput;
   const surface = useControlSurface(interactive, onInput);
   const surfaceCls = interactive ? ' phone__surface--control' : '';
-  const surfaceLabel = interactive ? `tela de ${handle} em controle: toque, arraste e digite` : undefined;
-  const label = phoneLabel({ video, videoAt, screenAt: screen?.at, now, fallback: streamLabel });
+  const surfaceLabel = interactive ? t('device.phone.controlSurface', { handle }) : undefined;
+  const label = phoneLabel({ video, videoAt, screenAt: screen?.at, now, fallback: streamLabel, i18n });
   return (
     <div className={cls} style={maxHeight ? { maxHeight } : undefined}>
       <div className="phone__meta"><span>{handle}</span><span>{label}</span></div>
-      {videoId && bus && <canvas ref={canvasRef} className={`phone__video${hasVideo ? surfaceCls : ''}`} style={{ display: hasVideo ? 'block' : 'none' }} aria-label={(hasVideo && surfaceLabel) || `vídeo de ${handle}`} {...(hasVideo ? surface : {})} />}
-      {!hasVideo && screen && <img className={`phone__screen${surfaceCls}`} src={screen.dataUrl} alt={surfaceLabel ?? `tela de ${handle}`} draggable={false} {...surface} />}
+      {videoId && bus && <canvas ref={canvasRef} className={`phone__video${hasVideo ? surfaceCls : ''}`} style={{ display: hasVideo ? 'block' : 'none' }} aria-label={(hasVideo && surfaceLabel) || t('device.phone.video', { handle })} {...(hasVideo ? surface : {})} />}
+      {!hasVideo && screen && <img className={`phone__screen${surfaceCls}`} src={screen.dataUrl} alt={surfaceLabel ?? t('device.phone.screen', { handle })} draggable={false} {...surface} />}
       {!hasVideo && !screen && <Skeleton variant={variant} />}
       {interactive && onInput && (
-        <div className="phone__nav" role="group" aria-label="teclas do device">
-          {NAV_KEYS.map((k) => <button key={k.key} type="button" className="phone__nav-btn" onClick={() => onInput({ kind: 'key', key: k.key })}>{k.label}</button>)}
+        <div className="phone__nav" role="group" aria-label={t('device.phone.keys')}>
+          {NAV_KEYS.map((k) => <button key={k.key} type="button" className="phone__nav-btn" onClick={() => onInput({ kind: 'key', key: k.key })}>{t(k.label)}</button>)}
         </div>
       )}
       {variant === 'full' && draft && <div className="phone__draft">{draft}</div>}

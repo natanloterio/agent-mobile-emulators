@@ -6,6 +6,7 @@ import { readProviderConfig, type ProviderConfig } from '../provider/config.js';
 import { buildModel as defaultBuildModel, pricingFor } from '../provider/factory.js';
 import { createOllamaSupervisor } from '../provider/ollama.js';
 import { costOf, type UsageLike } from '../worker/record.js';
+import { DEFAULT_LANG, LEADER_TEXTS, sliceInstruction, type Lang } from './lang.js';
 import { probeFleet, type EnsureReady, type Readiness } from './readiness.js';
 import type { GoalPlan, Pattern } from './types.js';
 
@@ -27,14 +28,15 @@ interface Decision { readonly pattern: Pattern; readonly rationale: string; read
 /** Regra do spec §4.3 quando não há LLM: lista/fila de itens → sharding; trabalho preso à conta → fan-out. */
 const SHARDING_HINT = /fila|lista|\bmenções\b|\d+\s+(itens|menções|perfis)/i;
 
-export function deterministicPlan(text: string, readyIds: readonly string[]): Decision {
+/** Justificativa e fatias saem em `lang` (tabela em lang.ts); o texto do objetivo fica como o usuário escreveu. */
+export function deterministicPlan(text: string, readyIds: readonly string[], lang: Lang = DEFAULT_LANG): Decision {
+  const texts = LEADER_TEXTS[lang];
   if (!SHARDING_HINT.test(text)) {
-    return { pattern: 'fan-out', rationale: 'Regra determinística: o trabalho pertence a cada conta → fan-out, uma tarefa por identidade.', instructions: new Map(readyIds.map((id) => [id, text])) };
+    return { pattern: 'fan-out', rationale: texts.fanOut, instructions: new Map(readyIds.map((id) => [id, text])) };
   }
   const n = readyIds.length;
-  const slice = (k: number) => (n <= 1 ? text
-    : `${text}\nSua fatia ${k + 1} de ${n}: trate só os itens nas posições ${k + 1}, ${k + 1 + n}, ${k + 1 + 2 * n}… da fila (contando a partir de 1).`);
-  return { pattern: 'sharding', rationale: 'Regra determinística: fila de itens compartilhada → sharding, uma fatia por identidade pronta.', instructions: new Map(readyIds.map((id, k) => [id, slice(k)])) };
+  const slice = (k: number) => (n <= 1 ? text : `${text}\n${sliceInstruction(lang, k, n)}`);
+  return { pattern: 'sharding', rationale: texts.sharding, instructions: new Map(readyIds.map((id, k) => [id, slice(k)])) };
 }
 
 /**
@@ -49,11 +51,11 @@ export const LeaderOut = z.object({
 const LOCAL_ATTEMPTS = 2;
 const MAX_RATIONALE = 600; const MAX_INSTRUCTION = 2000;
 
-const LEADER_PROMPT = `Você é o líder de um enxame de celulares Android, cada um logado numa conta diferente do mesmo app.
+const leaderInstructions = (lang: Lang) => `Você é o líder de um enxame de celulares Android, cada um logado numa conta diferente do mesmo app.
 Decomponha o objetivo do usuário em uma instrução por identidade e escolha o padrão:
 - "fan-out" quando o trabalho pertence à conta (ex.: cada conta responde os comentários da própria caixa): cada identidade recebe a mesma tarefa sobre a própria conta.
 - "sharding" quando há uma fila de itens compartilhada (lista de perfis, menções, itens numerados): divida a fila entre as identidades prontas e descreva na instrução de cada uma exatamente a sua fatia.
-Responda com "pattern", "rationale" (uma ou duas frases curtas em português) e "instructions" (uma por identidade da lista, em português, curta e acionável).
+Responda com "pattern", "rationale" (uma ou duas frases curtas em ${LEADER_TEXTS[lang].promptName}) e "instructions" (uma por identidade da lista, em ${LEADER_TEXTS[lang].promptName}, curta e acionável).
 As ações continuam somente-leitura: nada de enviar, publicar ou seguir.`;
 
 function leaderPrompt(text: string, fleet: readonly Readiness[]): string {
@@ -61,12 +63,12 @@ function leaderPrompt(text: string, fleet: readonly Readiness[]): string {
   return `Objetivo: ${text}\nIdentidades (JSON): ${JSON.stringify(ids)}`;
 }
 
-async function llmDecision(text: string, fleet: readonly Readiness[], cfg: ProviderConfig, d: PlanDeps): Promise<{ decision: Decision; costUsd: number }> {
+async function llmDecision(text: string, fleet: readonly Readiness[], cfg: ProviderConfig, d: PlanDeps, lang: Lang): Promise<{ decision: Decision; costUsd: number }> {
   const row = cfg.lider;
   // Papel local: o Ollama tem de estar de pé antes da chamada, como no worker (run.ts).
   if (row.mode === 'local') await (d.ollama ?? createOllamaSupervisor()).ensure(row.endpoint, row.model);
   const model = d.model ?? (d.buildModel ?? defaultBuildModel)(row, { anthropicApiKey: d.apiKey });
-  const call = () => (d.generate ?? generateText)({ model, instructions: LEADER_PROMPT, prompt: leaderPrompt(text, fleet), output: Output.object({ schema: LeaderOut, name: 'plano' }) });
+  const call = () => (d.generate ?? generateText)({ model, instructions: leaderInstructions(lang), prompt: leaderPrompt(text, fleet), output: Output.object({ schema: LeaderOut, name: 'plano' }) });
   // Modelo local às vezes escapa da gramática e responde prosa (gpt-oss:20b, ~1 em 3 medido): uma nova tentativa antes da regra.
   const attempts = row.mode === 'local' ? LOCAL_ATTEMPTS : 1;
   let res!: Awaited<ReturnType<typeof call>>;
@@ -87,14 +89,15 @@ async function llmDecision(text: string, fleet: readonly Readiness[], cfg: Provi
 /**
  * Líder (spec §4.3, inc. 5 §3.3): sonda a frota, decide fan-out × sharding e a instrução de cada identidade.
  * Sem chave (papel na nuvem) ou erro do modelo: regra determinística e o erro vai em `leader.error`. Nunca lança por causa do modelo.
+ * `lang`: idioma da justificativa e das instruções (o da interface); sem ele, português.
  */
-export async function planGoal(text: string, d: PlanDeps): Promise<GoalPlan> {
+export async function planGoal(text: string, d: PlanDeps, lang: Lang = DEFAULT_LANG): Promise<GoalPlan> {
   const cfg = d.providers ?? readProviderConfig(d.db);
   const fleet = await probeFleet(d.db, d.ensureReady);
   const readyIds = fleet.filter((r) => r.ready).map((r) => r.identity.id);
   let decision: Decision; let costUsd = 0; let error: string | null = null;
-  try { ({ decision, costUsd } = await llmDecision(text, fleet, cfg, d)); }
-  catch (e) { error = String((e as Error)?.message ?? e).slice(0, 300); decision = deterministicPlan(text, readyIds); }
+  try { ({ decision, costUsd } = await llmDecision(text, fleet, cfg, d, lang)); }
+  catch (e) { error = String((e as Error)?.message ?? e).slice(0, 300); decision = deterministicPlan(text, readyIds, lang); }
   const tasks = fleet.map((r) => ({
     identityId: r.identity.id, name: r.identity.name, handle: r.identity.handle,
     instruction: decision.instructions.get(r.identity.id) || text, signals: r.signals, ready: r.ready, readyLabel: r.readyLabel,

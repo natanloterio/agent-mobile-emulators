@@ -3,6 +3,7 @@ import { Heading } from '../components/Heading';
 import { Notice } from '../components/Notice';
 import { PhoneMock } from '../components/PhoneMock';
 import { Pill } from '../components/Pill';
+import { useI18n } from '../i18n/I18nProvider';
 import type { InputGesture } from '../live/types';
 import type { VideoBus } from '../live/videoBus';
 import type { LogRow, Stat, TileVM } from '../state/selectors';
@@ -32,29 +33,29 @@ interface DeviceProps {
 }
 
 function NeedsCard({ error, busy, onResolve, onBan }: { readonly error: string; readonly busy: boolean; readonly onResolve: () => void; readonly onBan?: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="card card--dark needs">
-      <span className="needs__kicker">Precisa de atenção humana</span>
+      <span className="needs__kicker">{t('device.needs.kicker')}</span>
       <span className="needs__error">{error}</span>
-      <span className="needs__body">
-        Identidade parada, sem retry automático. Retry em bloqueio de plataforma transforma bloqueio leve em banimento.
-      </span>
+      <span className="needs__body">{t('device.needs.body')}</span>
       <div className="device__controls">
-        <Button variant="tertiary" disabled={busy} onClick={onResolve}>Resolvi, devolver à fila</Button>
-        {onBan && <Button variant="secondary" disabled={busy} onClick={onBan}>Marcar como banida</Button>}
+        <Button variant="tertiary" disabled={busy} onClick={onResolve}>{t('device.needs.resolve')}</Button>
+        {onBan && <Button variant="secondary" disabled={busy} onClick={onBan}>{t('device.needs.ban')}</Button>}
       </div>
     </div>
   );
 }
 
 function StepLog({ log, isMobile }: { readonly log: readonly LogRow[]; readonly isMobile: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="card card--white log">
       <div className="row-between log__head">
-        <Heading size="h4">Passos recentes</Heading>
-        <span className="muted-14">histórico podado: modelo vê só os 2 últimos estados</span>
+        <Heading size="h4">{t('device.log.title')}</Heading>
+        <span className="muted-14">{t('device.log.pruned')}</span>
       </div>
-      {log.length === 0 && <span className="log__empty">Nenhum passo ainda.</span>}
+      {log.length === 0 && <span className="log__empty">{t('device.log.empty')}</span>}
       {log.map((l, k) => (
         <div className="log__row" key={k}>
           <span>#{l.i}</span>
@@ -70,7 +71,7 @@ function StepLog({ log, isMobile }: { readonly log: readonly LogRow[]; readonly 
               <span>{l.tokens}</span>
             </>
           )}
-          <span className={`log__tag${l.tag === 'gate' ? ' log__tag--gate' : ''}`}>{l.tag}</span>
+          <span className={`log__tag${l.tag === 'gate' ? ' log__tag--gate' : ''}`}>{l.tag === 'agora' ? t('device.log.now') : l.tag}</span>
         </div>
       ))}
     </div>
@@ -79,11 +80,12 @@ function StepLog({ log, isMobile }: { readonly log: readonly LogRow[]; readonly 
 
 export function Device(p: DeviceProps) {
   const { sel, control, paused, busy, isMobile } = p;
+  const { t } = useI18n();
   return (
     <div className="screen">
       <header className="screen__header" style={{ alignItems: 'center' }}>
         <div className="screen__title" style={{ gap: 20 }}>
-          <button type="button" className="device__back" onClick={p.onBack}>← Cockpit</button>
+          <button type="button" className="device__back" onClick={p.onBack}>← {t('shell.nav.cockpit')}</button>
           <Heading size={isMobile ? 'h3' : 'h2'}>{sel.name}</Heading>
           <span className="device__sub">{sel.handle} · {sel.app} {sel.version}</span>
         </div>
@@ -98,10 +100,10 @@ export function Device(p: DeviceProps) {
           />
           <div className="device__controls">
             <Button variant={control ? 'tertiary' : 'primary'} grow disabled={busy} onClick={p.onToggleControl}>
-              {control ? 'Devolver ao agente' : 'Assumir controle'}
+              {t(control ? 'device.control.release' : 'device.control.take')}
             </Button>
             <Button variant="secondary" disabled={busy} onClick={p.onTogglePause}>
-              {paused ? 'Retomar' : 'Pausar identidade'}
+              {t(paused ? 'device.resume' : 'device.pause')}
             </Button>
           </div>
           {p.errors.map((e) => <Notice key={e}>{e}</Notice>)}

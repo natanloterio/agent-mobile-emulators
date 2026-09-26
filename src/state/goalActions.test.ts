@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FleetAction } from './fleetReducer';
 import { goalPlan, goalSummary } from './fixtures';
-import { createGoalActions } from './goalActions';
+import { createGoalActions, documentLocale } from './goalActions';
+import { DEFAULT_GOAL_TEXT } from '../data/goals';
 import type { ApiBridge } from './apiRequest';
 
 function setup(bridge: ApiBridge | undefined) {
@@ -17,7 +18,7 @@ describe('createGoalActions', () => {
     const api = reply(plan);
     const { actions, created } = setup({ api });
     await created.decompose('  Responder comentários  ');
-    expect(api).toHaveBeenCalledWith('POST', '/goals/plan', { text: 'Responder comentários' });
+    expect(api).toHaveBeenCalledWith('POST', '/goals/plan', { text: 'Responder comentários', lang: 'pt' });
     expect(actions).toEqual([
       { type: 'decomposeStart', fallbackText: 'Responder comentários' },
       { type: 'request', key: 'plan', phase: 'start' },
@@ -57,6 +58,24 @@ describe('createGoalActions', () => {
     await busy.created.launch(plan);
     expect(busy.actions.at(-1)).toEqual({ type: 'requestError', key: 'launch', message: 'objetivo em execução' });
     expect(busy.actions.some((a) => a.type === 'launched')).toBe(false);
+  });
+
+  it('decompose: manda o idioma da tela; objetivo padrão e erros saem nele', async () => {
+    const api = reply(goalPlan());
+    const actions: FleetAction[] = [];
+    const created = createGoalActions({ dispatch: (x) => { actions.push(x); }, getBridge: () => ({ api }), getLocale: () => 'en' });
+    await created.decompose(DEFAULT_GOAL_TEXT);
+    expect(api).toHaveBeenCalledWith('POST', '/goals/plan', { text: 'Reply to comments from the last 24 h on every account', lang: 'en' });
+    expect(actions[0]).toEqual({ type: 'decomposeStart', fallbackText: 'Reply to comments from the last 24 h on every account' });
+    await created.decompose('ab');
+    expect(actions.at(-1)).toEqual({ type: 'requestError', key: 'plan', message: 'describe the goal (at least 3 characters)' });
+    const bad = createGoalActions({ dispatch: (x) => { actions.push(x); }, getBridge: () => ({ api: reply({ nope: 1 }) }), getLocale: () => 'zh' });
+    await bad.decompose('目标文本');
+    expect(actions).toContainEqual({ type: 'requestError', key: 'plan', message: '守护进程的响应不符合约定（计划）' });
+  });
+
+  it('documentLocale: sem documento (node) é português', () => {
+    expect(documentLocale()).toBe('pt');
   });
 
   it('loadGoals: GET /goals e goalsLoaded; formato inválido vira erro', async () => {

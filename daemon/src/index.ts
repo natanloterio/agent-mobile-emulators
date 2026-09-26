@@ -113,7 +113,7 @@ const server = await startServer({
     return { goalId: started.goalId, done: started.done };
   },
   // Rotas das frentes do incremento 5: objetivos, ciclo de vida da identidade, controle humano (input via `adb shell input`).
-  routes: [goalsRoutes({ plan: (text) => planGoal(text, planDeps) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) })],
+  routes: [goalsRoutes({ plan: (text, lang) => planGoal(text, planDeps, lang) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) })],
   onProviderTest: async (role) => {
     const model = readProviderConfig(db)[role].model;
     const fail = (error: string) => recordProviderTest(db, { role, model, latencyMs: 0, tokensPerSec: null, argsValid: false, warning: null, error, at: new Date().toISOString() });

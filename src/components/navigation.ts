@@ -1,17 +1,20 @@
 import type { Screen } from '../types/fleet';
 
+import type { MessageKey } from '../i18n/messages';
+
 export interface NavItem {
   readonly key: Screen;
-  readonly label: string;
-  readonly short: string;
+  /** Chaves de tradução (namespace `shell`). */
+  readonly label: MessageKey;
+  readonly short: MessageKey;
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { key: 'cockpit', label: 'Cockpit', short: 'Cockpit' },
-  { key: 'new', label: 'Novo objetivo', short: 'Novo' },
-  { key: 'report', label: 'Relatório', short: 'Relatório' },
-  { key: 'ids', label: 'Identidades', short: 'IDs' },
-  { key: 'prov', label: 'Provedores', short: 'Modelos' },
+  { key: 'cockpit', label: 'shell.nav.cockpit', short: 'shell.nav.cockpit' },
+  { key: 'new', label: 'shell.nav.new', short: 'shell.nav.new.short' },
+  { key: 'report', label: 'shell.nav.report', short: 'shell.nav.report' },
+  { key: 'ids', label: 'shell.nav.ids', short: 'shell.nav.ids.short' },
+  { key: 'prov', label: 'shell.nav.prov', short: 'shell.nav.prov.short' },
 ];
 
 /** A tela de device é um aprofundamento do cockpit; na navegação ela conta como cockpit. */

@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { KillBanner } from './components/KillBanner';
 import { MobileBottomNav, MobileTopbar } from './components/MobileChrome';
 import { Sidebar } from './components/Sidebar';
-import { CURRENT_GOAL_TEXT, DEFAULT_GOAL_TEXT, PAST_GOALS } from './data/goals';
+import { currentGoalText, DEFAULT_GOAL_TEXT, PAST_GOALS } from './data/goals';
+import { useI18n } from './i18n/I18nProvider';
 import { kvCacheLeftGiB, liveVram, vramEmulatorShare } from './lib/resources';
 import { useIsMobile } from './lib/useIsMobile';
 import { liveRoles } from './live/merge';
@@ -29,15 +30,16 @@ import './components/Shell.css';
 // Parâmetros do design (props do editor).
 const FULL_TILES = true;
 const SHOW_COST = true;
-const DEMO_HEADER = { kicker: 'Objetivo em execução · fan-out replicado', title: CURRENT_GOAL_TEXT };
 const DEMO_PAST = PAST_GOALS.map((g) => ({ ...g, key: g.text }));
 
 export function App() {
   const { state, actions, bridged, goal, identity } = useFleet();
   const isMobile = useIsMobile();
   const { snap: live, frames, bus } = useLiveFleet();
+  const i18n = useI18n();
+  const { t } = i18n;
 
-  const view = useMemo(() => buildFleetView(state, live, frames, bridged), [state, live, frames, bridged]);
+  const view = useMemo(() => buildFleetView(state, live, frames, bridged, i18n), [state, live, frames, bridged, i18n]);
   const { isLive, tiles, fleetSize } = view;
   const sel = tiles.length ? selectSelected(tiles, state.sel) : undefined;
 
@@ -55,8 +57,10 @@ export function App() {
     <Cockpit
       tiles={tiles}
       bus={bus}
-      goalHeader={isLive ? selectGoalHeader(view.goal) : DEMO_HEADER}
-      goalStats={isLive ? selectLiveGoalStats(view.goal, SHOW_COST) : selectGoalStats(tiles, fleetSize, SHOW_COST)}
+      goalHeader={isLive
+        ? selectGoalHeader(view.goal, i18n)
+        : { kicker: t('cockpit.goal.running', { pattern: t('cockpit.demo.pattern') }), title: currentGoalText(i18n) }}
+      goalStats={isLive ? selectLiveGoalStats(view.goal, SHOW_COST, i18n) : selectGoalStats(tiles, fleetSize, SHOW_COST, i18n)}
       goalPct={isLive ? selectLiveGoalPct(view.goal) : selectGoalPct(tiles)}
       showCost={SHOW_COST}
       fullTiles={FULL_TILES}
@@ -76,7 +80,7 @@ export function App() {
         return cockpit();
       case 'device': {
         if (!sel) return cockpit();
-        const d = buildDeviceView(state, view, live, sel);
+        const d = buildDeviceView(state, view, live, sel, i18n);
         const id = sel.id ?? '';
         return (
           <Device
@@ -111,10 +115,10 @@ export function App() {
       case 'report':
         return (
           <Report
-            cards={isLive ? selectLiveReportCards(view.goal) : selectReportCards(tiles)}
+            cards={isLive ? selectLiveReportCards(view.goal, i18n) : selectReportCards(tiles)}
             needsList={selectNeedsList(tiles)}
             costRows={selectCostRows(tiles)}
-            pastGoals={isLive ? (state.pastGoals && selectPastGoalRows(state.pastGoals)) : DEMO_PAST}
+            pastGoals={isLive ? (state.pastGoals && selectPastGoalRows(state.pastGoals, i18n)) : DEMO_PAST}
             pastReq={requestOf(state, 'goals')}
             goalKey={`${view.goal?.id ?? ''}:${view.goal?.state ?? ''}`}
             isMobile={isMobile}
@@ -125,7 +129,7 @@ export function App() {
       case 'ids':
         return (
           <Identities
-            rows={isLive ? selectLiveIdRows(live?.identities ?? [], state.requests, Date.now()) : selectIdRows(state, fleetSize)}
+            rows={isLive ? selectLiveIdRows(live?.identities ?? [], state.requests, Date.now(), i18n) : selectIdRows(state, fleetSize, i18n)}
             isMobile={isMobile}
             provisionReq={requestOf(state, 'provision')}
             onProvision={(pin) => (isLive ? void identity.provision(pin) : actions.provision())}
@@ -135,12 +139,12 @@ export function App() {
           />
         );
       case 'prov': {
-        const vram = isLive ? liveVram(live?.host, fleetSize) : null;
+        const vram = isLive ? liveVram(live?.host, fleetSize, i18n) : null;
         return (
           <Providers
-            roles={liveRoles(selectRoles(state), live)}
+            roles={liveRoles(selectRoles(state, i18n), live, i18n)}
             fleetSize={fleetSize}
-            kvLeft={vram?.kvLeft ?? kvCacheLeftGiB(fleetSize)}
+            kvLeft={vram?.kvLeft ?? kvCacheLeftGiB(fleetSize, i18n)}
             vramEmuShare={vram?.emuShare ?? vramEmulatorShare(fleetSize)}
             vramTotal={vram?.total ?? '32 GB'}
             isMobile={isMobile}
