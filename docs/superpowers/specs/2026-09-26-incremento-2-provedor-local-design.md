@@ -117,7 +117,7 @@ runTask(o)
  └─ finish(outcome, resumo do último segmento)
 ```
 
-- `seg1.response.messages` é `ModelMessage[]` neutro a provedor, com os `tool-result`; a tool call inválida que disparou o piso fica no histórico com o seu `tool-error` — o modelo de escalonamento vê o que deu errado. A poda de telas roda de novo no `prepareStep` do segmento 2.
+- `seg1.response.messages` é `ModelMessage[]` neutro a provedor, com os `tool-result` dos passos válidos. **Medido no `ai@7.0.116`:** passos cujas tool calls foram inválidas são descartados de `response.messages` (o SDK não gera `tool` message para eles), então o modelo de escalonamento não os vê. O segmento 2 recebe `[...mensagens iniciais, ...seg1.response.messages, { role: 'user', content: nota de escalada }]`, onde a nota diz que o modelo anterior falhou N vezes ao chamar tools e que a tarefa continua de onde a tela parou. A poda de telas roda de novo no `prepareStep` do segmento 2.
 - Orçamento é único para a tarefa. O prompt cache do Anthropic começa frio no segmento 2 — custo esperado de uma tarefa degradada, vai para o relatório.
 - **Sem repetição automática** após `quality-floor` (mesma regra do bloqueio de plataforma). A identidade volta a `idle`, nunca `needs-human`: a conta está bem, o modelo é que não serviu.
 - `outcome` ganha o valor `'quality-floor'`; `escalated` (já existe em `step`) marca as linhas do segmento 2.
