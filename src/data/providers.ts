@@ -1,10 +1,13 @@
+import { PT, type I18n } from '../i18n/translate';
 import type { ProviderMode, RoleDef, RoleKey } from '../types/fleet';
 
-export const ROLES: readonly RoleDef[] = [
-  { key: 'lider', name: 'Líder', volume: '1× por objetivo · decomposição', tone: 'grey' },
-  { key: 'worker', name: 'Worker por device', volume: '40–60 passos × N contas', tone: 'green' },
-  { key: 'esc', name: 'Escalonamento', volume: 'Raro · tela inesperada, orçamento, ação sensível', tone: 'dark' },
-];
+/** Nome e volume do papel no idioma pedido (português por padrão). */
+export const roleName = (role: RoleKey, { t }: I18n = PT): string => t(`providers.role.${role}.name`);
+export const roleVolume = (role: RoleKey, { t }: I18n = PT): string => t(`providers.role.${role}.volume`);
+
+const role = (key: RoleKey, tone: RoleDef['tone']): RoleDef => ({ key, name: roleName(key), volume: roleVolume(key), tone });
+/** Papéis com nome/volume em português; a tela traduz por `roleName`/`roleVolume`. */
+export const ROLES: readonly RoleDef[] = [role('lider', 'grey'), role('worker', 'green'), role('esc', 'dark')];
 
 export const DEFAULT_MODES: Readonly<Record<RoleKey, ProviderMode>> = {
   lider: 'nuvem',
@@ -26,12 +29,12 @@ export interface TestResultRow {
   readonly value: string;
 }
 
-export function testResultFor(mode: ProviderMode): readonly TestResultRow[] {
+export function testResultFor(mode: ProviderMode, { t, fmt }: I18n = PT): readonly TestResultRow[] {
   const local = mode === 'local';
   return [
-    { label: 'Latência', value: local ? '410 ms' : '1,2 s' },
-    { label: 'Tokens/s', value: local ? '88' : '64' },
-    { label: 'Argumentos', value: 'estruturados e válidos' },
-    { label: 'Tool', value: 'android_conta1_get_screen_state' },
+    { label: t('providers.result.latency'), value: local ? '410 ms' : `${fmt.decimal(1.2)} s` },
+    { label: t('providers.result.tps'), value: local ? '88' : '64' },
+    { label: t('providers.result.args'), value: t('providers.result.argsOk') },
+    { label: t('providers.result.tool'), value: 'android_conta1_get_screen_state' },
   ];
 }
