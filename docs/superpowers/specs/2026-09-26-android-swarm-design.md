@@ -98,7 +98,21 @@ seção 4.1 exige re-snapshot a cada execução, o snapshot é permanente, não 
 | 2G | ~4–5 GB | 2,1 GB | ~6–7 GB | **60–70 GB** |
 | 4G | ~4–5 GB | 4,3 GB | ~8–9 GB | **80–90 GB** |
 
-Cabe nos 397 GB livres, mas a decisão de `hw.ramSize` move disco e RAM juntos.
+Cabe, mas com três condições que o spec precisa fixar em vez de herdar:
+
+- **`hw.ramSize` e `dataPartition.size` são restrições versionadas da imagem-base.** Os números
+  acima pressupõem 2G e 6G; nenhum dos dois era declarado, e A4 argumenta que o guest vai
+  precisar subir.
+- **Política de ocupação por identidade.** A seção 4.1 manda o cache do app acumular, e a
+  partição é fixa: quando enche, o Android descarta cache e depois o app quebra. Precisa de
+  alerta de ocupação e procedimento de re-baseline (recriar a identidade a partir do snapshot
+  limpo, preservando a conta). AVDs antigos desta máquina mostram o destino sem política:
+  `Pixel_7.avd` com 23 GB.
+- **`ANDROID_AVD_HOME` pinado no disco certo.** O default fica em `~/.android/avd`, na
+  partição a 78% de uso, que já carrega 62 GB de outros AVDs e 33 GB de system images —
+  enquanto o volume de trabalho tem 1,1 TB ociosos. **Suspeita não medida:** dez emuladores
+  escrevendo qcow2 no mesmo NVMe durante o boot simultâneo do passo 3 da seção 5 é contenção
+  de I/O que ninguém verificou.
 
 ### Viabilidade do alvo (validada)
 
@@ -473,16 +487,31 @@ SQLite, escritor único (daemon).
 
 ## 9. Faseamento
 
-1. **Fundação** — daemon com adb server isolado e binário pinado, modelo de dados, ciclo de
-   vida do AVD, sonda de prontidão de 5 sinais, lease de portas com detecção de colisão.
-   Uma identidade, um device.
-2. **Cockpit** — **primeiro item: spike de injeção de toque com scrcpy 4.1 no Android 14**,
-   que é pré-requisito de todo o resto da fase; depois grid, ampliação com input,
-   provisionamento manual assistido. Decidir aqui grid por gRPC × grid por scrcpy.
-3. **Execução** — worker único com LLM, loop de passos, poda de histórico, gate determinístico.
+Ordenado por **risco descoberto**, não por camada construída. A ordem anterior — fundação,
+cockpit, execução, enxame — construía daemon, banco e frota inteira antes de testar se a
+plataforma tolera a terceira resposta automatizada, que a seção 10 identifica como o risco
+dominante. Também entregava uma fase 1 sem valor observável: um processo que sobe um AVD e
+diz que está pronto é o que `emulator -avd X && adb wait-for-device` já faz.
+
+1. **Fatia vertical, uma identidade** — login manual na janela nativa do emulador, um worker
+   LLM executando **uma tarefa real ponta a ponta** no app alvo, começando por ações
+   reversíveis antes de qualquer publicação. Sem daemon, sem banco, sem grid: script e um
+   device. Entregável observável: uma ação real feita por agente, com custo medido.
+   Resolve de uma vez as pendências mais caras: injeção de input (seção 4.2), `hw.ramSize`
+   sob carga real (seção 3), custo real em tokens por tarefa (seção 4.3) e — o principal —
+   como a conta reage, com **uma** identidade em jogo em vez de dez.
+2. **Endurecer o caminho único** — daemon com adb server isolado e binário pinado, modelo de
+   dados, ciclo de vida do AVD, sonda de 5 sinais, lease de portas, lease de device,
+   intenção write-ahead e idempotência. Infraestrutura agora com consumidor provado.
+3. **Cockpit** — grid e tela ampliada com controle; decisão grid por gRPC × scrcpy, já
+   informada pelo spike da fase 1.
 4. **Enxame** — líder, decomposição, scheduler, pacing, contabilidade de custo.
-5. **Provedores** — tela de configuração por papel, teste de conexão real, piso de qualidade.
+5. **Provedores** — tela por papel, teste de conexão real, piso de qualidade.
 6. **System 1** — coleta de `decision_sample`, fine-tune do Laya, gate calibrado.
+
+**Critério de parada entre 1 e 2:** se a fase 1 mostrar que a conta recebe checkpoint com
+volume baixo de automação, o projeto muda de forma antes de existir frota — e o custo dessa
+descoberta terá sido uma identidade e alguns dias, não seis fases.
 
 ## 10. Riscos abertos
 
