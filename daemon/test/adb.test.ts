@@ -37,9 +37,9 @@ describe('adb isolado', () => {
     expect(args).toContain('--ei port 8080');
     expect(args).toContain('com.danielealbano.androidremotecontrolmcp.ADB_CONFIGURE');
   });
-  it('forward chama adb forward tcp:host tcp:device', async () => {
+  it('forward chama adb forward tcp:host <spec>', async () => {
     const { exec, calls } = fakeExec({});
-    await createAdb({ exec }).forward('emulator-5554', 8081, 8080);
+    await createAdb({ exec }).forward('emulator-5554', 8081, 'tcp:8080');
     expect(calls[0]).toEqual(['-s', 'emulator-5554', 'forward', 'tcp:8081', 'tcp:8080']);
   });
   it('spy: getprop devolve valor sem \\r', async () => {
@@ -70,5 +70,28 @@ describe('adb — screencap (incremento 4)', () => {
     await expect(createAdb({ execBuffer: missing }).screencap('emulator-5554')).rejects.toMatchObject({ kind: 'device-missing' });
     const boom: ExecBuffer = async () => ({ stdout: Buffer.alloc(0), stderr: 'error: closed', code: 1 });
     await expect(createAdb({ execBuffer: boom }).screencap('emulator-5554')).rejects.toMatchObject({ kind: 'command' });
+  });
+});
+
+describe('adb — processo e forward (incremento 4)', () => {
+  it('push, forward com spec livre e forwardRemove montam os argumentos certos', async () => {
+    const { exec, calls } = fakeExec({});
+    const adb = createAdb({ exec });
+    await adb.push('emulator-5554', '/x/server.jar', '/data/local/tmp/s.jar');
+    await adb.forward('emulator-5554', 27183, 'localabstract:scrcpy_0000abcd');
+    await adb.forwardRemove('emulator-5554', 27183);
+    expect(calls).toEqual([
+      ['-s', 'emulator-5554', 'push', '/x/server.jar', '/data/local/tmp/s.jar'],
+      ['-s', 'emulator-5554', 'forward', 'tcp:27183', 'localabstract:scrcpy_0000abcd'],
+      ['-s', 'emulator-5554', 'forward', '--remove', 'tcp:27183'],
+    ]);
+  });
+  it('shellSpawn usa o binário, ANDROID_ADB_SERVER_PORT e `shell` + comando', () => {
+    const seen: { file: string; args: readonly string[]; env: NodeJS.ProcessEnv }[] = [];
+    const spawn = (file: string, args: readonly string[], opts: { env: NodeJS.ProcessEnv }) => { seen.push({ file, args, env: opts.env }); return { pid: 1, kill: () => true, on: () => undefined }; };
+    createAdb({ spawn }).shellSpawn('emulator-5554', ['CLASSPATH=/a.jar', 'app_process', '/', 'X']);
+    expect(seen[0].file).toBe('/home/loterio/Android/Sdk/platform-tools/adb');
+    expect(seen[0].args).toEqual(['-s', 'emulator-5554', 'shell', 'CLASSPATH=/a.jar', 'app_process', '/', 'X']);
+    expect(seen[0].env.ANDROID_ADB_SERVER_PORT).toBe('5038');
   });
 });

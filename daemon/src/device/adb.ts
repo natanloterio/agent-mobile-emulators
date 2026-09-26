@@ -1,8 +1,11 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn as nodeSpawn } from 'node:child_process';
 import { CONFIG } from '../config.js';
+import type { ChildLike } from '../provider/ollama.js';
 
+export type { ChildLike };
 export type Exec = (file: string, args: readonly string[], env: NodeJS.ProcessEnv) => Promise<{ stdout: string; stderr: string; code: number }>;
 export type ExecBuffer = (file: string, args: readonly string[], env: NodeJS.ProcessEnv) => Promise<{ stdout: Buffer; stderr: string; code: number }>;
+export type Spawn = (file: string, args: readonly string[], opts: { env: NodeJS.ProcessEnv }) => ChildLike;
 
 export class AdbError extends Error {
   constructor(readonly kind: 'device-missing' | 'command', message: string) { super(message); this.name = 'AdbError'; }
@@ -41,15 +44,19 @@ export interface Adb {
   getprop(serial: string, key: string): Promise<string>;
   settingsGetSecure(serial: string, key: string): Promise<string>;
   versionName(serial: string, pkg: string): Promise<string | null>;
-  forward(serial: string, hostPort: number, devicePort: number): Promise<void>;
+  push(serial: string, local: string, remote: string): Promise<void>;
+  forward(serial: string, hostPort: number, spec: string): Promise<void>;
+  forwardRemove(serial: string, hostPort: number): Promise<void>;
+  shellSpawn(serial: string, cmd: readonly string[]): ChildLike;
   broadcastConfigure(serial: string, extras: Record<string, string | number | boolean>): Promise<void>;
   startTrampoline(serial: string, action: 'start' | 'stop'): Promise<void>;
   screencap(serial: string): Promise<Buffer>;
 }
 
-export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; adbPath?: string; serverPort?: number } = {}): Adb {
+export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: Spawn; adbPath?: string; serverPort?: number } = {}): Adb {
   const exec = deps.exec ?? defaultExec;
   const execBuffer = deps.execBuffer ?? defaultExecBuffer;
+  const spawnFn = deps.spawn ?? ((file, args, opts) => nodeSpawn(file, [...args], { env: opts.env, stdio: ['ignore', 'pipe', 'pipe'] }) as unknown as ChildLike);
   const adbPath = deps.adbPath ?? CONFIG.adbPath;
   const env = { ...process.env, ANDROID_ADB_SERVER_PORT: String(deps.serverPort ?? CONFIG.adbServerPort) };
 
@@ -78,7 +85,10 @@ export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; adbPath?
     getprop: (serial, key) => shell(serial, ['getprop', key]),
     settingsGetSecure: (serial, key) => shell(serial, ['settings', 'get', 'secure', key]),
     versionName: async (serial, pkg) => /versionName=(\S+)/.exec(await shell(serial, ['dumpsys', 'package', pkg]))?.[1] ?? null,
-    forward: async (serial, hostPort, devicePort) => { await run(['-s', serial, 'forward', `tcp:${hostPort}`, `tcp:${devicePort}`]); },
+    push: async (serial, local, remote) => { await run(['-s', serial, 'push', local, remote]); },
+    forward: async (serial, hostPort, spec) => { await run(['-s', serial, 'forward', `tcp:${hostPort}`, spec]); },
+    forwardRemove: async (serial, hostPort) => { await run(['-s', serial, 'forward', '--remove', `tcp:${hostPort}`]); },
+    shellSpawn: (serial, cmd) => spawnFn(adbPath, ['-s', serial, 'shell', ...cmd], { env }),
     broadcastConfigure: async (serial, extras) => {
       await shell(serial, ['am', 'broadcast', '-a', CONFIGURE_ACTION, '-n', `${MCP_PKG}/${CONFIGURE_RECEIVER}`, ...extraArgs(extras)]);
     },
