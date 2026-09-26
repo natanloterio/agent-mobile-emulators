@@ -70,3 +70,13 @@ describe('selectIdRows (demo) no formato novo', () => {
     expect(r.find((x) => x.name === 'conta11')?.actions).toEqual([{ kind: 'extra', label: 'Liberar disco', index: 0 }]);
   });
 });
+
+describe('Registrar PIN (integrador)', () => {
+  it('aparece só quando o daemon diz que não há PIN, nunca em banida', () => {
+    const r = (o: Parameters<typeof liveId>[0]) => kinds(selectLiveIdRows([liveId({ id: 'c0', name: 'c0', ...o })], {}, now)[0].actions);
+    expect(r({ lifecycle: 'idle', hasPin: false })).toEqual(['pin']);
+    expect(r({ lifecycle: 'idle', hasPin: true })).toEqual([]);
+    expect(r({ lifecycle: 'idle' })).toEqual([]);
+    expect(r({ lifecycle: 'banned', hasPin: false })).toEqual(['discard']);
+  });
+});

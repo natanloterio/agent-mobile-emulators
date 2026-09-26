@@ -70,7 +70,7 @@ describe('ensureIdentityReady — slug exige reinício do servidor MCP', () => {
     const probe = async () => (++n === 1 ? toolsMissing : readyProbe());
     const r = await ensureIdentityReady(db, row, { adb, probe, sleep: async () => {} });
     expect(r.ready).toBe(true);
-    expect(calls.filter((c) => c.startsWith('trampoline'))).toEqual(['trampoline stop', 'trampoline start']);
+    expect(calls.filter((c) => c.startsWith('trampoline') || c.startsWith('configure'))).toEqual(['configure bearer_token,bearer_token_enabled,device_slug', 'configure bearer_token,bearer_token_enabled,device_slug', 'trampoline stop', 'trampoline start']);
     expect(n).toBeGreaterThanOrEqual(2);
     expect(getIdentity(db, 'conta1')?.state).toBe('idle');
   });
@@ -82,5 +82,43 @@ describe('ensureIdentityReady — slug exige reinício do servidor MCP', () => {
     expect(calls.filter((c) => c === 'trampoline start')).toHaveLength(1);
     expect(getIdentity(db, 'conta1')?.state).toBe('offline');
     expect(getIdentity(db, 'conta1')?.lastError).toMatch(/tools ausentes/);
+  });
+});
+
+describe('ensureIdentityReady destrava com o PIN (integrador)', () => {
+  it('chama o desbloqueio antes da sonda; falha do desbloqueio vira offline com o motivo', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const order: string[] = [];
+    const { adb } = adbSpy();
+    const ok = await ensureIdentityReady(db, getIdentity(db, 'conta1')!, { adb, unlock: async () => { order.push('unlock'); }, probe: async () => { order.push('probe'); return readyProbe(); } });
+    expect(order).toEqual(['unlock', 'probe']); expect(ok.ready).toBe(true);
+    const bad = await ensureIdentityReady(db, getIdentity(db, 'conta1')!, { adb, unlock: async () => { throw new Error('device bloqueado e identidade sem PIN registrado'); } });
+    expect(bad.ready).toBe(false);
+    expect(getIdentity(db, 'conta1')).toMatchObject({ state: 'offline', lastError: expect.stringMatching(/sem PIN/) });
+  });
+});
+
+describe('PIN recusado não é tentado de novo (integrador)', () => {
+  it('vira needs-human, e a próxima sonda nem toca no device', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { adb } = adbSpy(); let attempts = 0;
+    const unlock = async () => { attempts += 1; throw new Error('PIN recusado ou teclado de desbloqueio não apareceu'); };
+    await ensureIdentityReady(db, getIdentity(db, 'conta1')!, { adb, unlock });
+    expect(getIdentity(db, 'conta1')?.state).toBe('needs-human');
+    await ensureIdentityReady(db, getIdentity(db, 'conta1')!, { adb, unlock });
+    expect(attempts).toBe(1);
+  });
+});
+
+describe('token velho no servidor MCP (integrador: clone herda o token da base)', () => {
+  it('401 do MCP reinicia o servidor para ele ler o token novo, e a sonda passa', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { adb, calls } = adbSpy(); let n = 0;
+    const unauthorized = { ready: false, signals: { bootCompleted: true, accessibility: true, mcpInitialize: false, toolsPresent: false, versionMatch: true },
+      details: ['MCP: MCP HTTP Transport Error: POSTing to endpoint (HTTP 401): {"error":"unauthorized"}'], failureClass: 'infra' as const };
+    const probe = async () => (++n === 1 ? unauthorized : readyProbe());
+    const r = await ensureIdentityReady(db, row, { adb, probe, sleep: async () => {}, unlock: async () => {} });
+    expect(r.ready).toBe(true);
+    expect(calls.filter((c) => c.startsWith('trampoline') || c.startsWith('configure'))).toEqual(['configure bearer_token,bearer_token_enabled,device_slug', 'configure bearer_token,bearer_token_enabled,device_slug', 'trampoline stop', 'trampoline start']);
   });
 });

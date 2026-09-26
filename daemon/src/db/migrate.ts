@@ -20,6 +20,8 @@ const COLUMNS: readonly { table: string; column: string; ddl: string }[] = [
   { table: 'goal', column: 'plan_json', ddl: 'text' },
   { table: 'goal', column: 'rationale', ddl: 'text' },
   { table: 'identity', column: 'account_cleared_at', ddl: 'text' },
+  // PIN do bloqueio de tela da identidade: o daemon destrava sozinho após boot/restore/tela apagada.
+  { table: 'identity', column: 'lock_pin', ddl: 'text' },
 ];
 
 export function applyMigrations(db: DatabaseSync): void {

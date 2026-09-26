@@ -13,6 +13,7 @@ export interface IdentityRow {
   readonly paused?: boolean; readonly controlled?: boolean; readonly discardedAt?: string | null;
   readonly lastSignals?: ProbeSignalsRow | null; readonly diskBytes?: number | null; readonly bannedAt?: string | null;
   readonly createdAt?: string | null; readonly accountClearedAt?: string | null;
+  readonly lockPin?: string | null;
 }
 
 /** Espelho de `ProbeSignals` (device/probe.ts) sem importar o módulo de device no banco. */
@@ -25,7 +26,7 @@ export interface IdentityFlags {
   readonly paused?: boolean; readonly controlled?: boolean; readonly discardedAt?: string | null;
   readonly lastSignals?: ProbeSignalsRow | null; readonly diskBytes?: number | null;
   readonly handle?: string; readonly bannedAt?: string | null; readonly appVersionName?: string;
-  readonly accountClearedAt?: string | null;
+  readonly accountClearedAt?: string | null; readonly lockPin?: string | null;
 }
 
 const COLS = ['id','name','handle','avd_name','serial','console_port','mcp_host_port','mcp_token','device_slug','app_package','app_version_name','state'] as const;
@@ -54,7 +55,7 @@ function fromRow(x: Record<string, unknown>): IdentityRow {
     discardedAt: (x.discarded_at as string | null) ?? null, lastSignals: parseSignals(x.last_signals_json),
     diskBytes: x.disk_bytes === null || x.disk_bytes === undefined ? null : Number(x.disk_bytes),
     bannedAt: (x.banned_at as string | null) ?? null, createdAt: (x.created_at as string | null) ?? null,
-    accountClearedAt: (x.account_cleared_at as string | null) ?? null,
+    accountClearedAt: (x.account_cleared_at as string | null) ?? null, lockPin: (x.lock_pin as string | null) ?? null,
   };
 }
 
@@ -93,6 +94,7 @@ export function setIdentityFlags(db: DatabaseSync, id: string, f: IdentityFlags)
     ['bannedAt', 'banned_at', (v: string | null) => v],
     ['appVersionName', 'app_version_name', (v: string) => v],
     ['accountClearedAt', 'account_cleared_at', (v: string | null) => v],
+    ['lockPin', 'lock_pin', (v: string | null) => v],
   ] as never;
   const sets: string[] = []; const vals: (string | number | null)[] = [];
   for (const [k, col, enc] of cols) {

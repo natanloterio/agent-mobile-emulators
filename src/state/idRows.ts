@@ -7,7 +7,7 @@ import type { Tone } from './selectors';
 
 // Linhas da tela Identidades (spec inc. 5 §1): colunas reais do banco e ações ligadas às rotas §3.2.
 
-export type RowActionKind = 'open' | 'extra' | 'boot-window' | 'boot' | 'login' | 'discard' | 'restore' | 'rebaseline';
+export type RowActionKind = 'open' | 'extra' | 'boot-window' | 'boot' | 'login' | 'pin' | 'discard' | 'restore' | 'rebaseline';
 export interface RowAction { readonly kind: RowActionKind; readonly label: string; readonly index?: number }
 
 export interface IdRow {
@@ -73,6 +73,8 @@ function liveRowActions(l: LiveIdentity, tileIndex: number): readonly RowAction[
   if (lc === 'needs-human') out.push({ kind: 'open', label: 'Abrir device', index: tileIndex });
   if (l.restoreUnsafe) out.push({ kind: 'restore', label: 'Confirmar restore' });
   if (diskView(l.diskBytes).high) out.push({ kind: 'rebaseline', label: 'Re-baseline' });
+  // Daemon destrava sozinho com o PIN; sem ele, um reboot deixa o device parado na tela de bloqueio.
+  if (l.hasPin === false) out.push({ kind: 'pin', label: 'Registrar PIN' });
   return out;
 }
 

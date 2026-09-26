@@ -275,17 +275,34 @@ describe('restore espera o device voltar (integrador)', () => {
   });
 });
 
-describe('AVD com PIN (integrador)', () => {
-  it('boot que termina com o usuário travado por credencial vira offline com a explicação', async () => {
-    const h = harness({ userLocked: async () => true }); const s = await serve(h.db, h.ops);
-    await s.post('/identities', { name: 'conta2' }); await s.settle();
+describe('PIN por identidade (integrador)', () => {
+  it('provisionar com PIN: guarda, e o primeiro boot destrava, limpa a conta e aplica o PIN no device', async () => {
+    const log: string[] = [];
+    const h = harness({
+      unlock: async (id) => { log.push(`unlock ${id.id} ${id.lockPin ?? '-'}`); },
+      clearAccount: async (id) => { log.push(`clear ${id.id}`); },
+      setPin: async (id, pin) => { log.push(`setpin ${id.id} ${pin}`); },
+    }); const s = await serve(h.db, h.ops);
+    expect((await s.post('/identities', { name: 'conta2', pin: '4321' })).body).toMatchObject({ hasPin: true });
+    expect(JSON.stringify((await s.post('/identities', { name: 'conta3', pin: '12' })).body)).toMatch(/PIN/);
     await s.post('/identities/conta2/boot', {}); await s.settle();
-    expect(getIdentity(h.db, 'conta2')).toMatchObject({ state: 'offline', lastError: expect.stringMatching(/PIN/) });
+    expect(log).toEqual(['unlock conta2 4321', 'clear conta2', 'setpin conta2 4321']);
+    expect(getIdentity(h.db, 'conta2')).toMatchObject({ state: 'provisioned', lockPin: '4321' });
   });
-  it('usuário destravado segue o fluxo normal', async () => {
-    const h = harness({ userLocked: async () => false }); const s = await serve(h.db, h.ops);
+  it('sem PIN no corpo usa o default; desbloqueio que falha no boot vira offline com o motivo', async () => {
+    const h = harness({ defaultPin: '0000', unlock: async () => { throw new Error('device bloqueado e identidade sem PIN registrado'); } }); const s = await serve(h.db, h.ops);
     await s.post('/identities', { name: 'conta2' }); await s.settle();
+    expect(getIdentity(h.db, 'conta2')?.lockPin).toBe('0000');
     await s.post('/identities/conta2/boot', {}); await s.settle();
-    expect(getIdentity(h.db, 'conta2')?.state).toBe('provisioned');
+    expect(getIdentity(h.db, 'conta2')).toMatchObject({ state: 'offline', lastError: expect.stringMatching(/sem PIN/) });
+  });
+  it('POST /pin: com device no adb só grava se o PIN destravar; valida o formato', async () => {
+    const h = harness({ unlock: async (id) => { if (id.lockPin !== '1234') throw new Error('PIN recusado ou teclado de desbloqueio não apareceu'); } }); const s = await serve(h.db, h.ops);
+    expect((await s.post('/identities/conta1/pin', { pin: 'abcd' })).status).toBe(400);
+    expect((await s.post('/identities/conta1/pin', { pin: '9999' })).status).toBe(409);
+    expect(getIdentity(h.db, 'conta1')?.lockPin).toBeNull();
+    const ok = await s.post('/identities/conta1/pin', { pin: '1234' });
+    expect(ok.status).toBe(200); expect(ok.body).toMatchObject({ hasPin: true }); expect(JSON.stringify(ok.body)).not.toMatch(/1234/);
+    expect(getIdentity(h.db, 'conta1')?.lockPin).toBe('1234');
   });
 });

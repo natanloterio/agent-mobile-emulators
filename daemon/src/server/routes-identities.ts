@@ -29,8 +29,12 @@ export interface IdentityOps {
    * o AVD-base desta máquina é o da conta1, logado, e a identidade nova não pode nascer com a sessão de outra (spec §4.1).
    */
   readonly clearAccount?: (identity: IdentityRow) => Promise<void>;
-  /** Usuário Android travado por credencial após o boot (Direct Boot, `RUNNING_LOCKED`): ninguém opera o device sem o PIN. */
-  readonly userLocked?: (identity: IdentityRow) => Promise<boolean>;
+  /** Destrava tela/armazenamento com o PIN da identidade; lança se estiver bloqueado e não houver PIN (ou se for recusado). */
+  readonly unlock?: (identity: IdentityRow) => Promise<unknown>;
+  /** Define o PIN no device (clone novo nasce da base sem credencial). */
+  readonly setPin?: (identity: IdentityRow, pin: string) => Promise<void>;
+  /** PIN aplicado a identidade nova quando o corpo não traz um (ENXAME_DEFAULT_PIN). */
+  readonly defaultPin?: string | null;
   readonly now?: () => Date; readonly uuid?: () => string;
   readonly baseAvd?: string; readonly snapshotName?: string;
   readonly killSleep?: (ms: number) => Promise<void>;
@@ -46,7 +50,9 @@ const awaitingLogin = (id: IdentityRow) => id.state === 'provisioned' || id.stat
 
 export const normalizeHandle = (h: string): string | null => (HANDLE.test(h) ? `@${h.replace(/^@/, '')}` : null);
 
-const CreateBody = z.object({ name: z.string().regex(NAME, 'nome: [A-Za-z0-9_], até 32').optional(), handle: z.string().optional() });
+const PinSchema = z.string().regex(/^\d{4,16}$/, 'PIN: só dígitos, 4 a 16');
+const CreateBody = z.object({ name: z.string().regex(NAME, 'nome: [A-Za-z0-9_], até 32').optional(), handle: z.string().optional(), pin: PinSchema.optional() });
+const PinBody = z.object({ pin: PinSchema });
 const BootBody = z.object({ window: z.boolean().optional() });
 const LoginBody = z.object({ handle: z.string() });
 const PauseBody = z.object({ paused: z.boolean() });
@@ -112,6 +118,9 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
         id: name, name, handle, avdName, serial: `emulator-${ports.consolePort}`, consolePort: ports.consolePort, mcpHostPort: ports.mcpHostPort,
         mcpToken: uuid(), deviceSlug: name, appPackage: CONFIG.targetApp.package, appVersionName: CONFIG.targetApp.versionName, state: 'provisioned',
       });
+      // PIN pedido para a identidade: aplicado ao device no primeiro boot (o clone nasce sem credencial).
+      const pin = body.pin ?? ops.defaultPin ?? null;
+      if (pin) setIdentityFlags(ctx.db, name, { lockPin: pin });
       done(ctx, name, 201);
     });
     provisioning = job.catch(() => undefined);
@@ -135,13 +144,13 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
       try {
         const booted = await ops.boot(id, { window: body.window ?? false });
         const cur = getIdentity(ctx.db, id.id) ?? booted;
-        if (ops.userLocked && (await ops.userLocked(cur))) {
-          throw new Error(`${cur.avdName} tem bloqueio de tela com PIN/senha: digite-o na janela do emulador e remova o bloqueio (spec §4.1)`);
-        }
+        // Reboot com credencial deixa o armazenamento travado (Direct Boot): destrava com o PIN da identidade.
+        await ops.unlock?.(cur);
         // Sem login ainda (inclusive após um boot que falhou e deixou 'offline'): volta a 'provisioned' sem sonda — a sonda não
         // olha sessão e marcaria 'idle' uma identidade sem conta. As demais são sondadas a cada subida (spec §4.1).
         if (awaitingLogin(cur) && ops.clearAccount && !cur.accountClearedAt) {
           await ops.clearAccount(cur);
+          if (cur.lockPin && ops.setPin) await ops.setPin(cur, cur.lockPin);
           setIdentityFlags(ctx.db, id.id, { accountClearedAt: now() });
         }
         if (awaitingLogin(cur)) setIdentityState(ctx.db, id.id, 'provisioned', { lastError: null });
@@ -248,7 +257,18 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     done(ctx, id.id);
   };
 
-  const actions: Readonly<Record<string, Action>> = { boot, 'login-done': loginDone, pause, resolve, ban, discard, restore, rebaseline };
+  /** Registra o PIN de uma identidade existente. Com o device no adb, só grava se o PIN destravar de fato (evita gastar tentativas depois). */
+  const pin: Action = async (ctx, id) => {
+    const body = await parse(ctx, PinBody); if (!body) return;
+    if (await online(id)) {
+      try { await ops.unlock?.({ ...id, lockPin: body.pin }); }
+      catch (e) { return ctx.send(409, { error: errMsg(e) }); }
+    }
+    setIdentityFlags(ctx.db, id.id, { lockPin: body.pin });
+    done(ctx, id.id);
+  };
+
+  const actions: Readonly<Record<string, Action>> = { pin, boot, 'login-done': loginDone, pause, resolve, ban, discard, restore, rebaseline };
 
   const route: Route = async (ctx) => {
     if (ctx.method !== 'POST') return false;

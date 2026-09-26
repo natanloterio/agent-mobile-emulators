@@ -7,7 +7,8 @@ export interface IdentityActionDeps extends ApiDeps {
 }
 
 export interface IdentityActions {
-  readonly provision: () => Promise<boolean>;
+  readonly provision: (pin?: string) => Promise<boolean>;
+  readonly registerPin: (id: string, pin: string) => Promise<boolean>;
   readonly boot: (id: string, window: boolean) => Promise<boolean>;
   readonly loginDone: (id: string, handle: string) => Promise<boolean>;
   readonly pause: (id: string, paused: boolean) => Promise<boolean>;
@@ -26,6 +27,7 @@ export const inputKey = (id: string) => `input:${id}`;
 
 // Mesmo formato aceito pela lista de permissão do main (electron/api-route.ts).
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const PIN = /^\d{4,16}$/;
 const DEFAULT_BAN_REASON = 'marcada como banida pelo operador';
 
 /** Ações das telas Identidades e Device (spec inc. 5 §3.2); puras em relação ao React. */
@@ -45,7 +47,16 @@ export function createIdentityActions(deps: IdentityActionDeps): IdentityActions
   const confirmed = (message: string, then: () => Promise<boolean>) => (confirm(message) ? then() : Promise.resolve(false));
 
   return {
-    provision: () => track(deps, 'provision', (b) => b.api?.('POST', '/identities', {})).then((r) => r.ok),
+    provision: (pin) => {
+      const p = pin?.trim() ?? '';
+      if (p && !PIN.test(p)) { dispatch({ type: 'requestError', key: 'provision', message: 'PIN: só dígitos, 4 a 16' }); return Promise.resolve(false); }
+      return track(deps, 'provision', (b) => b.api?.('POST', '/identities', p ? { pin: p } : {})).then((r) => r.ok);
+    },
+    registerPin: (id, pin) => {
+      const p = pin.trim();
+      if (!PIN.test(p)) { dispatch({ type: 'requestError', key: idKey(id), message: 'PIN: só dígitos, 4 a 16' }); return Promise.resolve(false); }
+      return post(id, 'pin', { pin: p });
+    },
     boot: (id, window) => post(id, 'boot', { window }),
     loginDone: (id, handle) => {
       const h = handle.trim().replace(/^@*/, '');

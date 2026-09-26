@@ -119,3 +119,14 @@ Keychain do SO para token (continua no banco, como antes); `platform-tools` empa
 - **"No handler registered for 'enxame:api'"**: o processo principal do Electron aberto antes do merge não tinha o canal, e os canais só eram registrados depois de o daemon responder. Agora todos os canais existem desde a subida e respondem "daemon não conectado" enquanto ele não sobe.
 - **Base dourada**: `CONFIG.avd.base` usa `enxame_golden` quando esse AVD existe (senão o da conta1, que precisa estar parado).
 - **AVD com PIN**: o `mcp_test_playstore` tem bloqueio de tela com PIN (`CredentialType: PIN`), o que a spec principal §4.1 proíbe. Um clone dele nasce travado em `FallbackHome` e a conta1 fica em `RUNNING_LOCKED` depois de qualquer reboot. O boot agora detecta `RUNNING_LOCKED` e marca a identidade offline com a explicação. **Ação humana necessária:** digitar o PIN na janela do emulador da conta1, remover o bloqueio de tela (Configurações → Segurança → Bloqueio de tela → Nenhum) e só então criar `enxame_golden` com a conta1 parada.
+
+## PIN por identidade (2026-09-26, decisão do usuário)
+
+Substitui a regra "sem bloqueio de tela por credencial" do spec principal §4.1: cada identidade pode ter PIN, e o daemon se vira com ele.
+
+- **Registro:** `identity.lock_pin` (só dígitos, 4–16). O snapshot expõe só `hasPin`; o valor nunca sai do daemon. Mesmo nível de guarda do `mcp_token` (banco local); keychain continua pendente para os dois.
+- **Provisionar:** `POST /identities {pin?}` (ou `ENXAME_DEFAULT_PIN`); o primeiro boot destrava, limpa a conta do app alvo e aplica o PIN (`locksettings set-pin`), porque a base dourada não tem credencial.
+- **Destravar:** antes de toda sonda (plano, scheduler, teste de provedor, restore) e depois do boot: acordar, `wm dismiss-keyguard`, digitar o PIN, Enter; confirma por `dumpsys user` (`RUNNING_UNLOCKED`) e `isKeyguardShowing=false`. Uma tentativa por chamada; PIN recusado vira `needs-human` e ninguém tenta de novo sozinho (tentativas erradas bloqueiam o device por tempo).
+- **Identidade existente:** `POST /identities/:id/pin {pin}`; com o device no adb, só grava se o PIN destravar de fato. Na tela, "Registrar PIN" aparece nas linhas sem PIN.
+- **Token herdado da base:** clone nasce com o token MCP da conta1. 401 na sonda agora reenvia a configuração e reinicia o servidor MCP; logo após destravar, o daemon espera 4 s antes de configurar (o app ainda está subindo e perdia o broadcast).
+- **Verificado:** clone real com PIN 2468 → reboot a frio (`RUNNING_LOCKED`) → plano do líder destravou, trocou o token e marcou "pronto". Base `enxame_golden` criada da conta1 com ela parada; a conta1 voltou com PIN 1234.

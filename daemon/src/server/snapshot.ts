@@ -19,6 +19,8 @@ export interface IdentitySnapshot {
   readonly avdName: string; readonly serial: string; readonly snapshotTakenAt: string | null; readonly restoreUnsafe: boolean;
   readonly diskBytes: number | null; readonly bannedReason: string | null; readonly discardedAt: string | null;
   readonly signals: ProbeSignalsRow | null;
+  /** Há PIN registrado (o valor nunca sai do daemon). */
+  readonly hasPin: boolean;
 }
 export type ProviderSnapshot = ProviderRow & { readonly lastTest: ProviderTest | null };
 
@@ -75,7 +77,7 @@ function identitySnapshot(db: DatabaseSync, id: IdentityRow, videoState?: (id: s
     appPackage: id.appPackage, appVersionName: id.appVersionName, consolePort: id.consolePort, mcpHostPort: id.mcpHostPort,
     avdName: id.avdName, serial: id.serial, snapshotTakenAt: id.snapshotTakenAt ?? null, restoreUnsafe: isRestoreUnsafe(id.snapshotTakenAt),
     diskBytes: id.diskBytes ?? null, bannedReason: id.bannedReason ?? null, discardedAt: id.discardedAt ?? null,
-    signals: id.lastSignals ?? null,
+    signals: id.lastSignals ?? null, hasPin: !!id.lockPin,
   };
 }
 
