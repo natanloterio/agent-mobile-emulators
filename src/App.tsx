@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { KillBanner } from './components/KillBanner';
 import { MobileBottomNav, MobileTopbar } from './components/MobileChrome';
 import { Sidebar } from './components/Sidebar';
-import { CURRENT_GOAL_TEXT, DEFAULT_GOAL_TEXT, PAST_GOALS } from './data/goals';
+import { currentGoalText, DEFAULT_GOAL_TEXT, PAST_GOALS } from './data/goals';
 import { useI18n } from './i18n/I18nProvider';
 import { kvCacheLeftGiB, liveVram, vramEmulatorShare } from './lib/resources';
 import { useIsMobile } from './lib/useIsMobile';
@@ -59,7 +59,7 @@ export function App() {
       bus={bus}
       goalHeader={isLive
         ? selectGoalHeader(view.goal, i18n)
-        : { kicker: t('cockpit.goal.running', { pattern: t('cockpit.demo.pattern') }), title: CURRENT_GOAL_TEXT }}
+        : { kicker: t('cockpit.goal.running', { pattern: t('cockpit.demo.pattern') }), title: currentGoalText(i18n) }}
       goalStats={isLive ? selectLiveGoalStats(view.goal, SHOW_COST, i18n) : selectGoalStats(tiles, fleetSize, SHOW_COST, i18n)}
       goalPct={isLive ? selectLiveGoalPct(view.goal) : selectGoalPct(tiles)}
       showCost={SHOW_COST}

@@ -12,7 +12,7 @@ Each emulator is an **identity**: one Android Virtual Device (AVD) tied to one a
 
 ## What you get
 
-The interface is in Portuguese. Screens and buttons are named below as they appear in the app, with a translation.
+The interface speaks **English, Português, Español, Français, Deutsch and 中文**. Pick the language at the bottom of the sidebar (top bar on mobile). It follows your system language the first time and remembers your choice. The leader also writes its plan in that language. Screens and buttons are named below as they appear in Portuguese, with a translation.
 
 | Screen | What it does |
 |---|---|
