@@ -15,7 +15,7 @@ const okAdb = (over: Partial<Adb> = {}): Adb => ({
   versionName: async () => '448.0.0.52.84',
   forward: async () => {}, forwardRemove: async () => {}, push: async () => {},
   shellSpawn: () => ({ pid: 1, kill: () => true, on: () => undefined }),
-  broadcastConfigure: async () => {}, startTrampoline: async () => {}, screencap: async () => Buffer.alloc(0),
+  broadcastConfigure: async () => {}, startTrampoline: async () => {}, screencap: async () => Buffer.alloc(0), emu: async () => 'OK', trimCaches: async () => undefined,
   ...over,
 });
 const okMcp = async () => ({
