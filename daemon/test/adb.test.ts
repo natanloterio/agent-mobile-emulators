@@ -95,3 +95,15 @@ describe('adb — processo e forward (incremento 4)', () => {
     expect(seen[0].env.ANDROID_ADB_SERVER_PORT).toBe('5038');
   });
 });
+
+describe('adb — shell genérico (incremento 5)', () => {
+  it('shell monta -s <serial> shell + comando e devolve a saída sem \\r', async () => {
+    const { exec, calls } = fakeExec({ 'wm size': { stdout: 'Physical size: 1080x2400\r\n' } });
+    expect(await createAdb({ exec }).shell('emulator-5554', ['wm', 'size'])).toBe('Physical size: 1080x2400');
+    expect(calls[0]).toEqual(['-s', 'emulator-5554', 'shell', 'wm', 'size']);
+  });
+  it('falha do comando vira AdbError', async () => {
+    const { exec } = fakeExec({ 'input': { code: 1, stderr: 'error: closed' } });
+    await expect(createAdb({ exec }).shell('emulator-5554', ['input', 'tap', '1', '2'])).rejects.toMatchObject({ kind: 'command', message: 'error: closed' });
+  });
+});
