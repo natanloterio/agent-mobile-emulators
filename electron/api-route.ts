@@ -7,7 +7,7 @@ const ALLOWED: readonly { readonly method: 'GET' | 'POST' | 'PUT'; readonly path
   { method: 'POST', path: /^\/kill$/ },
   { method: 'POST', path: /^\/resume$/ },
   { method: 'POST', path: /^\/identities$/ },
-  { method: 'POST', path: /^\/identities\/[A-Za-z0-9_-]{1,64}\/(?:boot|login-done|pause|resolve|ban|discard|restore|rebaseline|control|input)$/ },
+  { method: 'POST', path: /^\/identities\/[A-Za-z0-9_-]{1,64}\/(?:pin|boot|login-done|pause|resolve|ban|discard|restore|rebaseline|control|input)$/ },
 ];
 
 export type ApiMethod = 'GET' | 'POST' | 'PUT';

@@ -12,6 +12,7 @@ export interface LiveIdentity {
   readonly avdName?: string; readonly serial?: string; readonly snapshotTakenAt?: string | null; readonly restoreUnsafe?: boolean;
   readonly diskBytes?: number | null; readonly bannedReason?: string | null; readonly discardedAt?: string | null;
   readonly signals?: ProbeSignals | null;
+  readonly hasPin?: boolean;
 }
 export interface ProbeSignals {
   readonly bootCompleted: boolean; readonly accessibility: boolean; readonly mcpInitialize: boolean;

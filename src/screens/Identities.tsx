@@ -12,10 +12,11 @@ interface IdentitiesProps {
   readonly rows: readonly IdRow[];
   readonly isMobile: boolean;
   readonly provisionReq: RequestStatus;
-  readonly onProvision: () => void;
+  readonly onProvision: (pin: string) => void;
   /** Ações de linha exceto "Login feito", que pede o @ num campo inline antes de chamar `onLoginDone`. */
   readonly onAction: (row: IdRow, action: RowAction) => void;
   readonly onLoginDone: (id: string, handle: string) => void;
+  readonly onRegisterPin: (id: string, pin: string) => void;
 }
 
 function DiskBar({ pct }: { readonly pct: number }) {
@@ -26,11 +27,15 @@ function DiskBar({ pct }: { readonly pct: number }) {
   );
 }
 
-function LoginForm({ onSubmit, onCancel }: { readonly onSubmit: (handle: string) => void; readonly onCancel: () => void }) {
+type InlineKind = 'login' | 'pin';
+
+function InlineForm({ kind, onSubmit, onCancel }: { readonly kind: InlineKind; readonly onSubmit: (value: string) => void; readonly onCancel: () => void }) {
   const [handle, setHandle] = useState('');
+  const pin = kind === 'pin';
   return (
     <form className="idrow__login" onSubmit={(e) => { e.preventDefault(); onSubmit(handle); }}>
-      <input className="idrow__input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@conta" aria-label="@ da conta logada" autoFocus />
+      <input className="idrow__input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder={pin ? 'PIN do device' : '@conta'}
+        aria-label={pin ? 'PIN de bloqueio do device' : '@ da conta logada'} inputMode={pin ? 'numeric' : undefined} type={pin ? 'password' : 'text'} autoFocus />
       <div className="idrow__login-btns">
         <Button size="sm" type="submit">Confirmar</Button>
         <Button size="sm" variant="ghost" onClick={onCancel}>Cancelar</Button>
@@ -40,12 +45,12 @@ function LoginForm({ onSubmit, onCancel }: { readonly onSubmit: (handle: string)
 }
 
 interface RowActionsProps {
-  readonly row: IdRow; readonly logging: boolean; readonly mobile: boolean;
+  readonly row: IdRow; readonly logging: InlineKind | null; readonly mobile: boolean;
   readonly onPick: (a: RowAction) => void; readonly onLogin: (handle: string) => void; readonly onCancel: () => void;
 }
 
 function RowActions({ row, logging, mobile, onPick, onLogin, onCancel }: RowActionsProps) {
-  if (logging) return <LoginForm onSubmit={onLogin} onCancel={onCancel} />;
+  if (logging) return <InlineForm kind={logging} onSubmit={onLogin} onCancel={onCancel} />;
   if (row.actions.length === 0) return <span />;
   return (
     <div className="idrow__actions">
@@ -58,13 +63,18 @@ function RowActions({ row, logging, mobile, onPick, onLogin, onCancel }: RowActi
   );
 }
 
-export function Identities({ rows, isMobile, provisionReq, onProvision, onAction, onLoginDone }: IdentitiesProps) {
-  const [loginFor, setLoginFor] = useState<string | null>(null);
-  const pick = (r: IdRow, a: RowAction) => (a.kind === 'login' ? setLoginFor(r.key) : onAction(r, a));
-  const login = (r: IdRow, handle: string) => { if (r.id) onLoginDone(r.id, handle); setLoginFor(null); };
-  const actionsOf = (r: IdRow) => (
-    <RowActions row={r} logging={loginFor === r.key} mobile={isMobile} onPick={(a) => pick(r, a)} onLogin={(h) => login(r, h)} onCancel={() => setLoginFor(null)} />
-  );
+export function Identities({ rows, isMobile, provisionReq, onProvision, onAction, onLoginDone, onRegisterPin }: IdentitiesProps) {
+  const [inline, setInline] = useState<{ key: string; kind: InlineKind } | null>(null);
+  const [newPin, setNewPin] = useState('');
+  const pick = (r: IdRow, a: RowAction) => (a.kind === 'login' || a.kind === 'pin' ? setInline({ key: r.key, kind: a.kind }) : onAction(r, a));
+  const submit = (r: IdRow, kind: InlineKind, value: string) => {
+    if (r.id) (kind === 'pin' ? onRegisterPin : onLoginDone)(r.id, value);
+    setInline(null);
+  };
+  const actionsOf = (r: IdRow) => {
+    const kind = inline?.key === r.key ? inline.kind : null;
+    return <RowActions row={r} logging={kind} mobile={isMobile} onPick={(a) => pick(r, a)} onLogin={(v) => kind && submit(r, kind, v)} onCancel={() => setInline(null)} />;
+  };
 
   return (
     <div className="screen">
@@ -73,7 +83,11 @@ export function Identities({ rows, isMobile, provisionReq, onProvision, onAction
           <Heading size={isMobile ? 'h3' : 'h2'}>Identidades</Heading>
           <p className="screen__lede" style={{ maxWidth: 420 }}>Cada identidade é um AVD que pertence a uma conta e envelhece com ela.</p>
         </div>
-        <Button disabled={provisionReq.busy} onClick={onProvision}>{provisionReq.busy ? 'Clonando AVD…' : 'Provisionar identidade'}</Button>
+        <form className="ids__provision" onSubmit={(e) => { e.preventDefault(); onProvision(newPin); }}>
+          <input className="idrow__input" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="PIN (opcional)"
+            aria-label="PIN de bloqueio da identidade nova" inputMode="numeric" type="password" />
+          <Button type="submit" disabled={provisionReq.busy}>{provisionReq.busy ? 'Clonando AVD…' : 'Provisionar identidade'}</Button>
+        </form>
       </header>
       {provisionReq.error && <Notice>Provisionamento falhou: {provisionReq.error}</Notice>}
 

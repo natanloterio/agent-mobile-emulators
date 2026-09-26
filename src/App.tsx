@@ -128,9 +128,10 @@ export function App() {
             rows={isLive ? selectLiveIdRows(live?.identities ?? [], state.requests, Date.now()) : selectIdRows(state, fleetSize)}
             isMobile={isMobile}
             provisionReq={requestOf(state, 'provision')}
-            onProvision={() => (isLive ? void identity.provision() : actions.provision())}
+            onProvision={(pin) => (isLive ? void identity.provision(pin) : actions.provision())}
             onAction={onRowAction}
             onLoginDone={(id, handle) => void identity.loginDone(id, handle)}
+            onRegisterPin={(id, pin) => void identity.registerPin(id, pin)}
           />
         );
       case 'prov': {

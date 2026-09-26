@@ -1,19 +1,29 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { Adb } from '../device/adb.js';
 import { probeIdentity, type ProbeResult } from '../device/probe.js';
+import { ensureUnlocked } from '../device/unlock.js';
 import { setIdentityState, type IdentityRow } from '../db/identities.js';
 
 const MCP_DEVICE_PORT = 8080;
 const RESTART_SETTLE_MS = 1500;
+const UNLOCK_SETTLE_MS = 4000;
+const configureExtras = (id: IdentityRow) => ({ bearer_token: id.mcpToken, bearer_token_enabled: true, device_slug: id.deviceSlug });
 const MCP_UP_TRIES = 20;
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** Servidor respondeu mas as tools com o prefixo do slug não existem: o prefixo é fixado na subida do servidor. */
-const needsServerRestart = (r: ProbeResult) => !r.ready && r.signals.mcpInitialize && !r.signals.toolsPresent;
+/**
+ * Slug e token são lidos na subida do servidor MCP: tools sem o prefixo do slug, ou 401 com o token desta identidade
+ * (clone que herdou o token da base; o broadcast já gravou o novo), só se resolvem reiniciando o servidor.
+ */
+const needsServerRestart = (r: ProbeResult) => !r.ready && (
+  (r.signals.mcpInitialize && !r.signals.toolsPresent)
+  || (r.signals.bootCompleted && !r.signals.mcpInitialize && r.details.some((d) => /\b401\b|unauthorized/i.test(d))));
 
 async function restartMcpServer(
   id: IdentityRow, adb: Adb, probe: typeof probeIdentity, sleep: (ms: number) => Promise<void>,
 ): Promise<ProbeResult> {
+  // Reenvia slug/token: o broadcast anterior pode ter se perdido (app ainda subindo logo após o desbloqueio).
+  await adb.broadcastConfigure(id.serial, configureExtras(id));
   await adb.startTrampoline(id.serial, 'stop');
   await sleep(RESTART_SETTLE_MS);
   await adb.startTrampoline(id.serial, 'start');
@@ -33,7 +43,7 @@ const ALL_FALSE = { bootCompleted: false, accessibility: false, mcpInitialize: f
  */
 export async function ensureIdentityReady(
   db: DatabaseSync, id: IdentityRow,
-  deps: { adb: Adb; probe?: typeof probeIdentity; sleep?: (ms: number) => Promise<void> },
+  deps: { adb: Adb; probe?: typeof probeIdentity; sleep?: (ms: number) => Promise<void>; unlock?: (id: IdentityRow) => Promise<unknown> },
 ): Promise<ProbeResult> {
   const sleep = deps.sleep ?? defaultSleep;
   if (id.state === 'needs-human' || id.state === 'banned') {
@@ -41,8 +51,12 @@ export async function ensureIdentityReady(
   }
   const probe = deps.probe ?? probeIdentity;
   try {
+    // Tela ou armazenamento bloqueados pelo PIN (reboot, restore, tela apagada): destrava com o PIN da identidade antes de tudo.
+    const unlocked = await (deps.unlock ?? ((i: IdentityRow) => ensureUnlocked(deps.adb, i.serial, i.lockPin)))(id);
+    // Recém-destravado: apps do armazenamento criptografado ainda estão subindo e perderiam o broadcast de configuração.
+    if (unlocked === 'unlocked') await sleep(UNLOCK_SETTLE_MS);
     await deps.adb.forward(id.serial, id.mcpHostPort, `tcp:${MCP_DEVICE_PORT}`);
-    await deps.adb.broadcastConfigure(id.serial, { bearer_token: id.mcpToken, bearer_token_enabled: true, device_slug: id.deviceSlug });
+    await deps.adb.broadcastConfigure(id.serial, configureExtras(id));
     let result = await probe(id, { adb: deps.adb });
     if (needsServerRestart(result)) result = await restartMcpServer(id, deps.adb, probe, sleep);
     if (result.ready) setIdentityState(db, id.id, 'idle', { lastError: null });
@@ -50,7 +64,9 @@ export async function ensureIdentityReady(
     return result;
   } catch (e) {
     const msg = (e as Error).message ?? String(e);
-    setIdentityState(db, id.id, 'offline', { lastError: msg.slice(0, 300) });
+    // PIN recusado: nunca tentar de novo sozinho (tentativas erradas bloqueiam o device por tempo) — humano confere o PIN.
+    const state = /PIN recusado/.test(msg) ? 'needs-human' : 'offline';
+    setIdentityState(db, id.id, state, { lastError: msg.slice(0, 300) });
     return { ready: false, signals: ALL_FALSE, details: [msg], failureClass: 'infra' };
   }
 }

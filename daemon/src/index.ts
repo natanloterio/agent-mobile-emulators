@@ -14,6 +14,7 @@ import { ensureIdentityReady } from './fleet/identity.js';
 import { pickTestIdentity } from './fleet/pick.js';
 import { reconcileOnStart } from './fleet/reconcile.js';
 import { clearTargetAccount } from './fleet/account.js';
+import { ensureUnlocked, isValidPin, setDevicePin } from './device/unlock.js';
 import { planGoal, type PlanDeps } from './leader/plan.js';
 import { leasePorts } from './fleet/ports.js';
 import { createHostMetrics } from './host/metrics.js';
@@ -83,7 +84,9 @@ const identityRoutes = createIdentityRoutes({
   ensureReady: (d, identity) => ensureIdentityReady(d, identity, { adb }),
   // Boot/descarte mudam quem tem device: vídeo e miniatura recomeçam com a lista nova (serial pode ter mudado por lease).
   onIdentitiesChanged: () => { const t = liveTargets(); screen.start(t); video.start(t); },
-  userLocked: async (identity) => /RUNNING_LOCKED/.test(await adb.shell(identity.serial, ['dumpsys', 'user']).catch(() => '')),
+  unlock: (identity) => ensureUnlocked(adb, identity.serial, identity.lockPin),
+  setPin: (identity, pin) => setDevicePin(adb, identity.serial, pin),
+  defaultPin: process.env.ENXAME_DEFAULT_PIN && isValidPin(process.env.ENXAME_DEFAULT_PIN) ? process.env.ENXAME_DEFAULT_PIN : null,
   clearAccount: async (identity) => { await clearTargetAccount(adb, identity.serial, identity.appPackage); },
 });
 

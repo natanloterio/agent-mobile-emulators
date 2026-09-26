@@ -110,3 +110,22 @@ describe('input em fila (integrador)', () => {
     expect(order).toEqual(['start text', 'end text', 'start key', 'end key']);
   });
 });
+
+describe('PIN (integrador)', () => {
+  const make = () => {
+    const api = vi.fn(async () => null); const acts: FleetAction[] = [];
+    const a = createIdentityActions({ dispatch: (x) => acts.push(x), getBridge: () => ({ api }) as never, confirm: () => true });
+    return { a, api, acts };
+  };
+  it('provisionar com PIN manda o PIN; sem PIN manda corpo vazio; PIN inválido nem chama o daemon', async () => {
+    const t = make();
+    await t.a.provision('4321'); await t.a.provision(''); await t.a.provision('12a');
+    expect(t.api.mock.calls).toEqual([['POST', '/identities', { pin: '4321' }], ['POST', '/identities', {}]]);
+    expect(t.acts.some((x) => x.type === 'requestError' && /PIN/.test(String((x as { message?: string }).message)))).toBe(true);
+  });
+  it('registrar PIN chama a rota da identidade', async () => {
+    const t = make();
+    expect(await t.a.registerPin('c1', ' 1234 ')).toBe(true);
+    expect(t.api).toHaveBeenCalledWith('POST', '/identities/c1/pin', { pin: '1234' });
+  });
+});
