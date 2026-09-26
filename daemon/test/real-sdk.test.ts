@@ -149,10 +149,12 @@ describe('runTask — revisão final', () => {
   });
 });
 
-/** Espelha o mcpToModelOutput do @ai-sdk/mcp (dist/index.js:2586): exige o shape MCP e lança em qualquer outra coisa. */
-const mcpToModelOutput = (result: unknown) => {
-  if (!('content' in (result as object)) || !Array.isArray((result as { content: unknown }).content)) throw new Error('Invalid MCP tool result');
-  return { type: 'content' as const, value: (result as { content: { type: 'text'; text: string }[] }).content };
+/** Espelha o mcpToModelOutput do @ai-sdk/mcp (dist/index.js:2583): recebe { output }; shape MCP vira content, o resto vira json.
+ *  Com output string, `'content' in output` lança TypeError — foi o que derrubou a primeira execução real. */
+const mcpToModelOutput = ({ output }: { output: unknown }) => {
+  const result = output as { content?: unknown };
+  if (!('content' in (result as object)) || !Array.isArray(result.content)) return { type: 'json' as const, value: output as never };
+  return { type: 'content' as const, value: result.content as { type: 'text'; text: string }[] };
 };
 
 describe('runTask — tools reais do @ai-sdk/mcp (shape MCP + toModelOutput)', () => {
