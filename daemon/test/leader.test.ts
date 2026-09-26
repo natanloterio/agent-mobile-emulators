@@ -49,7 +49,7 @@ describe('planGoal — líder com LLM', () => {
     expect(getIdentity(db, 'conta2')?.lastSignals?.versionMatch).toBe(false);
     expect(plan.estimate).toEqual({ tasks: 1, outOfProbe: 2, stepBudget: 30, fleetReadyMs: 8000 });
     expect(plan.leader.model).toBe('claude-sonnet-5'); expect(plan.leader.error).toBeNull();
-    expect(plan.leader.costUsd).toBeCloseTo((1000 * 1 + 200 * 5) / 1e6, 8);
+    expect(plan.leader.costUsd).toBeCloseTo((1000 * 2 + 200 * 10) / 1e6, 8) // líder na nuvem = claude-sonnet-5 (US$ 2/10 por M);
     const prompt = JSON.stringify(model.doGenerateCalls[0].prompt);
     expect(prompt).toMatch(/Responder as 40 menções/); expect(prompt).toMatch(/@c2/);
   });

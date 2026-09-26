@@ -112,4 +112,4 @@ Keychain do SO para token (continua no banco, como antes); `platform-tools` empa
 **Pendências conhecidas:**
 - Provisionar com a base padrão exige parar o emulador da conta1: o AVD-base desta máquina é o próprio AVD dela. O clone tem a conta limpa no primeiro boot (`pm clear`), mas o ideal é um AVD dourado separado (`ENXAME_AVD_BASE`).
 - Texto com acento não é digitável no modo controle (`input text` só aceita ASCII).
-- Custo do líder e do escalonamento na nuvem usa a tabela do Haiku para qualquer modelo.
+- (resolvido) custo na nuvem agora é por modelo: Haiku 4.5, Sonnet 5 e Opus 5; modelo desconhecido conta como Opus 5.
