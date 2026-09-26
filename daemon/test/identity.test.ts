@@ -56,3 +56,27 @@ describe('ensureIdentityReady — revisão final (I7, I8)', () => {
     expect(getIdentity(db, 'conta1')?.state).toBe('needs-human');
   });
 });
+
+describe('ensureIdentityReady — slug exige reinício do servidor MCP', () => {
+  const toolsMissing = { ready: false, signals: { bootCompleted: true, accessibility: true, mcpInitialize: true, toolsPresent: false, versionMatch: true }, details: ['tools ausentes: android_conta1_get_screen_state'], failureClass: 'infra' as const };
+  it('servidor no ar sem as tools do prefixo → reinicia via trampoline, re-sonda e fica idle', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { adb, calls } = adbSpy();
+    let n = 0;
+    const probe = async () => (++n === 1 ? toolsMissing : readyProbe());
+    const r = await ensureIdentityReady(db, row, { adb, probe, sleep: async () => {} });
+    expect(r.ready).toBe(true);
+    expect(calls.filter((c) => c.startsWith('trampoline'))).toEqual(['trampoline stop', 'trampoline start']);
+    expect(n).toBeGreaterThanOrEqual(2);
+    expect(getIdentity(db, 'conta1')?.state).toBe('idle');
+  });
+  it('reinicia no máximo uma vez; se continuar sem as tools, offline com o motivo', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { adb, calls } = adbSpy();
+    const r = await ensureIdentityReady(db, row, { adb, probe: async () => toolsMissing, sleep: async () => {} });
+    expect(r.ready).toBe(false);
+    expect(calls.filter((c) => c === 'trampoline start')).toHaveLength(1);
+    expect(getIdentity(db, 'conta1')?.state).toBe('offline');
+    expect(getIdentity(db, 'conta1')?.lastError).toMatch(/tools ausentes/);
+  });
+});
