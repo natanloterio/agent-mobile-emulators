@@ -16,6 +16,11 @@
 > `StepResult.content` como `tool-error` e `tool-approval-response{approved:false}` — `recordStep` lê `content`.
 > A correção está em `daemon/test/real-sdk.test.ts` (generateText real + `MockLanguageModelV4`) e no commit da passada de correção.
 
+> Além de C1/C2, a revisão final apontou I1–I11 (gate com tela velha e tool use paralelo; rótulos por palavra e
+> descendentes; paginação real; classificação de falhas por origem; isError do MCP; ensureIdentityReady sem lançar e
+> recusando needs-human; lastError limpável; write-ahead antes da execução; single-flight e killed único). Todos
+> corrigidos com testes RED→GREEN; menores diferidos no ledger. Commits `367fba9`, `aaedf3a`, `df936ca`.
+
 ## Global Constraints
 
 - Alvo de escala **8 identidades**; teto duro **16** pela varredura de portas do adb (5555–5585). Este incremento roda **1**.
