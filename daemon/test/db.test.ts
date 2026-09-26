@@ -43,7 +43,7 @@ describe('step — revisão final (I10)', () => {
     const { createGoalAndTask, writeIntent } = await import('../src/db/tasks.js');
     const db = openDb(':memory:'); upsertIdentity(db, row);
     const { taskId } = createGoalAndTask(db, 'conta1', 'g');
-    writeIntent(db, taskId, 1, 't', {}, 'k1');
-    expect(() => writeIntent(db, taskId, 2, 't', {}, 'k1')).toThrow(/UNIQUE|unique/i);
+    writeIntent(db, taskId, 't', {}, 'k1');
+    expect(() => writeIntent(db, taskId, 't', {}, 'k1')).toThrow(/UNIQUE|unique/i);
   });
 });

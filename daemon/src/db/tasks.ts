@@ -13,9 +13,10 @@ export function setTaskState(db: DatabaseSync, taskId: string, state: 'todo' | '
 }
 
 /** Intenção write-ahead: a linha existe ANTES da tool rodar (spec §4.3, recuperação de crash). */
-export function writeIntent(db: DatabaseSync, taskId: string, idx: number, tool: string, args: unknown, idempotencyKey: string): number {
-  const r = db.prepare("insert into step (task_id, idx, tool, args_json, idempotency_key, intent_written_at, started_at) values (?, ?, ?, ?, ?, datetime('now'), datetime('now'))")
-    .run(taskId, idx, tool, JSON.stringify(args ?? null), idempotencyKey);
+export function writeIntent(db: DatabaseSync, taskId: string, tool: string, args: unknown, idempotencyKey: string): number {
+  // idx é a ordem cronológica por tarefa — calculado aqui para que executadas, negadas e alucinadas compartilhem a mesma sequência.
+  const r = db.prepare("insert into step (task_id, idx, tool, args_json, idempotency_key, intent_written_at, started_at) values (?, (select coalesce(max(idx), 0) + 1 from step where task_id = ?), ?, ?, ?, datetime('now'), datetime('now'))")
+    .run(taskId, taskId, tool, JSON.stringify(args ?? null), idempotencyKey);
   return Number(r.lastInsertRowid);
 }
 

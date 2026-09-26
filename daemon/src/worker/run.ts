@@ -80,12 +80,12 @@ const isErrorResult = (out: unknown): boolean => !!out && typeof out === 'object
 
 /** Envolve cada tool do MCP: write-ahead, isError → erro, leitura paginada, invalidação da tela após ação, classificação de falha. */
 function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
-  let idx = 0;
+  let calls = 0;
   return Object.fromEntries(Object.entries(tools).map(([name, t]) => {
     const base = t as Tool & { execute?: (input: unknown, opts: unknown) => Promise<unknown> };
     const execute = async (input: unknown, opts: { toolCallId?: string }) => {
-      const callId = opts?.toolCallId ?? `call-${idx}`;
-      ctx.pending.set(callId, writeIntent(ctx.db, ctx.taskId, ++idx, name, input, `${ctx.taskId}:${callId}`));
+      const callId = opts?.toolCallId ?? `call-${++calls}`;
+      ctx.pending.set(callId, writeIntent(ctx.db, ctx.taskId, name, input, `${ctx.taskId}:${callId}`));
       try {
         // Screenshot não é lido pelo parser e custa tokens; neste incremento a leitura é só de árvore.
         const effectiveInput = isScreenTool(name) ? { ...(input as object), include_screenshot: false } : input;

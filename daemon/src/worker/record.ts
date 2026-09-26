@@ -81,7 +81,7 @@ export function recordStep(db: DatabaseSync, taskId: string, step: StepLike, pri
   const calls = rows.length ? rows : [{ id: `s${step.stepNumber}`, toolName: '(texto)', input: null, excerpt: squash(step.text, 300), error: null }];
   calls.forEach((c, i) => {
     const existing = pending.get(c.id);
-    const id = existing ?? writeIntent(db, taskId, step.stepNumber * 100 + i, c.toolName, c.input, `${taskId}:${step.stepNumber}:${c.id}`);
+    const id = existing ?? writeIntent(db, taskId, c.toolName, c.input, `${taskId}:${step.stepNumber}:${c.id}`);
     if (existing !== undefined) pending.delete(c.id);
     finishStep(db, id, {
       resultExcerpt: c.excerpt, error: c.error ?? undefined,

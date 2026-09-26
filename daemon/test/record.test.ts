@@ -11,7 +11,7 @@ describe('write-ahead e ledger', () => {
   it('writeIntent grava antes; finishStep completa; idempotency_key é único por (tarefa, chave)', () => {
     const db = openDb(':memory:'); upsertIdentity(db, row);
     const { taskId } = createGoalAndTask(db, 'conta1', 'objetivo');
-    const id = writeIntent(db, taskId, 1, 'android_conta1_click_node', { node_id: 'n1' }, 'conta1:click:n1');
+    const id = writeIntent(db, taskId, 'android_conta1_click_node', { node_id: 'n1' }, 'conta1:click:n1');
     const pending = db.prepare('select finished_at, intent_written_at from step where id=?').get(id) as { finished_at: string | null; intent_written_at: string };
     expect(pending.finished_at).toBeNull(); expect(pending.intent_written_at).toBeTruthy();
     finishStep(db, id, { resultExcerpt: 'Click performed', latencyMs: 120 });
@@ -61,5 +61,21 @@ describe('recordStep', () => {
     expect(() => recordStep(db, taskId, step, PRICING)).not.toThrow();
     const s = db.prepare('select result_excerpt, error from step where task_id=?').get(taskId) as { result_excerpt: string; error: string | null };
     expect(s.result_excerpt).toMatch(/^ERRO/); expect(s.error).toMatch(/NoSuchToolError/);
+  });
+});
+
+describe('idx sequencial', () => {
+  it('linha de chamada negada recebe o próximo idx da tarefa, não passo×100', () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { taskId } = createGoalAndTask(db, 'conta1', 'objetivo');
+    const pending = new Map<string, number>();
+    pending.set('c1', writeIntent(db, taskId, 'android_conta1_get_screen_state', {}, `${taskId}:c1`));
+    pending.set('c2', writeIntent(db, taskId, 'android_conta1_click_node', { node_id: 'n1' }, `${taskId}:c2`));
+    recordStep(db, taskId, { stepNumber: 16, text: '', usage: { inputTokens: 10, outputTokens: 1 }, content: [
+      { type: 'tool-call', toolCallId: 'c3', toolName: 'android_conta1_click_node', input: { node_id: 'n2' } },
+      { type: 'tool-output-denied', toolCallId: 'c3', toolName: 'android_conta1_click_node' },
+    ] } as never, PRICING, pending);
+    const idxs = (db.prepare('select idx from step where task_id=? order by id').all(taskId) as { idx: number }[]).map((s) => s.idx);
+    expect(idxs).toEqual([1, 2, 3]);
   });
 });
