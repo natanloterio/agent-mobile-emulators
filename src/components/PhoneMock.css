@@ -35,3 +35,14 @@
 
 .phone__video, .phone__screen { flex: 1; min-height: 0; width: 100%; object-fit: contain; object-position: top center; border-radius: 7px; background: #000; }
 .phone--full .phone__video, .phone--full .phone__screen { border-radius: var(--radius-control); }
+
+/* Modo controle (inc. 5): a tela recebe toque, arraste e teclado; o foco do teclado fica visível. */
+.phone__surface--control { cursor: crosshair; touch-action: none; user-select: none; outline: 2px solid var(--color-green); outline-offset: -2px; }
+.phone__surface--control:focus-visible, .phone__surface--control:focus { outline: 3px dashed var(--color-green); outline-offset: -3px; }
+.phone__nav { display: flex; justify-content: center; gap: 8px; flex-shrink: 0; }
+.phone__nav-btn {
+  font: inherit; font-size: 12px; line-height: 16px; padding: 4px 12px; cursor: pointer;
+  background: var(--color-dark-2); color: var(--color-white); border: 1px solid var(--color-dark-2); border-radius: var(--radius-heading);
+}
+.phone__nav-btn:hover { border-color: var(--color-green); }
+.phone__nav-btn:focus-visible { outline: 2px solid var(--color-green); outline-offset: 2px; }
