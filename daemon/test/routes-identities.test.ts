@@ -274,3 +274,18 @@ describe('restore espera o device voltar (integrador)', () => {
     expect(getIdentity(h.db, 'conta1')?.state).toBe('idle');
   });
 });
+
+describe('AVD com PIN (integrador)', () => {
+  it('boot que termina com o usuário travado por credencial vira offline com a explicação', async () => {
+    const h = harness({ userLocked: async () => true }); const s = await serve(h.db, h.ops);
+    await s.post('/identities', { name: 'conta2' }); await s.settle();
+    await s.post('/identities/conta2/boot', {}); await s.settle();
+    expect(getIdentity(h.db, 'conta2')).toMatchObject({ state: 'offline', lastError: expect.stringMatching(/PIN/) });
+  });
+  it('usuário destravado segue o fluxo normal', async () => {
+    const h = harness({ userLocked: async () => false }); const s = await serve(h.db, h.ops);
+    await s.post('/identities', { name: 'conta2' }); await s.settle();
+    await s.post('/identities/conta2/boot', {}); await s.settle();
+    expect(getIdentity(h.db, 'conta2')?.state).toBe('provisioned');
+  });
+});

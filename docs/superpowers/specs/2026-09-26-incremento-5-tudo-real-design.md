@@ -113,3 +113,9 @@ Keychain do SO para token (continua no banco, como antes); `platform-tools` empa
 - Provisionar com a base padrão exige parar o emulador da conta1: o AVD-base desta máquina é o próprio AVD dela. O clone tem a conta limpa no primeiro boot (`pm clear`), mas o ideal é um AVD dourado separado (`ENXAME_AVD_BASE`).
 - Texto com acento não é digitável no modo controle (`input text` só aceita ASCII).
 - (resolvido) custo na nuvem agora é por modelo: Haiku 4.5, Sonnet 5 e Opus 5; modelo desconhecido conta como Opus 5.
+
+## Correção pós-merge (2026-09-26, noite)
+
+- **"No handler registered for 'enxame:api'"**: o processo principal do Electron aberto antes do merge não tinha o canal, e os canais só eram registrados depois de o daemon responder. Agora todos os canais existem desde a subida e respondem "daemon não conectado" enquanto ele não sobe.
+- **Base dourada**: `CONFIG.avd.base` usa `enxame_golden` quando esse AVD existe (senão o da conta1, que precisa estar parado).
+- **AVD com PIN**: o `mcp_test_playstore` tem bloqueio de tela com PIN (`CredentialType: PIN`), o que a spec principal §4.1 proíbe. Um clone dele nasce travado em `FallbackHome` e a conta1 fica em `RUNNING_LOCKED` depois de qualquer reboot. O boot agora detecta `RUNNING_LOCKED` e marca a identidade offline com a explicação. **Ação humana necessária:** digitar o PIN na janela do emulador da conta1, remover o bloqueio de tela (Configurações → Segurança → Bloqueio de tela → Nenhum) e só então criar `enxame_golden` com a conta1 parada.

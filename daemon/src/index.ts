@@ -83,6 +83,7 @@ const identityRoutes = createIdentityRoutes({
   ensureReady: (d, identity) => ensureIdentityReady(d, identity, { adb }),
   // Boot/descarte mudam quem tem device: vídeo e miniatura recomeçam com a lista nova (serial pode ter mudado por lease).
   onIdentitiesChanged: () => { const t = liveTargets(); screen.start(t); video.start(t); },
+  userLocked: async (identity) => /RUNNING_LOCKED/.test(await adb.shell(identity.serial, ['dumpsys', 'user']).catch(() => '')),
   clearAccount: async (identity) => { await clearTargetAccount(adb, identity.serial, identity.appPackage); },
 });
 
