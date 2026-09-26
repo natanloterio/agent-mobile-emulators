@@ -1,8 +1,13 @@
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 
-// Superfície mínima e explícita. A ponte para o daemon (fase 2 do spec) entra aqui,
-// nunca via nodeIntegration no renderer.
 contextBridge.exposeInMainWorld('enxame', {
   platform: process.platform,
   version: '0.1.0',
+  onSnapshot: (cb: (s: unknown) => void) => {
+    const listener = (_e: unknown, data: unknown) => cb(data);
+    ipcRenderer.on('enxame:snapshot', listener);
+    return () => ipcRenderer.removeListener('enxame:snapshot', listener);
+  },
+  startGoal: (text: string) => ipcRenderer.invoke('enxame:startGoal', text),
+  kill: () => ipcRenderer.invoke('enxame:kill'),
 });

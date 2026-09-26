@@ -4,6 +4,8 @@ import { MobileBottomNav, MobileTopbar } from './components/MobileChrome';
 import { Sidebar } from './components/Sidebar';
 import { hostMeters, kvCacheLeftGiB, vramEmulatorShare } from './lib/resources';
 import { useIsMobile } from './lib/useIsMobile';
+import { liveLogFor, mergeLive } from './live/merge';
+import { useLiveFleet } from './live/useLiveFleet';
 import { Cockpit } from './screens/Cockpit';
 import { Device } from './screens/Device';
 import { Identities } from './screens/Identities';
@@ -25,8 +27,10 @@ const SHOW_COST = true;
 export function App() {
   const { state, actions } = useFleet();
   const isMobile = useIsMobile();
+  const live = useLiveFleet();
 
-  const tiles = useMemo(() => selectTiles(state, FLEET_SIZE), [state]);
+  const mergedIds = useMemo(() => mergeLive(state.ids, live), [state.ids, live]);
+  const tiles = useMemo(() => selectTiles({ ...state, ids: mergedIds }, FLEET_SIZE), [state, mergedIds]);
   const sel = selectSelected(tiles, state.sel);
   const needsCount = selectNeedsCount(tiles);
   const meters = useMemo(() => hostMeters(FLEET_SIZE), []);
@@ -43,7 +47,7 @@ export function App() {
             fullTiles={FULL_TILES}
             isMobile={isMobile}
             onOpen={actions.openDevice}
-            onKill={actions.kill}
+            onKill={() => { actions.kill(); void window.enxame?.kill?.(); }}
             onNew={() => actions.go('new')}
           />
         );
@@ -51,7 +55,7 @@ export function App() {
         return (
           <Device
             sel={sel}
-            log={selectLog(sel)}
+            log={liveLogFor(live, sel.name) ?? selectLog(sel)}
             stats={selectSelStats(sel)}
             control={state.control}
             isMobile={isMobile}
@@ -72,7 +76,7 @@ export function App() {
             onSetGoal={actions.setGoal}
             onDecompose={actions.decompose}
             onReset={actions.resetPlan}
-            onLaunch={() => actions.launch(FLEET_SIZE)}
+            onLaunch={() => { actions.launch(FLEET_SIZE); void window.enxame?.startGoal?.(state.goalText); }}
           />
         );
       case 'report':
