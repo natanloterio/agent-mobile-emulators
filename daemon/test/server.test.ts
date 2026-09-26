@@ -67,7 +67,7 @@ describe('servidor — provedores (incremento 2)', () => {
   it('GET /providers devolve config semeada + últimos testes; PUT valida e aplica', async () => {
     const { s } = await mk();
     const g = await (await fetch(`http://127.0.0.1:${s.port}/providers`, { headers: h })).json() as { config: { worker: { mode: string } }; tests: object };
-    expect(g.config.worker.mode).toBe('nuvem'); expect(g.tests).toEqual({});
+    expect(g.config.worker.mode).toBe('local'); expect(g.config.worker.model).toBe('gpt-oss:20b'); expect(g.tests).toEqual({});
     const put = await fetch(`http://127.0.0.1:${s.port}/providers/worker`, { method: 'PUT', headers: h, body: JSON.stringify({ mode: 'local', model: 'qwen3.5:27b' }) });
     expect(put.status).toBe(200); expect(await put.json()).toMatchObject({ mode: 'local', model: 'qwen3.5:27b', endpoint: 'http://127.0.0.1:11434/v1' });
     expect((await fetch(`http://127.0.0.1:${s.port}/providers/worker`, { method: 'PUT', headers: h, body: JSON.stringify({ mode: 'x' }) })).status).toBe(400);
@@ -78,7 +78,7 @@ describe('servidor — provedores (incremento 2)', () => {
     const r = await fetch(`http://127.0.0.1:${s.port}/providers/worker/test`, { method: 'POST', headers: h });
     expect(r.status).toBe(200); expect(await r.json()).toMatchObject({ role: 'worker', argsValid: true }); expect(tests).toEqual(['worker']);
     const snap = await (await fetch(`http://127.0.0.1:${s.port}/state`, { headers: h })).json() as { providers: { worker: { mode: string; lastTest: unknown } } };
-    expect(snap.providers.worker.mode).toBe('nuvem');
+    expect(snap.providers.worker.mode).toBe('local');
   });
   it('PUT e test → 409 enquanto um objetivo roda (Review Focus 4)', async () => {
     let release!: () => void; const gate = new Promise<void>((r) => { release = r; });

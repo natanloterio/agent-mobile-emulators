@@ -7,7 +7,7 @@ describe('provider_config', () => {
     const db = openDb(':memory:');
     const a = readProviderConfig(db);
     expect(a).toEqual(PROVIDER_DEFAULTS);
-    expect(a.worker).toMatchObject({ mode: 'nuvem', model: 'claude-haiku-4-5' });
+    expect(a.worker).toMatchObject({ mode: 'local', model: 'gpt-oss:20b', endpoint: LOCAL_ENDPOINT_DEFAULT });
     expect(a).not.toBe(PROVIDER_DEFAULTS);
     expect((db.prepare('select count(*) as n from provider_config').get() as { n: number }).n).toBe(3);
   });

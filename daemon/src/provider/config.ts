@@ -10,10 +10,10 @@ export const ROLE_KEYS: readonly RoleKey[] = ['lider', 'worker', 'esc'];
 export const LOCAL_ENDPOINT_DEFAULT = 'http://127.0.0.1:11434/v1';
 export const CLOUD_ENDPOINT = 'anthropic';
 
-/** Default de fábrica: worker na nuvem até o benchmark da Task 10 aprovar o local (spec §4.2). */
+/** Default de fábrica (spec §8, benchmark de 2026-09-26): gpt-oss:20b venceu o bake-off e completou a tarefa sem disparar o piso. */
 export const PROVIDER_DEFAULTS: ProviderConfig = {
   lider: { role: 'lider', mode: 'nuvem', model: 'claude-sonnet-5', endpoint: CLOUD_ENDPOINT },
-  worker: { role: 'worker', mode: 'nuvem', model: 'claude-haiku-4-5', endpoint: CLOUD_ENDPOINT },
+  worker: { role: 'worker', mode: 'local', model: 'gpt-oss:20b', endpoint: LOCAL_ENDPOINT_DEFAULT },
   esc: { role: 'esc', mode: 'nuvem', model: 'claude-haiku-4-5', endpoint: CLOUD_ENDPOINT },
 };
 

@@ -17,6 +17,10 @@ const calls = (...c: { id: string; name: string; input: unknown }[]) => ({
   finishReason: { unified: 'tool-calls' as const }, usage, warnings: [],
 });
 
+/** Testes do incremento 1 fixam a nuvem: o default de fábrica do worker é local desde o benchmark e tocaria o supervisor real do Ollama. */
+const CLOUD = { role: 'esc' as const, mode: 'nuvem' as const, model: 'claude-haiku-4-5', endpoint: 'anthropic' };
+const CLOUD_PROVIDERS = { lider: { ...CLOUD, role: 'lider' as const, model: 'claude-sonnet-5' }, worker: { ...CLOUD, role: 'worker' as const }, esc: CLOUD };
+
 const mcp: RunTaskDeps['connect'] = async () => ({
   tools: async () => ({
     android_conta1_get_screen_state: tool({ description: 'tela', inputSchema: z.object({}), execute: async () => SCREEN }),
@@ -29,7 +33,7 @@ describe('runTask com o generateText real', () => {
   it('C1: a instrução de sistema chega ao modelo e a tarefa termina done (não InvalidPromptError)', async () => {
     const db = openDb(':memory:'); upsertIdentity(db, row);
     const model = new MockLanguageModelV4({ doGenerate: [text('resumo final')] as never });
-    const r = await runTask({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => false, onStep: () => {} }, { connect: mcp, model });
+    const r = await runTask({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => false, onStep: () => {}, providers: CLOUD_PROVIDERS }, { connect: mcp, model });
     expect(r.outcome).toBe('done');
     expect(r.summary).toBe('resumo final');
     expect(model.doGenerateCalls).toHaveLength(1);
@@ -43,7 +47,7 @@ describe('runTask com o generateText real', () => {
       calls({ id: 'c2', name: 'android_conta1_tap_node', input: { node_id: 'node_ff01' } }, { id: 'c3', name: 'android_conta1_launch_app', input: {} }),
       text('fim'),
     ] as never });
-    const r = await runTask({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => false, onStep: () => {} }, { connect: mcp, model });
+    const r = await runTask({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => false, onStep: () => {}, providers: CLOUD_PROVIDERS }, { connect: mcp, model });
     expect(r.outcome).toBe('done');
     const rows = db.prepare('select tool, result_excerpt, error from step where task_id=? order by idx').all(r.taskId) as { tool: string; result_excerpt: string; error: string | null }[];
     const by = (t: string) => rows.find((x) => x.tool === t);
@@ -57,7 +61,7 @@ describe('runTask com o generateText real', () => {
 });
 
 import { PAGE1 as SCREEN_P1, PAGE2 as SCREEN_P2, PAGE2_CHECKPOINT } from './fixtures/paged.js';
-const opts = (db: ReturnType<typeof openDb>) => ({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => false, onStep: () => {} });
+const opts = (db: ReturnType<typeof openDb>) => ({ db, identity: row, goalText: 'g', apiKey: 'k', isKilled: () => false, onStep: () => {}, providers: CLOUD_PROVIDERS });
 const mkMcp = (tools: Record<string, unknown>): RunTaskDeps['connect'] => async () => ({ tools: async () => tools as never, close: async () => {} });
 const screenTool = (fn: (i: { cursor?: string }) => unknown) => tool({ description: 'tela', inputSchema: z.object({ cursor: z.string().optional() }), execute: async (i) => fn(i) });
 const tapTool = tool({ description: 'tap', inputSchema: z.object({ node_id: z.string() }), execute: async () => 'Tap performed' });

@@ -158,6 +158,8 @@ Tudo em `daemon/src/cli/bench.ts`, um comando (`npm run bench`), pré-condiçõe
 
 **Critério de sucesso do incremento:** o vencedor completa a tarefa **sem disparar o piso** e com tempo total ≤ 3× o do Haiku do mesmo dia. Nesse caso o default de fábrica do `worker` muda para `local` com esse modelo. Se disparar o piso mas o escalonamento concluir, o mecanismo está entregue e o default permanece `nuvem` — decisão sua com os números.
 
+**Resultado (2026-09-26, `docs/superpowers/reports/2026-09-26-incremento-2.md`).** Bake-off: `qwen3.5:27b` 3/3 (1,7 s, 63 tok/s), `gpt-oss:20b` 3/3 (0,9 s, 162 tok/s), `gemma4:12b` 3/3 (0,9 s, 72 tok/s), `qwen2.5-coder:14b` 0/3 (não emite tool call mesmo com `tool_choice: required`). Vencedor: **gpt-oss:20b**. Corrida completa: local 17 passos / 37 s / 33,9 s·GPU / 0 inválidas / sem degradar / pico de VRAM 16,3 GiB, terminou com 13 passos sobrando ("nenhum comentário sem resposta" — a conta de teste não tem publicações); Haiku 30 passos / 59 s / US$ 0,199 / cache read 321k. Critério atendido (sem piso, 37 s ≤ 3 × 59 s) → **default de fábrica do worker passa a `local` / `gpt-oss:20b`**; `esc` continua Haiku na nuvem.
+
 ## 9. Modelo de dados (delta do §8 do spec principal)
 
 ```sql
