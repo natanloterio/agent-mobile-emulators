@@ -148,3 +148,30 @@ describe('runTask — revisão final', () => {
     expect((db.prepare('select count(*) as n from step where finished_at is null').get() as { n: number }).n).toBe(0);
   });
 });
+
+/** Espelha o mcpToModelOutput do @ai-sdk/mcp (dist/index.js:2586): exige o shape MCP e lança em qualquer outra coisa. */
+const mcpToModelOutput = (result: unknown) => {
+  if (!('content' in (result as object)) || !Array.isArray((result as { content: unknown }).content)) throw new Error('Invalid MCP tool result');
+  return { type: 'content' as const, value: (result as { content: { type: 'text'; text: string }[] }).content };
+};
+
+describe('runTask — tools reais do @ai-sdk/mcp (shape MCP + toModelOutput)', () => {
+  it('screen state paginado devolvido no shape MCP passa pelo toModelOutput e a tarefa termina done', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const inputsSeen: unknown[] = [];
+    const mcpScreen = tool({ description: 'tela', inputSchema: z.object({ include_screenshot: z.boolean().optional(), cursor: z.string().optional() }),
+      execute: async (i) => { inputsSeen.push(i); return { content: [{ type: 'text', text: i.cursor ? SCREEN_P2 : SCREEN_P1 }] }; }, toModelOutput: mcpToModelOutput });
+    const mcpTap = tool({ description: 'tap', inputSchema: z.object({ node_id: z.string() }), execute: async () => ({ content: [{ type: 'text', text: 'Tap performed' }] }), toModelOutput: mcpToModelOutput });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: { include_screenshot: true } }),
+      calls({ id: 'c2', name: 'android_conta1_tap_node', input: { node_id: 'node_p2' } }),
+      text('fim'),
+    ] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: mcpScreen, android_conta1_tap_node: mcpTap }), model });
+    expect(r.outcome).toBe('done');
+    expect(stepsOf(db, r.taskId).find((s) => s.tool === 'android_conta1_get_screen_state')?.result_excerpt).toMatch(/node_p1/);
+    expect(stepsOf(db, r.taskId).find((s) => s.tool === 'android_conta1_tap_node')?.result_excerpt).toMatch(/Tap performed/);
+    // o parser não usa imagem; screenshot custa tokens à toa neste incremento
+    expect((inputsSeen[0] as { include_screenshot?: boolean }).include_screenshot).toBe(false);
+  });
+});

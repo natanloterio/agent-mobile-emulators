@@ -87,12 +87,15 @@ function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
       const callId = opts?.toolCallId ?? `call-${idx}`;
       ctx.pending.set(callId, writeIntent(ctx.db, ctx.taskId, ++idx, name, input, `${ctx.taskId}:${callId}`));
       try {
-        const out = await base.execute!(input, opts);
+        // Screenshot não é lido pelo parser e custa tokens; neste incremento a leitura é só de árvore.
+        const effectiveInput = isScreenTool(name) ? { ...(input as object), include_screenshot: false } : input;
+        const out = await base.execute!(effectiveInput, opts);
         if (isErrorResult(out)) throw new Error(textOf(out) || `${name}: isError`);
         if (isScreenTool(name)) {
-          const all = await readAllPages(out, (i) => base.execute!(i, opts), input);
+          const all = await readAllPages(out, (i) => base.execute!(i, opts), effectiveInput);
           ctx.onScreen(all.screen);
-          return all.text;
+          // Preserva o shape MCP: o toModelOutput do @ai-sdk/mcp exige `content: [...]` (string lança TypeError).
+          return typeof out === 'object' && out !== null ? { ...(out as object), content: [{ type: 'text', text: all.text }] } : all.text;
         }
         if (ACTION_TOOL.test(name)) ctx.onScreen(null); // a tela mudou; o gate nega até nova leitura
         return out;
