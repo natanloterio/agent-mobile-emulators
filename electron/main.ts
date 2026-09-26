@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +17,7 @@ function createWindow(): void {
     minHeight: 640,
     title: 'Enxame',
     backgroundColor: '#ffffff',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(here, 'preload.js'),
       contextIsolation: true,
@@ -33,6 +34,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // O design não tem barra de menu; atalhos de sistema continuam funcionando.
+  Menu.setApplicationMenu(null);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
