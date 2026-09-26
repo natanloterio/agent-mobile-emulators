@@ -1,8 +1,13 @@
 import { EXTRA_IDENTITIES, IDENTITIES } from '../data/identities';
 import { DEFAULT_MODES } from '../data/providers';
+import type { GoalPlan, GoalSummary } from '../live/types';
 import type {
   ExtraIdentity, Identity, PlanStage, ProviderMode, RoleKey, Screen, TestStage,
 } from '../types/fleet';
+
+/** Estado de uma chamada ao daemon, por chave ('plan', 'launch', 'goals', 'provision', 'id:<id>'…). */
+export interface RequestStatus { readonly busy: boolean; readonly error: string | null }
+const IDLE_REQUEST: RequestStatus = { busy: false, error: null };
 
 export interface FleetState {
   readonly screen: Screen;
@@ -21,6 +26,12 @@ export interface FleetState {
   /** Erro da última carga da lista de modelos (ex.: "Ollama parado"); separado para um PUT não apagá-lo. */
   readonly providerModelsErrors: Partial<Record<RoleKey, string>>;
   readonly providerModels: Partial<Record<RoleKey, readonly string[]>>;
+  /** Chamadas ao daemon em andamento ou com erro visível na tela. */
+  readonly requests: Readonly<Record<string, RequestStatus>>;
+  /** Plano devolvido por `POST /goals/plan` (modo vivo). */
+  readonly plan: GoalPlan | null;
+  /** `GET /goals` (modo vivo); null = ainda não carregado. */
+  readonly pastGoals: readonly GoalSummary[] | null;
 }
 
 export type FleetAction =
@@ -44,7 +55,13 @@ export type FleetAction =
   | { type: 'providerModels'; role: RoleKey; models: readonly string[] }
   | { type: 'providerModelsError'; role: RoleKey; message: string | null }
   | { type: 'provision' }
-  | { type: 'extraAction'; index: number };
+  | { type: 'extraAction'; index: number }
+  | { type: 'request'; key: string; phase: 'start' | 'ok' }
+  | { type: 'requestError'; key: string; message: string }
+  | { type: 'planReady'; plan: GoalPlan }
+  | { type: 'planFailed' }
+  | { type: 'launched' }
+  | { type: 'goalsLoaded'; goals: readonly GoalSummary[] };
 
 export function createInitialState(screen: Screen = 'cockpit'): FleetState {
   return {
@@ -62,7 +79,14 @@ export function createInitialState(screen: Screen = 'cockpit'): FleetState {
   providerErrors: {},
   providerModelsErrors: {},
   providerModels: {},
+  requests: {},
+  plan: null,
+  pastGoals: null,
   };
+}
+
+export function requestOf(s: FleetState, key: string): RequestStatus {
+  return s.requests[key] ?? IDLE_REQUEST;
 }
 
 export const initialFleetState: FleetState = createInitialState();
@@ -142,13 +166,13 @@ export function fleetReducer(s: FleetState, a: FleetAction): FleetState {
         ids: updateAt(s.ids, s.sel, (d) => ({ ...d, state: 'running', error: '', task: 'Respondendo comentários' })),
       };
     case 'setGoal':
-      return { ...s, goalText: a.text, planStage: 0 };
+      return { ...s, goalText: a.text, planStage: 0, plan: null };
     case 'decomposeStart':
       return { ...s, goalText: s.goalText || a.fallbackText, planStage: 1 };
     case 'decomposeReady':
       return s.planStage === 1 ? { ...s, planStage: 2 } : s;
     case 'resetPlan':
-      return { ...s, planStage: 0 };
+      return { ...s, planStage: 0, plan: null };
     case 'launch':
       return { ...s, screen: 'cockpit', planStage: 0, killed: false, ids: launchIdle(s.ids, a.fleetSize) };
     case 'pickMode':
@@ -167,5 +191,18 @@ export function fleetReducer(s: FleetState, a: FleetAction): FleetState {
       return { ...s, extra: [...s.extra, newProvisionedIdentity(s.extra.length)] };
     case 'extraAction':
       return { ...s, extra: updateAt(s.extra, a.index, applyExtraAction) };
+    case 'request':
+      return { ...s, requests: { ...s.requests, [a.key]: { busy: a.phase === 'start', error: null } } };
+    case 'requestError':
+      return { ...s, requests: { ...s.requests, [a.key]: { busy: false, error: a.message } } };
+    case 'planReady':
+      // Resposta atrasada (texto editado no meio) é descartada.
+      return s.planStage === 1 ? { ...s, planStage: 2, plan: a.plan } : s;
+    case 'planFailed':
+      return s.planStage === 1 ? { ...s, planStage: 0 } : s;
+    case 'launched':
+      return { ...s, screen: 'cockpit', planStage: 0, plan: null, goalText: '' };
+    case 'goalsLoaded':
+      return { ...s, pastGoals: a.goals };
   }
 }
