@@ -54,8 +54,8 @@ Medidas nesta máquina em 2026-09-26, não estimadas:
 | Subset de 11 tools p/ fluxo de comentários | ~1,4k tokens (−78%) |
 | `android_get_screen_state` | 2,1k–2,9k tokens (média ~2,6k) |
 | Preâmbulo anti-injeção por dump | ~165 tokens |
-| Laya: primeira carga / inferência | 67 s / 20–47 ms |
-| Laya zero-shot no nosso domínio | 5/9 acertos, com erros de alta confiança |
+| Laya: primeira carga / inferência | 67 s / 20–47 ms **em telas 2–5× menores que o workload** |
+| Laya zero-shot no nosso domínio | erro confiante reproduzido; acurácia **sem poder estatístico (n=9)** |
 
 Contagens de token medidas com tokenizer real (`o200k_base`), não `chars/4`. **Ressalva:** é
 tokenizer de outro fornecedor; a ordem de grandeza vale, o dígito não. A régua `chars/4` foi
@@ -403,12 +403,17 @@ de worker.
 
 **Resultado do spike (2026-09-26, 3 telas reais deste emulador):**
 
-- Latência confirmada: 20–47 ms após warm-up, 67 s de carga inicial.
-- Acurácia zero-shot: **5/9**.
-- `has_text_input` errou as três com confiança 0,86–0,89 — erro confiante, o modo de falha que
-  calibração deveria impedir, consistente com o ECE 0,204 zero-shot publicado por eles.
-- `needs_confirmation` acertou a direção nas três, mas com 0,47 / 0,47 / 0,67: sem margem para
-  calibrar limiar.
+- **O spike tem n=9** (3 telas × 3 perguntas). 5/9 dá IC 95% de aproximadamente [0,27; 0,81] —
+  indistinguível tanto do 0,362 zero-shot quanto do 0,766 pós-fine-tune que serve de referência
+  aqui. **A acurácia medida não sustenta conclusão** e não é usada como tal: a decisão de adiar
+  o Laya se apoia no motivo estrutural (não emite tool call), não neste número.
+- O que **sobrevive** como evidência: `has_text_input` errou as três com confiança 0,86–0,89, e
+  o rótulo foi conferido (nenhuma das três telas tem nó editável). Erro confiante reproduzido é
+  qualitativo e não depende de tamanho de amostra — é o modo de falha que calibração deveria
+  impedir, consistente com o ECE 0,204 publicado por eles.
+- `needs_confirmation` acertou a direção nas três, com 0,47 / 0,47 / 0,67: sem margem de limiar.
+- Latência medida em telas de 1,3–3,3k chars, enquanto telas reais chegam a ~7k. **Re-medir no
+  tamanho do workload antes de tratar o custo como desprezível.**
 
 **Duas lições do spike, ambas sobre desenho da pergunta:**
 
@@ -464,9 +469,18 @@ continuarem o objetivo.
   grava o `versionName` do app de origem**; quando a versão instalada diverge, o CI falha
   dizendo que a fixture envelheceu, em vez de passar testando uma UI que não existe mais.
 - **Integração golden-path** com emulador real, em app próprio, sob demanda — nunca no CI.
-- **Suíte de eval** do modelo: pares (tela, decisão esperada). O mesmo ativo vira o dataset de
-  fine-tune do Laya.
+- **Suíte de eval** do modelo: pares (tela, decisão esperada), com **papel de gate de
+  release** — não é um teste par dos outros. Precisa de tamanho mínimo declarado e limiar
+  numérico de aprovação antes de servir para alguma coisa; o conjunto existente hoje tem 9
+  exemplos, que não decide nada. O mesmo ativo vira o dataset de fine-tune do Laya.
 - **Não testar** UI do Instagram em CI: não é nossa e muda sem aviso.
+
+**O que o record-replay não cobre**, explicitado para que CI verde não seja confundido com
+sistema funcionando: se o modelo escolhe a tool certa; se a escada de escalonamento dispara na
+hora certa — o gatilho é "tela inesperada N vezes", que é comportamento de modelo; se o gate de
+ação irreversível pega o caso, já que a metade-modelo do gate está stubbada e o replay só
+exercita a metade determinística; e tudo que é timing, pacing e jitter. Isso é território da
+suíte de eval e da fase 1 vertical, não do CI.
 
 ## 8. Modelo de dados
 
@@ -482,8 +496,18 @@ SQLite, escritor único (daemon).
   custo, criado_em, finalizado_em.
 - **step** — id, task_id, indice, acao, tool, argumentos, resultado, tokens, latencia_ms,
   escalou, **started_at, idempotency_key, intent_written_at** (recuperação de crash).
-- **decision_sample** — id, step_id, estado_reduzido, pergunta, resposta_do_modelo, rotulo.
-  Alimenta a suíte de eval e depois o fine-tune.
+- **decision_sample** — id, step_id, estado_reduzido, pergunta, resposta_do_modelo, rotulo,
+  **rotulo_origem**. Alimenta a suíte de eval e depois o fine-tune.
+
+`rotulo` e `resposta_do_modelo` são colunas distintas de propósito, e `rotulo_origem` declara
+de onde o rótulo veio, porque isso decide o que a suíte mede:
+
+- `outcome` — derivado do resultado observado (a verificação pós-ação passou? a tela seguinte
+  foi a esperada?). Barato, não vem do modelo, e é a fonte preferida.
+- `human` — revisão manual, usada em amostragem por conferência e nos casos que `outcome` não
+  decide. É custo real e precisa ser orçado, não presumido.
+- `model` — saída do próprio LLM. Aceitável apenas para pré-triagem, **nunca** como verdade da
+  suíte de eval nem do fine-tune do gate.
 
 ## 9. Faseamento
 
@@ -507,7 +531,11 @@ diz que está pronto é o que `emulator -avd X && adb wait-for-device` já faz.
    informada pelo spike da fase 1.
 4. **Enxame** — líder, decomposição, scheduler, pacing, contabilidade de custo.
 5. **Provedores** — tela por papel, teste de conexão real, piso de qualidade.
-6. **System 1** — coleta de `decision_sample`, fine-tune do Laya, gate calibrado.
+6. **System 1** — coleta de `decision_sample`, fine-tune do Laya, gate calibrado. **Só começa
+   com a procedência do rótulo resolvida** (ver seção 8): rótulo vindo do próprio LLM torna o
+   fine-tune uma destilação que herda os erros do professor, e a suíte de eval passa a medir
+   concordância com o modelo anterior em vez de correção — o oposto da premissa de que o Laya
+   seja um gate mais confiável.
 
 **Critério de parada entre 1 e 2:** se a fase 1 mostrar que a conta recebe checkpoint com
 volume baixo de automação, o projeto muda de forma antes de existir frota — e o custo dessa
