@@ -10,6 +10,9 @@ export interface ScreenCapture {
   all(): readonly Frame[];
   onFrame(cb: (f: Frame) => void): () => void;
   setActive(active: boolean): void;
+  /** Identidade pausada não captura e mantém o último quadro (o vídeo ao vivo está no ar). */
+  pause(id: string): void;
+  resume(id: string): void;
 }
 export interface ScreenDeps {
   readonly adb: Pick<Adb, 'screencap'>;
@@ -27,6 +30,7 @@ export function createScreenCapture(deps: ScreenDeps): ScreenCapture {
   const now = deps.now ?? (() => new Date());
   const frames = new Map<string, Frame>();
   const listeners = new Set<(f: Frame) => void>();
+  const paused = new Set<string>();
   let active = false;
   let generation = 0;
 
@@ -46,7 +50,7 @@ export function createScreenCapture(deps: ScreenDeps): ScreenCapture {
 
   const loop = async (t: ScreenTarget, gen: number): Promise<void> => {
     while (gen === generation) {
-      if (!active) { await sleep(IDLE_POLL_MS); continue; }
+      if (!active || paused.has(t.id)) { await sleep(IDLE_POLL_MS); continue; }
       const wait = await captureOnce(t, gen);
       if (gen !== generation) return;
       await sleep(wait);
@@ -54,11 +58,13 @@ export function createScreenCapture(deps: ScreenDeps): ScreenCapture {
   };
 
   return {
-    start: (targets) => { generation += 1; frames.clear(); for (const t of targets) void loop(t, generation); },
+    start: (targets) => { generation += 1; frames.clear(); paused.clear(); for (const t of targets) void loop(t, generation); },
     stop: () => { generation += 1; frames.clear(); },
     last: (id) => frames.get(id) ?? null,
     all: () => [...frames.values()],
     onFrame: (cb) => { listeners.add(cb); return () => { listeners.delete(cb); }; },
     setActive: (a) => { active = a; },
+    pause: (id) => { paused.add(id); },
+    resume: (id) => { paused.delete(id); },
   };
 }

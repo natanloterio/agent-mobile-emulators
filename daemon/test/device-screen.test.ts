@@ -82,4 +82,13 @@ describe('createScreenCapture', () => {
     errSpy.mockRestore();
     cap.stop();
   });
+  it('pause(id) para a captura daquela identidade e mantém o último quadro; resume(id) retoma', async () => {
+    const calls: string[] = []; const c = clock();
+    const cap = createScreenCapture({ adb: { screencap: async (s) => { calls.push(s); return png(1); } }, sleep: c.sleep });
+    cap.setActive(true); cap.start([{ id: 'A', serial: 'a' }, { id: 'B', serial: 'b' }]); await c.tick(2);
+    cap.pause('A'); const n = calls.length; await c.tick(4);
+    expect(calls.slice(n)).not.toContain('a'); expect(calls.slice(n)).toContain('b'); expect(cap.last('A')).not.toBeNull();
+    cap.resume('A'); await c.tick(4); expect(calls.slice(n).filter((s) => s === 'a').length).toBeGreaterThan(0);
+    cap.stop();
+  });
 });

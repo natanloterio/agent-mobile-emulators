@@ -3,7 +3,9 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { CONFIG, loadEnv } from './config.js';
 import { createAdb } from './device/adb.js';
 import { openDb } from './db/open.js';
-import { getIdentity, upsertIdentity } from './db/identities.js';
+import { getIdentity, listIdentities, upsertIdentity } from './db/identities.js';
+import { createScreenCapture } from './device/screen.js';
+import { createVideoStreams } from './device/video.js';
 import { ensureIdentityReady } from './fleet/identity.js';
 import { readProviderConfig } from './provider/config.js';
 import { createOllamaSupervisor } from './provider/ollama.js';
@@ -17,8 +19,6 @@ const db = openDb(CONFIG.dbPath);
 const adb = createAdb();
 // Supervisor do Ollama: só mata o processo que ele mesmo subiu (spec §4.3).
 const ollama = createOllamaSupervisor();
-for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { ollama.stop(); process.exit(0); });
-process.on('exit', () => ollama.stop());
 
 // Identidade 0: o emulador já provisionado. Token vem do arquivo salvo na sessão de setup ou é gerado agora.
 const tokenFile = '/tmp/claude-1000/-media-loterio-workspace-workspace-pitaia-research/mcp-token.txt';
@@ -30,9 +30,17 @@ upsertIdentity(db, {
   appPackage: CONFIG.targetApp.package, appVersionName: CONFIG.targetApp.versionName, state: existing?.state ?? 'logged-in',
 });
 
+const targets = listIdentities(db).map(({ id, serial }) => ({ id, serial }));
+const screen = createScreenCapture({ adb }); screen.start(targets);
+// Vídeo é a fonte principal; o screencap só corre enquanto o vídeo daquela identidade não está no ar (poster/fallback).
+const video = createVideoStreams({ adb, onState: (id, s) => { if (s === 'streaming') screen.pause(id); else screen.resume(id); } });
+video.start(targets);
+for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { video.stop(); screen.stop(); ollama.stop(); process.exit(0); });
+process.on('exit', () => { video.stop(); screen.stop(); ollama.stop(); });
+
 const daemonToken = randomUUID();
 const server = await startServer({
-  db, token: daemonToken,
+  db, token: daemonToken, screen, video,
   // Kill switch derruba o Ollama que é nosso (spec §4.3); /resume + próximo objetivo o sobem de novo.
   onKill: () => { ollama.stop(); server.broadcast(); },
   onGoal: async (text) => {

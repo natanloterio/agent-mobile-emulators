@@ -3,6 +3,8 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { CLOUD_MODELS, ollamaBase, patchErrorMessage, ProviderPatch, readProviderConfig, ROLE_KEYS, updateProvider, type RoleKey } from '../provider/config.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
+import type { ScreenCapture } from '../device/screen.js';
+import type { VideoStreams } from '../device/video.js';
 import { buildSnapshot } from './snapshot.js';
 import { attachWs } from './ws.js';
 
@@ -15,6 +17,8 @@ export interface ServerOpts {
   readonly onGoal: (text: string) => Promise<void>; readonly onKill: () => void;
   readonly onProviderTest: (role: RoleKey) => Promise<ProviderTest>;
   readonly fetch?: typeof fetch;
+  /** Posters/fallback (screencap) e vídeo ao vivo (spec inc. 4); ausentes, o WS só manda snapshots. */
+  readonly screen?: ScreenCapture; readonly video?: VideoStreams;
 }
 
 function readJson(req: http.IncomingMessage): Promise<unknown> {
@@ -95,7 +99,7 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
       return sendError(res, e);
     }
   });
-  const ws = attachWs(server, o.token, () => buildSnapshot(o.db, killed));
+  const ws = attachWs(server, o.token, () => buildSnapshot(o.db, killed), o.screen, o.video);
   await new Promise<void>((r) => server.listen(o.port ?? 47800, '127.0.0.1', r));
   const port = (server.address() as { port: number }).port;
   return { port, broadcast: ws.broadcast, isKilled: () => killed, close: async () => { ws.close(); await new Promise<void>((r) => server.close(() => r())); } };
