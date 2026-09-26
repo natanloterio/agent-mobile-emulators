@@ -1,6 +1,7 @@
-import type { LogRow } from '../state/selectors';
+import type { TestResultRow } from '../data/providers';
+import type { LogRow, RoleVM } from '../state/selectors';
 import type { DeviceState, Identity } from '../types/fleet';
-import type { FleetSnapshot } from './types';
+import type { FleetSnapshot, LiveProviderTest } from './types';
 
 const STATE_MAP: Readonly<Record<string, DeviceState>> = {
   running: 'running', idle: 'idle', 'logged-in': 'idle', restored: 'idle', dirty: 'idle', provisioned: 'idle', blank: 'idle',
@@ -22,4 +23,19 @@ export function liveLogFor(live: FleetSnapshot | null, name: string): readonly L
   const l = live?.identities.find((i) => i.name === name);
   if (!l || l.lastTools.length === 0) return null;
   return l.lastTools.map((t) => ({ i: String(t.idx), tool: t.tool, desc: t.excerpt, tokens: `${(t.tokens / 1000).toFixed(1)}k tok`, tag: t.gate ? 'gate' : 'ok' }));
+}
+
+const fmtTps = (n: number | null) => (n === null ? '—' : n.toFixed(1).replace('.', ','));
+export function testRows(t: LiveProviderTest): readonly TestResultRow[] {
+  const last: TestResultRow = t.error ? { label: 'Erro', value: t.error } : t.warning ? { label: 'Aviso', value: t.warning } : { label: 'Tool', value: 'android_conta1_get_screen_state' };
+  return [{ label: 'Latência', value: `${t.latencyMs} ms` }, { label: 'Tokens/s', value: fmtTps(t.tokensPerSec) }, { label: 'Argumentos', value: t.argsValid ? 'estruturados e válidos' : 'inválidos' }, last];
+}
+
+/** Sobrepõe o registro real de provedores à tela; sem snapshot (Vite no browser) tudo segue mock. */
+export function liveRoles(roles: readonly RoleVM[], live: FleetSnapshot | null): readonly RoleVM[] {
+  const p = live?.providers; if (!p) return roles;
+  return roles.map((r) => {
+    const l = p[r.key]; if (!l) return r;
+    return { ...r, mode: l.mode, model: l.model, endpoint: l.endpoint, result: r.testing ? r.result : l.lastTest ? testRows(l.lastTest) : null };
+  });
 }
