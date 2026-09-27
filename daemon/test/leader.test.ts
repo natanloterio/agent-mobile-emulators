@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, setIdentityFlags, setIdentityState, upsertIdentity, type IdentityRow } from '../src/db/identities.js';
+import { writeStepBudgets } from '../src/db/settings.js';
 import type { ProbeResult } from '../src/device/probe.js';
 import { LANGS } from '../src/leader/lang.js';
 import { deterministicPlan, planGoal } from '../src/leader/plan.js';
@@ -53,6 +54,12 @@ describe('planGoal — líder com LLM', () => {
     expect(plan.leader.costUsd).toBeCloseTo((1000 * 2 + 200 * 10) / 1e6, 8) // líder na nuvem = claude-sonnet-5 (US$ 2/10 por M);
     const prompt = JSON.stringify(model.doGenerateCalls[0].prompt);
     expect(prompt).toMatch(/Responder as 40 menções/); expect(prompt).toMatch(/@c2/);
+  });
+  it('sem stepBudget explícito, a estimativa lê o limite gravado no banco (spec limites §UI)', async () => {
+    const db = fleet(1);
+    writeStepBudgets(db, { goal: 77 });
+    const plan = await planGoal('Responder comentários', { db, ensureReady: probeBy({}).ensureReady, providers: PROVIDERS, apiKey: '' });
+    expect(plan.estimate.stepBudget).toBe(77);
   });
   it('erro do modelo → regra determinística e erro no plano', async () => {
     const db = fleet(1);

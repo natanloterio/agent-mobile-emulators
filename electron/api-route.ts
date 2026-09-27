@@ -11,6 +11,9 @@ const ALLOWED: readonly { readonly method: 'GET' | 'POST' | 'PUT'; readonly path
   // Missões (spec missões §API).
   { method: 'POST', path: /^\/missions$/ },
   { method: 'POST', path: /^\/missions\/[A-Za-z0-9-]{1,64}\/(?:pause|resume|continue|abandon)$/ },
+  // Limites dos agentes (spec limites §UI): lidos e gravados direto pela tela, sem IPC dedicado.
+  { method: 'GET', path: /^\/settings\/budgets$/ },
+  { method: 'PUT', path: /^\/settings\/budgets$/ },
 ];
 
 export type ApiMethod = 'GET' | 'POST' | 'PUT';

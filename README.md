@@ -164,13 +164,18 @@ A **mission** is a long goal for one identity, such as *"create an email account
 | `ANTHROPIC_API_KEY` | none | Key for the cloud roles. Goes in `.env`. Leave it out to use only local models. |
 | `ENXAME_AVD_BASE` | `enxame_golden`, if it exists | AVD cloned when provisioning. |
 | `ENXAME_DEFAULT_PIN` | none | PIN given to new identities when you don't type one. 4–16 digits. |
-| `ENXAME_STEP_BUDGET` | `30` | Maximum agent steps per task. `0` disables the step budget (the task runs until it finishes, is paused or the kill switch is hit). |
-| `ENXAME_MISSION_STEP_BUDGET` | `60` | Maximum agent steps per mission subtask. `0` disables the step budget (the task runs until it finishes, is paused or the kill switch is hit). |
+| `ENXAME_STEP_BUDGET` | `30` | Starting value for the agent-steps-per-task limit (see below). `0` disables it (the task runs until it finishes, is paused or the kill switch is hit). |
+| `ENXAME_MISSION_STEP_BUDGET` | `60` | Starting value for the agent-steps-per-mission-subtask limit (see below). `0` disables it (the subtask runs until it finishes, is paused or the kill switch is hit). |
 | `ENXAME_LOCAL_CONTEXT` | `65536` | Context length for local models (Ollama and LM Studio). More context uses more VRAM. |
 | `ENXAME_DATA_DIR` | `~/.local/share/enxame` | Database, logs and `daemon.json`. |
 | `ENXAME_PORT` | `47800` | Daemon HTTP/WebSocket port (loopback only). |
 | `ENXAME_SCRCPY_PORT` | `27183` | First local port used for video streams. |
 | `ANDROID_AVD_HOME` | `~/.android/avd` | Where AVDs live. |
+
+**Step limits** can be changed live, without restarting the daemon, on **Provedores → Limites dos agentes**. The env
+vars above only set the value the daemon starts with; from then on the screen's value wins. `0` in the env var and
+"Sem limite" on the screen both mean no limit; the change applies to the next task/subtask (the one already running
+keeps its current limit).
 
 **Models** are chosen on the **Provedores** screen, per role:
 

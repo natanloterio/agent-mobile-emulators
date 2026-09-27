@@ -91,10 +91,13 @@ export interface MissionView {
   readonly subtasks: readonly MissionSubtaskView[];
   readonly memory: readonly { readonly key: string; readonly value: string | null; readonly secret: boolean }[];
 }
+/** Limites de passos configuráveis na tela (spec limites §UI); ausente em daemon antigo. */
+export interface StepBudgets { readonly goal: number | null; readonly mission: number | null }
 export interface FleetSnapshot {
   readonly identities: readonly LiveIdentity[]; readonly providers?: Readonly<Record<LiveRoleKey, LiveProvider>>; readonly killed: boolean; readonly updatedAt: string;
   readonly goal?: GoalSummary | null; readonly host?: HostMetrics | null;
   readonly missions?: readonly MissionView[];
+  readonly stepBudgets?: StepBudgets;
 }
 /** Poster (último screencap PNG, base64) de uma identidade; casado por id (spec inc. 4 §4.3). */
 export interface LiveFrame { readonly id: string; readonly at: string; readonly png: string }

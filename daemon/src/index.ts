@@ -5,6 +5,7 @@ import { createAdb } from './device/adb.js';
 import { createDeviceInput } from './device/input.js';
 import { openDb } from './db/open.js';
 import { getIdentity, listIdentities, upsertIdentity, type IdentityRow } from './db/identities.js';
+import { readStepBudgets } from './db/settings.js';
 import { createScreenCapture } from './device/screen.js';
 import { createVideoStreams } from './device/video.js';
 import { cloneAvd, deleteAvd } from './fleet/avd.js';
@@ -34,6 +35,7 @@ import { controlRoutes } from './server/routes-control.js';
 import { credentialRoutes } from './server/routes-credentials.js';
 import { goalsRoutes } from './server/routes-goals.js';
 import { missionRoutes } from './server/routes-missions.js';
+import { settingsRoutes } from './server/routes-settings.js';
 import { getCredential } from './vault/credentials.js';
 import { keyringKeySource } from './vault/keyring.js';
 import { createVault } from './vault/vault.js';
@@ -114,9 +116,11 @@ const identityRoutes = createIdentityRoutes({
 // Enxame (spec inc. 5 §3.2): líder planeja sobre a frota; scheduler roda um worker por identidade pronta, com pacing.
 const ensureReady = (id: IdentityRow) => ensureIdentityReady(db, id, { adb });
 const planDeps: PlanDeps = { db, ensureReady, apiKey: env.anthropicApiKey, ollama };
+// Limite lido do banco no início de cada tarefa (spec limites §UI): a tela muda o valor sem reiniciar o daemon.
 const runWorker = (j: WorkerJob) => runTask({
   db, identity: j.identity, goalText: j.goalText, goalId: j.goalId, taskId: j.taskId, instruction: j.instruction,
   apiKey: env.anthropicApiKey, isKilled: () => server.isKilled(), onStep: () => server.broadcast(), pacing: CONFIG.swarm,
+  stepBudget: readStepBudgets(db).goal,
 }, { ollama });
 
 // Missões (spec missões): loop planejador → executor por identidade, fora do lock de objetivo.
@@ -130,7 +134,7 @@ const missions = createMissionRunner({
     const r = await runTask({
       db, identity: j.identity, goalText: j.instruction, goalId: j.missionId, taskId: j.taskId, instruction: j.instruction,
       apiKey: env.anthropicApiKey, isKilled: j.shouldStop, onStep: () => server.broadcast(),
-      stepBudget: CONFIG.mission.subtaskStepBudget, pacing: CONFIG.swarm, mission: { missionId: j.missionId, vault, mask },
+      stepBudget: readStepBudgets(db).mission, pacing: CONFIG.swarm, mission: { missionId: j.missionId, vault, mask },
     }, { ollama });
     return { humanReason: r.humanReason, summary: r.platformBlock ?? r.summary };
   },
@@ -156,7 +160,7 @@ const server = await startServer({
   // missões e credenciais do cofre (spec missões) não usam o lock de objetivo.
   routes: [
     goalsRoutes({ plan: (text, lang) => planGoal(text, planDeps, lang) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) }),
-    missionRoutes({ runner: missions }), credentialRoutes({ vault }),
+    missionRoutes({ runner: missions }), credentialRoutes({ vault }), settingsRoutes(),
   ],
   onProviderTest: async (role) => {
     const model = readProviderConfig(db)[role].model;

@@ -5,6 +5,7 @@ import type { GpuBarView } from '../lib/gpuBar';
 import type { ProviderPatch } from '../live/types';
 import type { RoleVM } from '../state/selectors';
 import type { ProviderMode, RoleKey } from '../types/fleet';
+import { BudgetsCard, type BudgetsCardProps } from './BudgetsCard';
 import { shouldSubmitEndpoint } from './endpointSubmit';
 import { cardError, localSelect, modelChoice, roleRuntime, runtimeLines } from './localModels';
 import { VramPanel } from './VramPanel';
@@ -24,11 +25,13 @@ interface ProvidersProps {
   readonly onTest: (role: RoleKey) => void;
   readonly onSetField: (role: RoleKey, patch: Omit<ProviderPatch, 'mode'>) => void;
   readonly onLoadModels: (role: RoleKey) => void;
+  /** Cartão "Limites dos agentes" (spec limites §UI): só no modo vivo (`null` esconde, como no demo). */
+  readonly budgets: BudgetsCardProps | null;
 }
 
 const MODES: readonly ProviderMode[] = ['nuvem', 'local'];
 
-export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, gpu, isMobile, onPickMode, onTest, onSetField, onLoadModels }: ProvidersProps) {
+export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, gpu, isMobile, onPickMode, onTest, onSetField, onLoadModels, budgets }: ProvidersProps) {
   // Recarrega a lista de modelos quando a tela abre e quando algum papel troca de modo.
   const { t } = useI18n();
   const modeKey = roles.map((r) => `${r.key}:${r.mode}`).join('|');
@@ -100,6 +103,8 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, g
           </div>
         ))}
       </div>
+
+      {budgets && <BudgetsCard {...budgets} />}
 
       <VramPanel gpu={gpu} fleetSize={fleetSize} kvLeft={kvLeft} vramEmuShare={vramEmuShare} vramTotal={vramTotal} />
     </div>

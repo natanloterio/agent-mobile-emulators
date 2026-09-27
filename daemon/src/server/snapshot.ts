@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { CONFIG } from '../config.js';
 import { listIdentities, type IdentityRow, type ProbeSignalsRow } from '../db/identities.js';
 import { openMissionFor } from '../db/missions.js';
+import { readStepBudgets, type StepBudgets } from '../db/settings.js';
 import { readProviderConfig, type ProviderRow, type RoleKey } from '../provider/config.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import type { VideoState } from '../device/video.js';
@@ -50,6 +51,8 @@ export interface FleetSnapshot {
   readonly killed: boolean; readonly updatedAt: string;
   readonly goal: GoalSummary | null; readonly host: HostMetrics | null;
   readonly missions: readonly MissionView[];
+  /** Limites de passos configuráveis (spec limites §UI): valor atual do banco, lido a cada snapshot. */
+  readonly stepBudgets: StepBudgets;
 }
 export interface SnapshotSources {
   readonly videoState?: (id: string) => VideoState;
@@ -72,14 +75,14 @@ export function isRestoreUnsafe(snapshotTakenAt: string | null | undefined, now:
 type TaskRow = { id: string; instruction: string; state: string; cost_usd: number; degraded: number; early_stop_remaining: number | null };
 type StepRow = { idx: number; tool: string | null; result_excerpt: string | null; input_tokens: number | null; output_tokens: number | null; provider: string | null };
 
-function identitySnapshot(db: DatabaseSync, id: IdentityRow, videoState?: (id: string) => VideoState): IdentitySnapshot {
+function identitySnapshot(db: DatabaseSync, id: IdentityRow, budgets: StepBudgets, videoState?: (id: string) => VideoState): IdentitySnapshot {
   const task = db.prepare('select id, instruction, state, cost_usd, degraded, early_stop_remaining from task where identity_id=? order by created_at desc, rowid desc limit 1').get(id.id) as TaskRow | undefined;
   const agg = task ? (db.prepare('select count(*) as n, coalesce(sum(gen_ms), 0) as g from step where task_id=?').get(task.id) as { n: number; g: number }) : { n: 0, g: 0 };
   const steps = task ? (db.prepare('select idx, tool, result_excerpt, input_tokens, output_tokens, provider from step where task_id=? order by idx desc limit 6').all(task.id) as StepRow[]) : [];
   const lastTools = steps.map((s) => ({ idx: s.idx, tool: s.tool ?? '—', excerpt: s.result_excerpt ?? '', tokens: (s.input_tokens ?? 0) + (s.output_tokens ?? 0), gate: (s.result_excerpt ?? '').startsWith('GATE'), provider: s.provider }));
   const ledger = db.prepare('select count(*) as n from ledger where identity_id=?').get(id.id) as { n: number };
-  // Em missão o teto é o da subtarefa (spec missões); fora dela, o do worker comum.
-  const budget = openMissionFor(db, id.id) ? CONFIG.mission.subtaskStepBudget : CONFIG.worker.stepBudget;
+  // Em missão o teto é o da subtarefa (spec missões); fora dela, o do worker comum. Vem do banco (spec limites §UI).
+  const budget = openMissionFor(db, id.id) ? budgets.mission : budgets.goal;
   return {
     id: id.id, name: id.name, handle: id.handle, state: id.state, task: task?.instruction ?? 'Aguardando',
     steps: agg.n, budget, costUsd: task?.cost_usd ?? 0, error: id.lastError ?? '', lastTools,
@@ -127,10 +130,11 @@ export function currentGoal(db: DatabaseSync): GoalSummary | null {
 /** Aceita a assinatura antiga (`videoState` como 3º argumento) e o objeto de fontes do incremento 5. */
 export function buildSnapshot(db: DatabaseSync, killed: boolean, sources?: SnapshotSources | ((id: string) => VideoState)): FleetSnapshot {
   const src: SnapshotSources = typeof sources === 'function' ? { videoState: sources } : (sources ?? {});
-  const identities = listIdentities(db).map((id) => identitySnapshot(db, id, src.videoState));
+  const stepBudgets = readStepBudgets(db);
+  const identities = listIdentities(db).map((id) => identitySnapshot(db, id, stepBudgets, src.videoState));
   const cfg = readProviderConfig(db); const tests = lastProviderTests(db);
   const providers = Object.fromEntries((Object.keys(cfg) as RoleKey[]).map((k) => [k, { ...cfg[k], lastTest: tests[k] ?? null }])) as Record<RoleKey, ProviderSnapshot>;
   let host: HostMetrics | null = null;
   try { host = src.host?.() ?? null; } catch { host = null; }
-  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db) };
+  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db), stepBudgets };
 }
