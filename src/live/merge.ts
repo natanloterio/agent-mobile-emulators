@@ -1,6 +1,7 @@
 import type { TestResultRow } from '../data/providers';
 import { PT, type I18n } from '../i18n/translate';
 import type { LogRow, RoleVM } from '../state/selectors';
+import { isOpenMission, missionForIdentity, missionTaskLabel } from '../state/missionView';
 import type { DeviceState, Identity, VideoStreamState } from '../types/fleet';
 import type { FleetSnapshot, LiveFrame, LiveIdentity, LiveProviderTest } from './types';
 
@@ -13,14 +14,19 @@ const VIDEO_STATES: readonly string[] = ['idle', 'starting', 'streaming', 'retry
 const toVideoState = (v: string | undefined): VideoStreamState | undefined =>
   v !== undefined && VIDEO_STATES.includes(v) ? (v as VideoStreamState) : undefined;
 
-const toIdentity = (l: LiveIdentity, f: LiveFrame | undefined, { t }: I18n): Identity => ({
-  id: l.id, name: l.name, handle: l.handle, state: l.paused ? 'paused' : STATE_MAP[l.state] ?? 'offline',
-  task: l.degraded ? t('identities.live.degraded', { task: l.task }) : l.task, steps: l.steps, budget: l.budget, cost: l.costUsd,
-  error: l.error || (l.bannedReason ? t('identities.live.banned', { reason: l.bannedReason }) : ''),
-  genMs: l.genMs ?? 0, degraded: l.degraded ?? false, earlyStopRemaining: l.earlyStopRemaining ?? 0,
-  video: toVideoState(l.video), live: l,
-  ...(f ? { screen: { dataUrl: `data:image/png;base64,${f.png}`, at: f.at } } : {}),
-});
+const toIdentity = (l: LiveIdentity, f: LiveFrame | undefined, live: FleetSnapshot, i18n: I18n): Identity => {
+  const { t } = i18n;
+  const m = missionForIdentity(live, l.id);
+  const baseTask = l.degraded ? t('identities.live.degraded', { task: l.task }) : l.task;
+  return {
+    id: l.id, name: l.name, handle: l.handle, state: l.paused ? 'paused' : STATE_MAP[l.state] ?? 'offline',
+    task: m && isOpenMission(m) ? missionTaskLabel(m, i18n) : baseTask, steps: l.steps, budget: l.budget, cost: l.costUsd,
+    error: l.error || (l.bannedReason ? t('identities.live.banned', { reason: l.bannedReason }) : ''),
+    genMs: l.genMs ?? 0, degraded: l.degraded ?? false, earlyStopRemaining: l.earlyStopRemaining ?? 0,
+    video: toVideoState(l.video), live: l,
+    ...(f ? { screen: { dataUrl: `data:image/png;base64,${f.png}`, at: f.at } } : {}),
+  };
+};
 /**
  * Frota do modo vivo: só as identidades do snapshot (todas, sem teto e sem completar com demo), menos as descartadas;
  * posters casam por id (spec inc. 4 §4.3). Sem snapshot (Vite no browser) devolve o demo intacto.
@@ -29,7 +35,7 @@ export function mergeLive(
   ids: readonly Identity[], live: FleetSnapshot | null, frames: Readonly<Record<string, LiveFrame>> = {}, i18n: I18n = PT,
 ): readonly Identity[] {
   if (!live) return ids;
-  return live.identities.filter((l) => !l.discardedAt).map((l) => toIdentity(l, frames[l.id], i18n));
+  return live.identities.filter((l) => !l.discardedAt).map((l) => toIdentity(l, frames[l.id], live, i18n));
 }
 
 /** Passos recentes reais da identidade; vazio quando ainda não há passos. */
