@@ -33,6 +33,8 @@ export interface OllamaDeps {
   /** Processos `ollama serve` vivos com o env de cada um (para adotar um órfão nosso). */
   readonly findProcesses?: () => readonly OllamaProcess[];
   readonly kill?: (pid: number, signal: NodeJS.Signals) => void;
+  /** Paralelismo pedido na tela (spec paralelismo §UI), lido a cada spawn; ausente = 1 (default de `readLocalParallel`). */
+  readonly parallel?: () => number;
 }
 export interface OllamaStatus {
   readonly running: boolean; readonly spawnedByUs: boolean; readonly adopted: boolean; readonly pid: number | null; readonly models: readonly string[];
@@ -45,6 +47,12 @@ export interface OllamaSupervisor {
   unload(endpoint: string, model: string): Promise<void>;
   stop(): void;
   status(): OllamaStatus | null;
+  /**
+   * Paralelismo (spec paralelismo §Ocioso): só mexe se o `ollama serve` rodando é nosso (spawnado ou adotado) e o
+   * `OLLAMA_NUM_PARALLEL` real do processo (lido do `/proc`, como o marcador de contexto) difere do pedido — aí
+   * mata e sobe de novo com o valor novo. Sem Ollama nosso ou valor real desconhecido: não mexe, devolve `null`.
+   */
+  restartIfParallelDiffers(wanted: number): Promise<number | null>;
 }
 
 export function modelListed(models: readonly string[], wanted: string): boolean {
@@ -103,10 +111,13 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
   const findProcesses = deps.findProcesses ?? defaultFindProcesses;
   const killFn = deps.kill ?? ((pid: number, sig: NodeJS.Signals) => { try { process.kill(pid, sig); } catch { /* já morreu */ } });
   const spawnFn = deps.spawn ?? ((cmd, args, opts) => nodeSpawn(cmd, args, { env: opts.env, stdio: opts.stdio as never, detached: false }) as unknown as ChildLike);
+  const getParallel = deps.parallel ?? (() => 1);
   let child: ChildLike | null = null;
   let adopted = false;
   let last: OllamaStatus | null = null;
   let logFd: unknown = null;
+  // Último host:porta usado (spec paralelismo): guardado para o restart poder subir de novo sem repetir `ensure(endpoint, model)`.
+  let lastHost: string | null = null;
   const releaseLog = () => { if (logFd !== null) { closeLog(logFd); logFd = null; } };
 
   const checkModel = (models: readonly string[], model: string) => {
@@ -125,6 +136,7 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
       const base = ollamaBase(endpoint);
       // Só host:porta: um path no endpoint (`…/ollama/v1`) não pode virar "remoto" nem ir para OLLAMA_HOST.
       const host = new URL(base).host;
+      lastHost = host;
       const alive = await listModels(fetchFn, base);
       if (alive) {
         checkModel(alive, model);
@@ -142,7 +154,7 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
       adopted = false;
       try {
         const log = openLog(logPath); logFd = log;
-        child = spawnFn('ollama', ['serve'], { env: { ...process.env, ...OLLAMA_ENV, OLLAMA_HOST: host }, stdio: ['ignore', log, log] });
+        child = spawnFn('ollama', ['serve'], { env: { ...process.env, ...OLLAMA_ENV, OLLAMA_NUM_PARALLEL: String(getParallel()), OLLAMA_HOST: host }, stdio: ['ignore', log, log] });
       } catch (e) { spawnErr = e as Error; child = null; releaseLog(); }
       child?.on('exit', () => { child = null; releaseLog(); });
       child?.on('error', (e) => { spawnErr = e ?? new Error('spawn error'); child = null; releaseLog(); });
@@ -156,6 +168,35 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
       child?.kill('SIGTERM'); child = null;
       releaseLog();
       throw new ProviderError('infra-local', `Ollama não subiu em ${Math.round(timeoutMs / 1000)} s; veja ${logPath}`);
+    },
+    restartIfParallelDiffers: async (wanted) => {
+      if (child === null || child.pid == null || !lastHost) return null;
+      const pid = child.pid;
+      const own = findProcesses().find((p) => p.pid === pid);
+      const m = own ? /(?:^|\0)OLLAMA_NUM_PARALLEL=(\d+)/.exec(own.env) : null;
+      if (!m) return null; // desconhecido (sem info do /proc): não mexe
+      const current = Number(m[1]);
+      if (current === wanted) return current;
+      const host = lastHost;
+      const base = `http://${host}`;
+      child.kill('SIGTERM'); child = null; adopted = false; releaseLog();
+      let spawnErr: Error | null = null;
+      try {
+        const log = openLog(logPath); logFd = log;
+        child = spawnFn('ollama', ['serve'], { env: { ...process.env, ...OLLAMA_ENV, OLLAMA_NUM_PARALLEL: String(wanted), OLLAMA_HOST: host }, stdio: ['ignore', log, log] });
+      } catch (e) { spawnErr = e as Error; child = null; releaseLog(); }
+      child?.on('exit', () => { child = null; releaseLog(); });
+      child?.on('error', (e) => { spawnErr = e ?? new Error('spawn error'); child = null; releaseLog(); });
+      const t0 = Date.now();
+      do {
+        await sleep(POLL_MS);
+        if (spawnErr) return null;
+        const models = await listModels(fetchFn, base);
+        if (models) { status(models); return wanted; }
+      } while (Date.now() - t0 < timeoutMs);
+      child?.kill('SIGTERM'); child = null;
+      releaseLog();
+      return null;
     },
   };
 }

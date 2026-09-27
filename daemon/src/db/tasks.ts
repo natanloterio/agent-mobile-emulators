@@ -74,6 +74,15 @@ export function addTaskCost(db: DatabaseSync, taskId: string, usd: number): void
   db.prepare('update goal set cost_usd = cost_usd + ? where id = (select goal_id from task where id=?)').run(usd, taskId);
 }
 
+/**
+ * Frota ociosa (spec paralelismo §Ocioso): nenhuma tarefa de objetivo ou subtarefa de missão rodando — as duas
+ * moram na mesma tabela `task`. Só nesse instante a troca de paralelismo local mexe no Ollama/LM Studio.
+ */
+export function isFleetIdle(db: DatabaseSync): boolean {
+  const row = db.prepare("select count(*) as n from task where state='running'").get() as { n: number };
+  return row.n === 0;
+}
+
 export function ledgerHas(db: DatabaseSync, identityId: string, key: string): boolean {
   return !!db.prepare('select 1 from ledger where identity_id=? and item_key=?').get(identityId, key);
 }

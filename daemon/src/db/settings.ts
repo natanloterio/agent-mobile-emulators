@@ -35,3 +35,27 @@ export function writeStepBudgets(db: DatabaseSync, patch: Partial<StepBudgets>):
   if (patch.mission !== undefined) upsert.run(KEYS.mission, JSON.stringify(patch.mission));
   return readStepBudgets(db);
 }
+
+const LOCAL_PARALLEL_KEY = 'local.parallel';
+const LOCAL_PARALLEL_DEFAULT = 1;
+const LOCAL_PARALLEL_MIN = 1;
+const LOCAL_PARALLEL_MAX = 8;
+
+/**
+ * Gerações simultâneas no modelo local (spec paralelismo §UI): chave `local.parallel`, default 1, válido 1..8;
+ * ausente ou ilegível cai no default. Lido a cada `ensure()`/apply — nunca cacheado (mesmo padrão dos limites).
+ */
+export function readLocalParallel(db: DatabaseSync): number {
+  const row = db.prepare('select value from settings where key=?').get(LOCAL_PARALLEL_KEY) as { value: string } | undefined;
+  if (!row) return LOCAL_PARALLEL_DEFAULT;
+  let v: unknown;
+  try { v = JSON.parse(row.value); } catch { return LOCAL_PARALLEL_DEFAULT; }
+  return typeof v === 'number' && Number.isInteger(v) && v >= LOCAL_PARALLEL_MIN && v <= LOCAL_PARALLEL_MAX ? v : LOCAL_PARALLEL_DEFAULT;
+}
+
+/** Grava o paralelismo local (patch total, um valor só); devolve o estado novo já validado pela leitura. */
+export function writeLocalParallel(db: DatabaseSync, n: number): number {
+  db.prepare("insert into settings (key, value, updated_at) values (?, ?, datetime('now')) on conflict(key) do update set value=excluded.value, updated_at=excluded.updated_at")
+    .run(LOCAL_PARALLEL_KEY, JSON.stringify(n));
+  return readLocalParallel(db);
+}
