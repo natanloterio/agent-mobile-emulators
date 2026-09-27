@@ -4,7 +4,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises';
 /** Erro do cofre: chaveiro ausente/travado ou chave perdida. A mensagem nunca carrega valor guardado. */
 export class VaultError extends Error {}
 
-/** Origem da chave de 32 bytes (produção: chaveiro do SO via secret-tool). `load` → null quando ainda não existe. */
+/** Origem da chave de 32 bytes (produção: chaveiro nativo do SO, vault/keyring.ts). `load` → null quando ainda não existe. */
 export interface KeySource { load(): Promise<Buffer | null>; store(key: Buffer): Promise<void> }
 export interface VaultFs { readFile(p: string): Promise<string>; writeFile(p: string, d: string, mode: number): Promise<void>; rename(a: string, b: string): Promise<void> }
 export interface VaultEntryInfo { readonly id: string; readonly meta: string | null }

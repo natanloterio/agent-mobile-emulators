@@ -39,10 +39,10 @@ describe('rotas de credenciais', () => {
     expect((await call('PUT', '/identities/nada/credentials', { username: 'a', password: 'b' })).status).toBe(404);
   });
   it('cofre indisponível → 503 com o motivo; GET mostra available.ok=false', async () => {
-    const broken = createVault({ file: '/nao/existe.json', keys: { load: async () => { throw new VaultError('secret-tool ausente: instale libsecret-tools'); }, store: async () => undefined } });
+    const broken = createVault({ file: '/nao/existe.json', keys: { load: async () => { throw new VaultError('chaveiro do sistema indisponível: travado'); }, store: async () => undefined } });
     const { call } = await mk(broken);
     const r = await call('PUT', '/identities/conta2/credentials', { username: 'a', password: 'b' });
-    expect(r.status).toBe(503); expect(await r.json()).toEqual({ error: 'secret-tool ausente: instale libsecret-tools' });
+    expect(r.status).toBe(503); expect(await r.json()).toEqual({ error: 'chaveiro do sistema indisponível: travado' });
     expect(((await (await call('GET', '/credentials')).json()) as { available: { ok: boolean } }).available.ok).toBe(false);
   });
   it('import grava as válidas e ignora ids desconhecidos', async () => {

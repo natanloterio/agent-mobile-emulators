@@ -1,41 +1,39 @@
-import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { VaultError, type KeySource } from './vault.js';
 
-export type SecretToolRun = (args: string[], input?: string) => Promise<{ code: number; stdout: string }>;
+/** O mínimo de uma entrada do chaveiro que o cofre usa (`Entry` do @napi-rs/keyring). */
+export interface KeyEntry { getPassword(): string | null; setPassword(password: string): void }
+export type EntryFactory = () => KeyEntry;
 
-const ATTRS = ['service', 'enxame', 'key', 'vault'];
+const SERVICE = 'enxame';
+const ACCOUNT = 'vault';
 
-const spawnRun: SecretToolRun = (args, input) => new Promise((resolve, reject) => {
-  const p = spawn('secret-tool', args, { stdio: ['pipe', 'pipe', 'ignore'] });
-  let out = '';
-  p.stdout.on('data', (c) => { out += String(c); });
-  p.on('error', reject);
-  p.on('close', (code) => resolve({ code: code ?? 1, stdout: out }));
-  p.stdin.end(input ?? '');
-});
-
-const wrap = async <T>(fn: () => Promise<T>): Promise<T> => {
-  try { return await fn(); }
-  catch (e) {
-    if ((e as { code?: string }).code === 'ENOENT') throw new VaultError('secret-tool ausente: instale libsecret-tools');
-    throw e instanceof VaultError ? e : new VaultError(`chaveiro indisponível: ${String((e as Error).message ?? e).slice(0, 160)}`);
-  }
+/**
+ * Chaveiro nativo do SO: Credential Manager (Windows), Keychain (macOS), Secret Service/GNOME Keyring/KWallet (Linux).
+ * No Linux fica preso ao Secret Service: o keyutils do kernel perderia a chave no reboot.
+ * A biblioteca nativa só é carregada no primeiro uso — sem binário para a plataforma, o cofre recusa e o daemon sobe.
+ */
+const nativeEntry: EntryFactory = () => {
+  const { Entry } = createRequire(import.meta.url)('@napi-rs/keyring') as typeof import('@napi-rs/keyring');
+  return new Entry(SERVICE, ACCOUNT, { linux: { store: 'secret-service' } });
 };
 
-/** Chave do cofre no chaveiro do SO (GNOME Keyring/KWallet via libsecret). Exit 1 no lookup = ainda não existe. */
-export function secretToolKeySource(run: SecretToolRun = spawnRun): KeySource {
+const unavailable = (e: unknown) =>
+  e instanceof VaultError ? e : new VaultError(`chaveiro do sistema indisponível: ${String((e as Error)?.message ?? e).slice(0, 160)}`);
+
+/** Chave do cofre (32 bytes em base64) numa entrada do chaveiro do SO. Entrada ausente → null. */
+export function keyringKeySource(entry: EntryFactory = nativeEntry): KeySource {
   return {
-    load: () => wrap(async () => {
-      const r = await run(['lookup', ...ATTRS]);
-      const b64 = r.stdout.trim();
-      if (r.code !== 0 || !b64) return null;
-      const k = Buffer.from(b64, 'base64');
-      if (k.length !== 32) throw new VaultError('chave do cofre no chaveiro com tamanho errado');
-      return k;
-    }),
-    store: (key) => wrap(async () => {
-      const r = await run(['store', '--label=Enxame vault', ...ATTRS], key.toString('base64'));
-      if (r.code !== 0) throw new VaultError('o chaveiro recusou guardar a chave (está destravado?)');
-    }),
+    load: async () => {
+      let b64: string | null;
+      try { b64 = entry().getPassword(); } catch (e) { throw unavailable(e); }
+      if (!b64) return null;
+      const key = Buffer.from(b64, 'base64');
+      if (key.length !== 32) throw new VaultError('chave do cofre no chaveiro com tamanho errado');
+      return key;
+    },
+    store: async (key) => {
+      try { entry().setPassword(key.toString('base64')); } catch (e) { throw unavailable(e); }
+    },
   };
 }
