@@ -195,6 +195,8 @@ For a local role, the model picker lists every model **already downloaded** on t
 
 Picking a model from the other runtime switches the role's runtime and endpoint for you. Enxame only stops the servers it started itself: if you change `ENXAME_LOCAL_CONTEXT` or upgrade Enxame, stop any `ollama serve` you started outside the daemon so it gets restarted with the new context (an already-running one is used as-is, at whatever context it was started with).
 
+**Simultaneous generations** on the local model (1–8) are set on **Provedores → Limites dos agentes → Gerações simultâneas no modelo local**. Raising it lets several workers share the same local model instead of queueing; it splits the GPU, so each generation gets slower and may need more VRAM. The swap only happens once the whole fleet is idle (no goal task or mission subtask running): Ollama's `ollama serve` is restarted with the new `OLLAMA_NUM_PARALLEL`, and LM Studio's loaded model is reloaded with `--parallel`. Until then the screen shows "aplica quando a frota ficar ociosa" (applies once the fleet is idle). If Ollama is running outside the daemon's control, the screen tells you to restart it yourself with `OLLAMA_NUM_PARALLEL=N`.
+
 Cost is tracked per task and per goal: dollars for cloud models, GPU seconds for local ones.
 
 ---
