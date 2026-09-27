@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { openDb } from '../src/db/open.js';
-import { readStepBudgets, writeStepBudgets } from '../src/db/settings.js';
+import { readLocalParallel, readStepBudgets, writeLocalParallel, writeStepBudgets } from '../src/db/settings.js';
 
 describe('limites configuráveis (settings.stepBudget.*)', () => {
   it('sem linha gravada, cai no default do CONFIG', () => {
@@ -24,5 +24,28 @@ describe('limites configuráveis (settings.stepBudget.*)', () => {
     db.prepare("insert into settings (key, value) values ('stepBudget.goal', 'não é json')").run();
     db.prepare("insert into settings (key, value) values ('stepBudget.mission', '\"texto\"')").run();
     expect(readStepBudgets(db)).toEqual({ goal: CONFIG.worker.stepBudget, mission: CONFIG.mission.subtaskStepBudget });
+  });
+});
+
+describe('paralelismo local configurável (settings.local.parallel)', () => {
+  it('sem linha gravada, cai no default 1', () => {
+    const db = openDb(':memory:');
+    expect(readLocalParallel(db)).toBe(1);
+  });
+  it('grava e lê de volta (1..8)', () => {
+    const db = openDb(':memory:');
+    expect(writeLocalParallel(db, 4)).toBe(4);
+    expect(readLocalParallel(db)).toBe(4);
+  });
+  it('fora de 1..8, não inteiro ou JSON inválido: cai no default 1', () => {
+    const db = openDb(':memory:');
+    db.prepare("insert into settings (key, value) values ('local.parallel', '9')").run();
+    expect(readLocalParallel(db)).toBe(1);
+    db.prepare("update settings set value='0' where key='local.parallel'").run();
+    expect(readLocalParallel(db)).toBe(1);
+    db.prepare("update settings set value='1.5' where key='local.parallel'").run();
+    expect(readLocalParallel(db)).toBe(1);
+    db.prepare("update settings set value='não é json' where key='local.parallel'").run();
+    expect(readLocalParallel(db)).toBe(1);
   });
 });

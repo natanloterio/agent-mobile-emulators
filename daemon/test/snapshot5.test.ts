@@ -71,6 +71,17 @@ describe('snapshot do incremento 5', () => {
     const s2 = buildSnapshot(db, false);
     expect(s2.identities[0].budget).toBe(CONFIG.mission.subtaskStepBudget);
   });
+  it('localParallel: sem fonte, default (wanted 1, nada aplicado, não pendente); com fonte, reflete o valor', () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    expect(buildSnapshot(db, false).localParallel).toEqual({ wanted: 1, applied: { ollama: null, lmstudio: null }, pending: false });
+    const s = buildSnapshot(db, false, { localParallel: () => ({ wanted: 4, applied: { ollama: 4, lmstudio: null }, pending: true }) });
+    expect(s.localParallel).toEqual({ wanted: 4, applied: { ollama: 4, lmstudio: null }, pending: true });
+  });
+  it('localParallel: fonte que lança não quebra o snapshot, cai no default', () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const s = buildSnapshot(db, false, { localParallel: () => { throw new Error('x'); } });
+    expect(s.localParallel).toEqual({ wanted: 1, applied: { ollama: null, lmstudio: null }, pending: false });
+  });
 });
 
 describe('rotas plugáveis', () => {

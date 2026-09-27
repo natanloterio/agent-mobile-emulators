@@ -8,6 +8,7 @@ import type { ScreenCapture } from '../device/screen.js';
 import type { VideoState, VideoStreams } from '../device/video.js';
 import type { LocalRuntimeKind } from '../provider/config.js';
 import type { RuntimeListing } from '../provider/runtimes/types.js';
+import type { LocalParallelStatus } from '../provider/local-parallel.js';
 import { buildSnapshot, listGoals, type HostMetrics, type SnapshotSources } from './snapshot.js';
 import { attachWs } from './ws.js';
 
@@ -32,6 +33,8 @@ export interface ServerOpts {
   readonly videoState?: (id: string) => VideoState;
   /** Métricas do host publicadas no snapshot (spec inc. 5 §3.1); ausente = null. */
   readonly host?: () => HostMetrics | null;
+  /** Paralelismo local configurável (spec paralelismo §UI); ausente = default (wanted 1, nada aplicado). */
+  readonly localParallel?: () => LocalParallelStatus;
   /** Rotas de outras frentes (spec inc. 5 §3.2): avaliadas antes do 404, na ordem; `true` = tratou. */
   readonly routes?: readonly Route[];
   /** Modelos baixados de todos os runtimes locais (spec runtimes-locais); ausente = só o Ollama pela API, como antes. */
@@ -90,7 +93,7 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
     if (code === 204 || body === undefined) { res.writeHead(code); res.end(); return; }
     res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body));
   };
-  const sources: SnapshotSources = { videoState: o.videoState, host: o.host };
+  const sources: SnapshotSources = { videoState: o.videoState, host: o.host, localParallel: o.localParallel };
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
