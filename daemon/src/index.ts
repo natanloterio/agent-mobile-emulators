@@ -53,6 +53,8 @@ import { singleFlightOllama } from './swarm/single-flight.js';
 import { createIdentityRoutes } from './server/routes-identities.js';
 import { runTask } from './worker/run.js';
 
+// Só o daemon roda como Node dentro do Electron; adb, emulador, Ollama e LM Studio não podem herdar a flag.
+delete process.env.ELECTRON_RUN_AS_NODE;
 const env = loadEnv();
 mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath);
