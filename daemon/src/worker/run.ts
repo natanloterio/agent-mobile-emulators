@@ -18,7 +18,7 @@ import { createPacer, type Pacer, type PacingConfig } from '../swarm/pacing.js';
 import { buildToolApproval } from './gate.js';
 import { MISSION_ESCALATION_NOTE, MISSION_SYSTEM_PROMPT, pickMissionTools } from './mission-prompt.js';
 import { missionOutcome } from './mission-outcome.js';
-import { missionTools, type MissionRunCtx } from './mission-tools.js';
+import { maskOut, missionTools, type MissionRunCtx } from './mission-tools.js';
 import { ESCALATION_NOTE, SYSTEM_PROMPT, taskInstruction } from './prompt.js';
 import { isScreenTool, pruneScreens } from './prune.js';
 import { readUsage, recordStep, textOf, type StepLike } from './record.js';
@@ -80,15 +80,6 @@ interface WrapCtx {
   readonly mask?: (s: string) => string;
 }
 
-/** Aplica a máscara de segredos no texto que volta ao modelo (e que o recordStep grava). */
-function maskOut(out: unknown, mask: (s: string) => string): unknown {
-  if (typeof out === 'string') return mask(out);
-  if (out && typeof out === 'object' && Array.isArray((out as { content?: unknown }).content)) {
-    return { ...(out as object), content: (out as { content: { type: string; text?: unknown }[] }).content.map((c) => (c.type === 'text' && typeof c.text === 'string' ? { ...c, text: mask(c.text) } : c)) };
-  }
-  return out;
-}
-
 /** Linhas de controle de paginação que não devem chegar ao modelo (ele não pagina; o wrapper pagina). */
 const PAGINATION_LINE = /^(?:(?:next_)?cursor:|page:\d+\/\d+ snapshot:|note:more nodes available|note:end of snapshot)/;
 
@@ -142,7 +133,7 @@ function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
         // Screenshot não é lido pelo parser e custa tokens; neste incremento a leitura é só de árvore.
         const effectiveInput = isScreenTool(name) ? { ...(input as object), include_screenshot: false } : input;
         const out = await base.execute!(effectiveInput, opts);
-        if (isErrorResult(out)) throw new Error(textOf(out) || `${name}: isError`);
+        if (isErrorResult(out)) { const msg = textOf(out) || `${name}: isError`; throw new Error(ctx.mask ? ctx.mask(msg) : msg); }
         if (isScreenTool(name)) {
           const all = await readAllPages(out, (i) => base.execute!(i, opts), effectiveInput);
           ctx.onScreen(all.screen);
@@ -159,9 +150,12 @@ function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
           const out = await tap.execute({ node_id: (input as { node_id?: unknown })?.node_id }, opts);
           if (isErrorResult(out)) throw new Error(textOf(out) || `${name}: tap_node de reserva falhou`);
           ctx.onScreen(null);
-          return withNote(out, NOT_CLICKABLE_NOTE);
+          const noted = withNote(out, NOT_CLICKABLE_NOTE);
+          return ctx.mask ? maskOut(noted, ctx.mask) : noted;
         }
-        const h = classifyMcpError(e); if (h) ctx.onHalt(h); throw e;
+        const h = classifyMcpError(e); if (h) ctx.onHalt(h);
+        // A mensagem crua pode ecoar o input da tool (ex.: um segredo digitado); mascarada antes de subir ao modelo.
+        throw ctx.mask ? new Error(ctx.mask(String((e as Error)?.message ?? e))) : e;
       }
     };
     return [name, { ...base, execute } as Tool];
@@ -280,7 +274,14 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       ...mission, db,
       typeText: async (nodeId, text) => {
         if (!typeRaw?.execute) throw new Error('type_append_text ausente no MCP');
-        const out = await typeRaw.execute({ node_id: nodeId, text }, { toolCallId: `secret-${nodeId}`, messages: [] });
+        let out: unknown;
+        try {
+          out = await typeRaw.execute({ node_id: nodeId, text }, { toolCallId: `secret-${nodeId}`, messages: [] });
+        } catch (e) {
+          // O erro cru do MCP pode ecoar os parâmetros (a senha); nunca sobe como veio. Infra ainda pausa a missão.
+          const h = classifyMcpError(e); if (h) halt = h;
+          throw new Error('type_append_text falhou no device');
+        }
         if (isErrorResult(out)) throw new Error('type_append_text falhou no device');
       },
       onFinish: (r) => { report = r; },
@@ -322,6 +323,12 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     }
     // Ollama caiu/recusou/OOM no meio da tarefa: infra-local → tarefa volta a todo, identidade idle (spec §7).
     if (activeMode === 'local' && isLocalInfraError(e)) { const text = String((e as Error).message ?? e).slice(0, 200); halt = { kind: 'infra-local', text }; return finish('infra', text); }
+    // Missão: infra ANTES do loop (connect, client.tools(), ollama.ensure) também interrompe a subtarefa, nunca falha (spec missões §Erros).
+    if (mission) {
+      const mc = classifyMcpError(e);
+      if (mc) { halt = mc; return finish('infra', mc.text); }
+      if (isLocalInfraError(e)) { const text = String((e as Error).message ?? e).slice(0, 200); halt = { kind: 'infra-local', text }; return finish('infra', text); }
+    }
     return finish('failed', String((e as Error).message ?? e));
   } finally {
     await client?.close().catch(() => undefined);

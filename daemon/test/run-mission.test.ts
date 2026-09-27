@@ -3,7 +3,7 @@ import { openDb } from '../src/db/open.js';
 import { getIdentity, upsertIdentity } from '../src/db/identities.js';
 import { addSubtask, createMission, listMemory, listSubtasks } from '../src/db/missions.js';
 import { ProviderError } from '../src/provider/errors.js';
-import { createSecretMask } from '../src/worker/mission-tools.js';
+import { createSecretMask, secretEntryId } from '../src/worker/mission-tools.js';
 import { runTask, type RunTaskDeps } from '../src/worker/run.js';
 import { memVault } from './fixtures/mem-vault.js';
 
@@ -16,7 +16,7 @@ const screenOf = (pkg: string, labels: readonly string[]) =>
   + labels.map((l, i) => `node_${i}\tEditText\t${l}\t-\t-\t0,${i * 10},10,${i * 10 + 10}\ton,ena,edt`).join('\n') + '\n';
 
 /** MCP falso com estado: o que for digitado aparece na próxima leitura de tela e no find_nodes (campo sem máscara). */
-function fakeMcp(opts: { pkg?: string; labels?: string[]; fail?: 'device-missing' } = {}) {
+function fakeMcp(opts: { pkg?: string; labels?: string[]; fail?: 'device-missing'; typeFails?: boolean } = {}) {
   const typed: string[] = []; const clicked: string[] = [];
   const screen = () => screenOf(opts.pkg ?? 'com.instagram.android', [...(opts.labels ?? ['Confirmar']), ...typed]);
   const connect: RunTaskDeps['connect'] = async () => ({
@@ -24,7 +24,8 @@ function fakeMcp(opts: { pkg?: string; labels?: string[]; fail?: 'device-missing
       [`${P}get_screen_state`]: { description: 'x', inputSchema: {}, execute: async () => { if (opts.fail) throw new Error("adb: device 'emulator-5556' not found"); return screen(); } },
       [`${P}find_nodes`]: { description: 'x', inputSchema: {}, execute: async () => ({ content: [{ type: 'text', text: `achei: ${typed.join(',')}` }] }) },
       [`${P}click_node`]: { description: 'x', inputSchema: {}, execute: async (i: { node_id: string }) => { clicked.push(i.node_id); return 'ok'; } },
-      [`${P}type_append_text`]: { description: 'x', inputSchema: {}, execute: async (i: { text: string }) => { typed.push(i.text); return 'ok'; } },
+      // erro cru do MCP: ecoa o parâmetro (a senha) — a fixture existe para provar que isso nunca sobe como veio (fix round 1, item 1).
+      [`${P}type_append_text`]: { description: 'x', inputSchema: {}, execute: async (i: { text: string }) => { if (opts.typeFails) throw new Error(`falhou digitando ${i.text}`); typed.push(i.text); return 'ok'; } },
     }) as never,
     close: async () => {},
   });
@@ -114,5 +115,24 @@ describe('runTask em modo missão', () => {
     const s = setup(); const mcp = fakeMcp({ fail: 'device-missing' });
     const r = await s.run({ connect: mcp.connect, generate: scripted([[`${P}get_screen_state`, {}]]).generate });
     expect(taskState(s.db, s.taskId)).toBe('interrupted'); expect(r.report).toBeNull();
+  });
+  it('erro ao digitar segredo: a mensagem crua (que pode ecoar a senha) nunca vira step nem chega ao modelo', async () => {
+    const s = setup(); const mcp = fakeMcp({ typeFails: true }); const key = 'account.com.instagram.android.password';
+    const g = scripted([['secret_new', { key }], [`${P}get_screen_state`, {}], ['type_secret', { node_id: 'node_0', key }]]);
+    await s.run({ connect: mcp.connect, generate: g.generate });
+    const pwd = await s.vault.get(secretEntryId(s.missionId, key));
+    expect(pwd).toHaveLength(20);
+    expect(g.seen.join('\n')).not.toContain(pwd as string);
+    expect(g.seen.some((x) => x.includes('falhou digitando'))).toBe(false);
+    const dump = JSON.stringify(s.db.prepare('select * from step').all());
+    expect(dump).not.toContain(pwd);
+    expect(dump).not.toContain('falhou digitando');
+  });
+  it('MCP indisponível antes do loop (connect falha) → interrupted, não failed', async () => {
+    const s = setup();
+    const connect: RunTaskDeps['connect'] = async () => { throw new Error('fetch failed'); };
+    const r = await s.run({ connect, generate: (async () => { throw new Error('não deveria chamar generate'); }) as unknown as RunTaskDeps['generate'] });
+    expect(taskState(s.db, s.taskId)).toBe('interrupted');
+    expect(r.report).toBeNull();
   });
 });
