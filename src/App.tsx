@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { KillBanner } from './components/KillBanner';
 import { MobileBottomNav, MobileTopbar } from './components/MobileChrome';
 import { Sidebar } from './components/Sidebar';
-import { DEMO_MISSION } from './data/missions';
+import { demoMission } from './data/missions';
 import { currentGoalText, DEFAULT_GOAL_TEXT, PAST_GOALS } from './data/goals';
 import { useI18n } from './i18n/I18nProvider';
 import { gpuBar } from './lib/gpuBar';
@@ -96,7 +96,7 @@ export function App() {
         if (!sel) return cockpit();
         const d = buildDeviceView(state, view, live, sel, i18n);
         const id = sel.id ?? '';
-        const m = isLive ? missionForIdentity(live, sel.id) : state.sel === 0 ? DEMO_MISSION : null;
+        const m = isLive ? missionForIdentity(live, sel.id) : state.sel === 0 ? demoMission(i18n) : null;
         const mReq = m ? requestOf(state, missionKey(m.id)) : null;
         return (
           <Device

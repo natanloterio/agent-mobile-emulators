@@ -33,7 +33,7 @@ interface DeviceProps {
   /** Só no vivo e com controle: gesto na tela → POST /input. */
   readonly onInput?: (g: InputGesture) => void;
   readonly bus?: VideoBus | null;
-  /** Missão aberta ou concluída mais recente da identidade (spec missões §Interface); demo mostra `DEMO_MISSION`. */
+  /** Missão aberta ou concluída mais recente da identidade (spec missões §Interface); demo mostra `demoMission(i18n)`. */
   readonly mission?: MissionView | null;
   readonly missionBusy?: boolean;
   readonly missionError?: string | null;
