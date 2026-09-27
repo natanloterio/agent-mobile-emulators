@@ -4,6 +4,7 @@ import { MobileBottomNav, MobileTopbar } from './components/MobileChrome';
 import { Sidebar } from './components/Sidebar';
 import { currentGoalText, DEFAULT_GOAL_TEXT, PAST_GOALS } from './data/goals';
 import { useI18n } from './i18n/I18nProvider';
+import { gpuBar } from './lib/gpuBar';
 import { kvCacheLeftGiB, liveVram, vramEmulatorShare } from './lib/resources';
 import { useIsMobile } from './lib/useIsMobile';
 import { liveRoles } from './live/merge';
@@ -147,6 +148,7 @@ export function App() {
             kvLeft={vram?.kvLeft ?? kvCacheLeftGiB(fleetSize, i18n)}
             vramEmuShare={vram?.emuShare ?? vramEmulatorShare(fleetSize)}
             vramTotal={vram?.total ?? '32 GB'}
+            gpu={isLive ? gpuBar(live?.host?.gpu, i18n) : null}
             isMobile={isMobile}
             onPickMode={actions.pickMode}
             onTest={actions.testConnection}
