@@ -12,8 +12,37 @@ const args = process.platform === 'linux' ? ['--no-sandbox'] : [];
 const port = '47899';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Isola da máquina: sem isto, o onboarding depende do que já está instalado onde quem roda o teste mora
+ * (SDK/AVDs/modelos do Ollama) — nesta máquina, e em runners do GitHub para macOS/Windows, o SDK e o JDK já
+ * vêm prontos, e o onboarding é pulado (nenhuma etapa do `.onb` aparece). `ANDROID_HOME`/`ANDROID_SDK_ROOT`
+ * apontando pra um dir novo e vazio faz `sdkmanager` "não existir", o que garante que o onboarding sempre
+ * apareça em `onboardingAppears`. `daemonStarts` já grava um setup.json concluído, então não é afetado por
+ * nada disto (decideStartup nem chega a probar).
+ */
 async function launch(dataDir) {
-  return electron.launch({ executablePath: exe, args, env: { ...process.env, ENXAME_DATA_DIR: dataDir, ENXAME_PORT: port, ELECTRON_ENABLE_LOGGING: '1' }, timeout: 60_000 });
+  const androidHome = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-sdk-'));
+  const avdHome = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-avd-'));
+  const ollamaModels = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-ollama-'));
+  const cleanup = () => Promise.all(
+    [androidHome, avdHome, ollamaModels].map((d) => rm(d, { recursive: true, force: true })),
+  );
+  const app = await electron.launch({
+    executablePath: exe,
+    args,
+    env: {
+      ...process.env,
+      ENXAME_DATA_DIR: dataDir,
+      ENXAME_PORT: port,
+      ELECTRON_ENABLE_LOGGING: '1',
+      ANDROID_HOME: androidHome,
+      ANDROID_SDK_ROOT: androidHome,
+      ANDROID_AVD_HOME: avdHome,
+      OLLAMA_MODELS: ollamaModels,
+    },
+    timeout: 60_000,
+  });
+  return { app, cleanup };
 }
 
 /** PID do `daemon.json` do dataDir, se existir. */
@@ -35,7 +64,7 @@ async function closeApp(app) {
 
 async function onboardingAppears() {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-'));
-  const app = await launch(dataDir);
+  const { app, cleanup } = await launch(dataDir);
   try {
     const win = await app.firstWindow();
     await win.waitForSelector('.onb', { timeout: 60_000 });
@@ -48,6 +77,7 @@ async function onboardingAppears() {
     // (o `.onb` acima já teria falhado); mata-lo aqui evita travar o close() e o teste falha limpo.
     killPid(await daemonPid(dataDir));
     await closeApp(app);
+    await cleanup();
     await rm(dataDir, { recursive: true, force: true });
   }
 }
@@ -55,7 +85,7 @@ async function onboardingAppears() {
 async function daemonStarts() {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-'));
   await writeFile(path.join(dataDir, 'setup.json'), JSON.stringify({ version: 1, completedAt: '2026-01-01T00:00:00.000Z', paths: { sdkRoot: path.join(dataDir, 'sdk'), ollamaBin: null } }));
-  const app = await launch(dataDir);
+  const { app, cleanup } = await launch(dataDir);
   let pid = null;
   try {
     await app.firstWindow();
@@ -72,6 +102,7 @@ async function daemonStarts() {
     // Mata o daemon ANTES do close(): vivo, ele herda pipes do Playwright e o close() nunca resolve.
     killPid(pid);
     await closeApp(app);
+    await cleanup();
     await rm(dataDir, { recursive: true, force: true });
   }
 }
