@@ -16,6 +16,7 @@ function deps() {
       startDaemon: async () => { log.push('start'); },
       daemon: async (method: 'PUT', p: string, body: unknown) => { log.push(`${method} ${p} ${JSON.stringify(body)}`); return null; },
       now: () => '2026-09-27T12:00:00.000Z',
+      readSetup: async (): Promise<SetupFileT | null> => null,
     },
   };
 }
@@ -23,7 +24,7 @@ function deps() {
 describe('finishSetup', () => {
   it('grava caminhos, sobe o daemon, grava a chave, aplica os papéis e só então marca concluído', async () => {
     const { d, log, writes } = deps();
-    await finishSetup({ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: KEY }, '/opt/ollama', d);
+    await finishSetup({ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: KEY, applyRoles: true }, '/opt/ollama', d);
     expect(log).toEqual([
       'write completed=false', 'start',
       `PUT /settings/anthropic-key {"key":"${KEY}"}`,
@@ -36,13 +37,26 @@ describe('finishSetup', () => {
   });
   it('sem chave não chama a rota da chave', async () => {
     const { d, log } = deps();
-    await finishSetup({ mode: 'local', localModel: 'qwen3:14b', anthropicKey: null }, null, d);
+    await finishSetup({ mode: 'local', localModel: 'qwen3:14b', anthropicKey: null, applyRoles: true }, null, d);
     expect(log.some((l) => l.includes('anthropic-key'))).toBe(false);
   });
   it('se um papel falha, não marca concluído (a próxima abertura mostra o onboarding de novo)', async () => {
     const { d, writes } = deps();
     const failing = { ...d, daemon: async () => { throw new Error('/providers/worker → 409'); } };
-    await expect(finishSetup({ mode: 'nuvem', localModel: 'gpt-oss:20b', anthropicKey: null }, null, failing)).rejects.toThrow(/409/);
+    await expect(finishSetup({ mode: 'nuvem', localModel: 'gpt-oss:20b', anthropicKey: null, applyRoles: true }, null, failing)).rejects.toThrow(/409/);
     expect(writes.map((w) => w.completedAt)).toEqual([null]);
+  });
+  it('applyRoles=false (reabertura sem mexer em modo nem modelo): não toca nos papéis, mas grava a chave', async () => {
+    const { d, log } = deps();
+    await finishSetup({ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: KEY, applyRoles: false }, null, d);
+    expect(log).toEqual(['write completed=false', 'start', `PUT /settings/anthropic-key {"key":"${KEY}"}`, 'write completed=true']);
+    expect(log.some((l) => l.includes('/providers/'))).toBe(false);
+  });
+  it('reabertura mantém o completedAt anterior na primeira gravação (falha no meio não vira primeira execução)', async () => {
+    const { d, writes } = deps();
+    const prev: SetupFileT = { version: 1, completedAt: '2026-09-01T00:00:00.000Z', paths: { sdkRoot: '/sdk', ollamaBin: null } };
+    const failing = { ...d, readSetup: async () => prev, daemon: async () => { throw new Error('409'); } };
+    await expect(finishSetup({ mode: 'nuvem', localModel: 'gpt-oss:20b', anthropicKey: null, applyRoles: true }, null, failing)).rejects.toThrow(/409/);
+    expect(writes.map((w) => w.completedAt)).toEqual(['2026-09-01T00:00:00.000Z']);
   });
 });

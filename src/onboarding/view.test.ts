@@ -4,7 +4,7 @@ import { LOCAL_MODELS } from './catalog';
 import { INITIAL_STATE, type OnboardingState } from './reducer';
 import type { DepStatus, SetupReport } from './schema';
 import {
-  defaultMode, defaultModel, depRows, emulatorCapacity, footerView, formatMb, installTotals, ipcErrorText, jobsToInstall, modelFit, summarize, vramBar,
+  defaultMode, defaultModel, depRows, emulatorCapacity, footerView, formatMb, installTotals, ipcErrorText, jobsToInstall, modelFit, shouldApplyRoles, summarize, vramBar,
 } from './view';
 
 const dep = (id: DepStatus['id'], state: DepStatus['state'], over: Partial<DepStatus> = {}): DepStatus => ({ id, state, version: null, sizeMb: null, fix: null, ...over });
@@ -119,5 +119,16 @@ describe('footerView', () => {
   });
   it('passo 4: abre o Cockpit, sem Voltar', () => {
     expect(footerView(st({ step: 3 }), PT)).toMatchObject({ action: 'Abrir o Cockpit', showBack: false, disabled: false });
+  });
+});
+
+describe('shouldApplyRoles', () => {
+  it('primeira execução sempre aplica os papéis', () => {
+    expect(shouldApplyRoles(true, st({}))).toBe(true);
+  });
+  it('reabertura só aplica se a pessoa mexeu em modo ou modelo', () => {
+    expect(shouldApplyRoles(false, st({}))).toBe(false);
+    expect(shouldApplyRoles(false, st({ modeTouched: true }))).toBe(true);
+    expect(shouldApplyRoles(false, st({ modelTouched: true }))).toBe(true);
   });
 });

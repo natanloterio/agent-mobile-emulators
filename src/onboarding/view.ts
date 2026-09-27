@@ -21,6 +21,11 @@ export function depRows(report: SetupReport, mode: SetupMode, model: string): re
   return [...report.deps.slice(0, i + 1), modelRow, ...report.deps.slice(i + 1)];
 }
 
+/** Papéis só são reescritos na primeira execução ou quando a pessoa mexeu em modo/modelo numa reabertura. */
+export function shouldApplyRoles(firstRun: boolean, s: Pick<OnboardingState, 'modeTouched' | 'modelTouched'>): boolean {
+  return firstRun || s.modeTouched || s.modelTouched;
+}
+
 export interface Summary { readonly total: number; readonly ok: number; readonly todo: number; readonly user: number; readonly downloadMb: number }
 export function summarize(rows: readonly DepRow[]): Summary {
   const count = (s: DepRow['state']) => rows.filter((r) => r.state === s).length;

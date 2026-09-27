@@ -15,5 +15,7 @@ export const FinishRequestSchema = z.object({
   mode: z.enum(['misto', 'local', 'nuvem']),
   localModel: ModelName,
   anthropicKey: AnthropicKeySchema.nullable(),
+  /** false numa reabertura sem mexer em modo nem modelo: os papéis que a pessoa configurou em Provedores ficam como estão. */
+  applyRoles: z.boolean(),
 }).strict();
 export type FinishRequest = z.infer<typeof FinishRequestSchema>;

@@ -146,5 +146,5 @@ export interface SetupBridge {
   readonly onJob: (cb: (e: unknown) => void) => () => void;
   readonly onLog: (cb: (line: string) => void) => () => void;
   readonly testKey: (key: string) => Promise<unknown>;
-  readonly finish: (req: { readonly mode: string; readonly localModel: string; readonly anthropicKey: string | null }) => Promise<void>;
+  readonly finish: (req: { readonly mode: string; readonly localModel: string; readonly anthropicKey: string | null; readonly applyRoles: boolean }) => Promise<void>;
 }

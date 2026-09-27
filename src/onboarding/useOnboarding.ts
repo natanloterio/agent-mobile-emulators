@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef } from 'react';
 import type { SetupBridge } from '../live/types';
 import { INITIAL_STATE, onboardingReducer, type OnboardingState, type Step } from './reducer';
 import { JobEventSchema, KeyTestSchema, SetupReportSchema } from './schema';
-import { depRows, ipcErrorText, jobsToInstall } from './view';
+import { depRows, ipcErrorText, jobsToInstall, shouldApplyRoles } from './view';
 
 export interface OnboardingActions {
   readonly check: () => Promise<void>;
@@ -15,7 +15,8 @@ export interface OnboardingActions {
   readonly install: () => Promise<void>;
 }
 
-export function useOnboarding(bridge: SetupBridge): { state: OnboardingState; actions: OnboardingActions } {
+/** `firstRun` false = reaberto em Provedores: os papéis só mudam se a pessoa mexer em modo ou modelo. */
+export function useOnboarding(bridge: SetupBridge, firstRun: boolean): { state: OnboardingState; actions: OnboardingActions } {
   const [state, dispatch] = useReducer(onboardingReducer, INITIAL_STATE);
   const ref = useRef(state);
   ref.current = state;
@@ -48,10 +49,10 @@ export function useOnboarding(bridge: SetupBridge): { state: OnboardingState; ac
     dispatch({ type: 'finish-start' });
     const key = s.mode === 'local' ? '' : s.apiKey.trim();
     try {
-      await bridge.finish({ mode: s.mode, localModel: s.model, anthropicKey: key || null });
+      await bridge.finish({ mode: s.mode, localModel: s.model, anthropicKey: key || null, applyRoles: shouldApplyRoles(firstRun, s) });
       dispatch({ type: 'finish-done' });
     } catch (e) { dispatch({ type: 'finish-failed', error: ipcErrorText(e) }); }
-  }, [bridge]);
+  }, [bridge, firstRun]);
 
   const go = useCallback((step: Step) => {
     dispatch({ type: 'go', step });

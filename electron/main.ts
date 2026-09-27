@@ -18,7 +18,7 @@ import { registerSetupIpc } from './setup/ipc.js';
 import { resolveSetupPaths } from './setup/paths.js';
 import { nodeProbeDeps, probeSetup } from './setup/probe.js';
 import { createRunners, nodeRunnerDeps } from './setup/runners.js';
-import { readSetupFileSync, writeSetupFile } from './setup/setup-file.js';
+import { readSetupFile, readSetupFileSync, writeSetupFile } from './setup/setup-file.js';
 import { decideStartup } from './setup/startup.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -146,6 +146,7 @@ app.whenReady().then(() => {
     finish: (req, bin) => finishSetup(req, bin, {
       paths, writeSetup: (f) => writeSetupFile(paths.setupFile, f), startDaemon,
       daemon: (method, p, body) => daemon(method, p, body), now: () => new Date().toISOString(),
+      readSetup: () => readSetupFile(paths.setupFile),
     }),
   });
 });

@@ -14,10 +14,14 @@ describe('schemas do IPC de setup', () => {
     expect(() => InstallRequestSchema.parse({ jobs: [], localModel: 'qwen3:14b', x: 1 })).toThrow();
   });
   it('finish aceita chave nula e recusa chave malformada', () => {
-    expect(FinishRequestSchema.parse({ mode: 'nuvem', localModel: 'gpt-oss:20b', anthropicKey: null }).anthropicKey).toBeNull();
-    expect(FinishRequestSchema.parse({ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: ` ${KEY} ` }).anthropicKey).toBe(KEY);
-    expect(() => FinishRequestSchema.parse({ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: 'abc' })).toThrow();
-    expect(() => FinishRequestSchema.parse({ mode: 'tudo', localModel: 'gpt-oss:20b', anthropicKey: null })).toThrow();
+    expect(FinishRequestSchema.parse({ mode: 'nuvem', localModel: 'gpt-oss:20b', anthropicKey: null, applyRoles: true }).anthropicKey).toBeNull();
+    expect(FinishRequestSchema.parse({ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: ` ${KEY} `, applyRoles: false }).anthropicKey).toBe(KEY);
+    expect(() => FinishRequestSchema.parse({ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: 'abc', applyRoles: true })).toThrow();
+    expect(() => FinishRequestSchema.parse({ mode: 'tudo', localModel: 'gpt-oss:20b', anthropicKey: null, applyRoles: true })).toThrow();
+  });
+  it('finish exige applyRoles booleano', () => {
+    expect(() => FinishRequestSchema.parse({ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: null })).toThrow();
+    expect(() => FinishRequestSchema.parse({ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: null, applyRoles: 'sim' })).toThrow();
   });
   it('chave sozinha (Testar chave)', () => {
     expect(AnthropicKeySchema.parse(KEY)).toBe(KEY);
