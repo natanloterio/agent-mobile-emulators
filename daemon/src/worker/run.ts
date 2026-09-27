@@ -10,7 +10,7 @@ import { buildModel as defaultBuildModel, pricingFor, providerOptionsFor } from 
 import { createOllamaSupervisor, type OllamaSupervisor } from '../provider/ollama.js';
 import { createQualityFloor } from '../provider/quality.js';
 import { connectMcp } from '../device/mcp.js';
-import { detectPlatformBlock } from '../screen/checks.js';
+import { detectLoggedOut, detectPlatformBlock } from '../screen/checks.js';
 import { parseScreen, type ScreenState, type ScreenWindow } from '../screen/parse.js';
 import { createPacer, type Pacer, type PacingConfig } from '../swarm/pacing.js';
 import { buildToolApproval } from './gate.js';
@@ -230,7 +230,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     const slug = identity.deviceSlug || null;
     const mcpTools = wrapTools(pickWorkerTools(await client.tools(), slug), {
       db, taskId, pending,
-      onScreen: (s) => { lastScreen = s; const b = s ? detectPlatformBlock(s) : null; if (b) halt = { kind: 'platform-block', text: b }; },
+      onScreen: (s) => { lastScreen = s; const b = s ? detectPlatformBlock(s) ?? detectLoggedOut(s) : null; if (b) halt = { kind: 'platform-block', text: b }; },
       onHalt: (h) => { halt = h; },
     });
     const ledgerTool = tool({

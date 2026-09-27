@@ -340,3 +340,16 @@ describe('click_node em nó não clicável (integrador)', () => {
     expect(stepsOf(db, r.taskId).find((s) => s.tool === 'android_conta1_click_node')?.error).toMatch(/not found/);
   });
 });
+
+describe('sessão perdida (integrador)', () => {
+  it('tela de login do Instagram para a tarefa e deixa a identidade em needs-human com o motivo', async () => {
+    const LOGIN = 'screen:1080x2400 density:420 orientation:portrait\n--- window:1 type:APPLICATION pkg:com.instagram.android title:Instagram layer:0 focused:true ---\nnode_id\tclass\ttext\tdesc\tres_id\tbounds\tflags\n'
+      + 'node_u\tEditText\t-\tUsername, email or mobile number,\t-\t0,0,10,10\ton,clk,edt,ena\nnode_p\tEditText\t-\tPassword,\t-\t0,20,10,30\ton,clk,edt,ena\nnode_l\tButton\t-\tLog in\t-\t0,40,10,50\ton,clk,ena\n';
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const model = new MockLanguageModelV4({ doGenerate: [calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }), text('0 itens')] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => LOGIN) }), model });
+    expect(r.outcome).toBe('platform-block');
+    expect(taskState(db, r.taskId)).toBe('needs-human');
+    expect(getIdentity(db, 'conta1')).toMatchObject({ state: 'needs-human', lastError: expect.stringMatching(/deslogado/) });
+  });
+});

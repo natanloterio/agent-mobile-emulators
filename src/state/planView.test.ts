@@ -82,3 +82,11 @@ describe('planView em outros idiomas', () => {
     expect(demo.tasks[0].instr).toBe('Kommentare im eigenen Postfach beantworten, letzte 24 h');
   });
 });
+
+describe('fora do objetivo (integrador)', () => {
+  it('rótulo traduzido', async () => {
+    const { createI18n } = await import('../i18n/translate');
+    expect(readyLabelText('fora do objetivo', createI18n('en'))).toBe('not in this goal');
+    expect(readyLabelText('fora do objetivo')).toBe('fora do objetivo');
+  });
+});
