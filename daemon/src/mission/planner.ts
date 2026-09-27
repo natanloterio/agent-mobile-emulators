@@ -4,7 +4,7 @@ import type { MemoryRow, SubtaskRow } from '../db/missions.js';
 import { LEADER_TEXTS, type Lang } from '../leader/lang.js';
 import type { ProviderConfig } from '../provider/config.js';
 import { buildModel as defaultBuildModel, pricingFor } from '../provider/factory.js';
-import { createOllamaSupervisor } from '../provider/ollama.js';
+import { createOllamaSupervisor, warnIfExternalOllama } from '../provider/ollama.js';
 import { costOf, type UsageLike } from '../worker/record.js';
 
 /** Sem min/max de propósito (mesmo motivo de LeaderOut: o Ollama descarta a gramática). Validação em `toDecision`. */
@@ -25,7 +25,7 @@ export interface PlannerInput {
 export interface PlannerDeps {
   readonly providers: ProviderConfig; readonly apiKey?: string; readonly model?: LanguageModel; readonly generate?: typeof generateText;
   readonly buildModel?: typeof defaultBuildModel;
-  readonly ollama?: { ensure(endpoint: string, model: string, runtime?: 'ollama' | 'lmstudio' | null): Promise<unknown> };
+  readonly ollama?: { ensure(endpoint: string, model: string, runtime?: 'ollama' | 'lmstudio' | null): Promise<{ spawnedByUs?: boolean; contextWarning?: string | null }> };
 }
 
 const ATTEMPTS = 2;
@@ -66,7 +66,7 @@ function toDecision(o: z.infer<typeof PlannerOut>): PlannerDecision {
 /** Uma decisão do planejador (papel `lider`); 2 tentativas, depois PlannerError (a missão pausa — spec missões §Loop). */
 export async function planNext(input: PlannerInput, d: PlannerDeps): Promise<{ decision: PlannerDecision; costUsd: number }> {
   const row = d.providers.lider;
-  if (row.mode === 'local' && !d.model) await (d.ollama ?? createOllamaSupervisor()).ensure(row.endpoint, row.model, row.runtime);
+  if (row.mode === 'local' && !d.model) warnIfExternalOllama(await (d.ollama ?? createOllamaSupervisor()).ensure(row.endpoint, row.model, row.runtime));
   const model = d.model ?? (d.buildModel ?? defaultBuildModel)(row, { anthropicApiKey: d.apiKey });
   let costUsd = 0; let last: unknown = null;
   for (let k = 1; k <= ATTEMPTS; k++) {

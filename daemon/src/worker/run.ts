@@ -8,7 +8,7 @@ import { createGoalAndTask, createTask, finishGoal, ledgerHas, ledgerPut, markDe
 import { providerLabel, readProviderConfig, type ProviderConfig, type ProviderRow } from '../provider/config.js';
 import { isLocalInfraError, ProviderError } from '../provider/errors.js';
 import { buildModel as defaultBuildModel, pricingFor, providerOptionsFor } from '../provider/factory.js';
-import { createOllamaSupervisor, type OllamaSupervisor } from '../provider/ollama.js';
+import { createOllamaSupervisor, warnIfExternalOllama, type OllamaSupervisor } from '../provider/ollama.js';
 import { createQualityFloor } from '../provider/quality.js';
 import { connectMcp } from '../device/mcp.js';
 import { detectLoggedOut, detectPlatformBlock } from '../screen/checks.js';
@@ -192,6 +192,8 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
   let lastScreen: ScreenState | null = null; let halt: Halt = null; let costUsd = 0; let genMsTotal = 0; let lastGenMs: number | null = null;
   let degraded = false; let escalatedAtStep: number | null = null; let stepsUsed = 0;
   let lastNonEmptyText = ''; // missão: último texto não vazio, para o `did` automático sem finish_subtask
+  // Passos do pedido final não contam como "orçamento esgotado": o gate só roda o pedido com orçamento de sobra.
+  let missionFinishRan = false;
   let activeMode: ProviderRow['mode'] | null = null; // papel em execução, para classificar erro de API do provedor local
   const floor = createQualityFloor(CONFIG.worker.qualityFloor);
   const pending = new Map<string, number>();
@@ -201,7 +203,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     const base = { taskId, outcome, costUsd, usage, platformBlock: h?.kind === 'platform-block' ? h.text : null, summary,
       degraded, escalatedAtStep, provider: providerLabel(cfg.worker), genMs: genMsTotal, invalidCalls: floor.count() };
     if (mission) {
-      const m = missionOutcome({ outcome, report, halt: h, summary, budgetHit: budget !== null && stepsUsed >= budget });
+      const m = missionOutcome({ outcome, report, halt: h, summary, budgetHit: budget !== null && stepsUsed >= budget && !missionFinishRan });
       if (m.report) setSubtaskReport(db, taskId, m.report);
       setTaskState(db, taskId, m.state);
       return { ...base, earlyStopRemaining: 0, report: m.report, humanReason: m.humanReason };
@@ -255,7 +257,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
   let client: Awaited<ReturnType<typeof deps.connect>> | null = null;
   try {
     // Provedor local: o Ollama tem de estar de pé antes de abrir a conversa (falha aqui é infra-local, não do device).
-    if (cfg.worker.mode === 'local') await deps.ollama.ensure(cfg.worker.endpoint, cfg.worker.model, cfg.worker.runtime);
+    if (cfg.worker.mode === 'local') warnIfExternalOllama(await deps.ollama.ensure(cfg.worker.endpoint, cfg.worker.model, cfg.worker.runtime));
     const model = depsIn.model ?? deps.buildModel(cfg.worker, { anthropicApiKey: o.apiKey });
 
     client = await deps.connect(`http://127.0.0.1:${identity.mcpHostPort}/mcp`, identity.mcpToken);
@@ -322,6 +324,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
 
     // Executor terminou sem finish_subtask: um pedido final curto antes de a subtarefa falhar (spec missões §Executor).
     if (shouldRunMissionFinish({ mission: !!mission, report, halted: !!halt, stopped: stopped(), budget, stepsUsed })) {
+      missionFinishRan = true;
       history = buildMissionFinishMessages(history, result.response.messages, MISSION_FINISH_NUDGE);
       result = await segment(currentRow, currentModel, tools, history, stopIfHalted, slug, MISSION_FINISH_STEPS, MISSION_FINISH_TOOLS);
       if (result.text.trim()) lastNonEmptyText = result.text;

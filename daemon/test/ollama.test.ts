@@ -1,8 +1,8 @@
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { ProviderError } from '../src/provider/errors.js';
-import { createOllamaSupervisor, isLoopbackHost, modelListed, OLLAMA_ENV } from '../src/provider/ollama.js';
+import { createOllamaSupervisor, isLoopbackHost, modelListed, OLLAMA_ENV, resetExternalOllamaWarning, warnIfExternalOllama } from '../src/provider/ollama.js';
 
 const tags = (...names: string[]) => new Response(JSON.stringify({ models: names.map((name) => ({ name })) }), { status: 200 });
 const refused = () => { throw new Error('fetch failed: ECONNREFUSED'); };
@@ -134,5 +134,22 @@ describe('supervisor — incremento 3', () => {
       openLog: () => 77, closeLog: (fd) => { closed.push(fd); }, spawn: () => { throw new Error('spawn ollama ENOENT'); } });
     await expect(sup.ensure('http://127.0.0.1:11434/v1', 'm')).rejects.toMatchObject({ kind: 'infra-local' });
     expect(closed).toEqual([77]);
+  });
+});
+
+describe('warnIfExternalOllama', () => {
+  it('avisa uma vez (spawnedByUs=false); nosso e o segundo aviso não repetem; LM Studio (contextWarning presente) é ignorado', () => {
+    resetExternalOllamaWarning();
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnIfExternalOllama({ spawnedByUs: false });
+    warnIfExternalOllama({ spawnedByUs: false });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][0]).toContain(`ENXAME_LOCAL_CONTEXT=${CONFIG.local.contextLength}`);
+    spy.mockClear();
+    resetExternalOllamaWarning();
+    warnIfExternalOllama({ spawnedByUs: true });
+    warnIfExternalOllama({ spawnedByUs: false, contextWarning: null });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

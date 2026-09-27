@@ -184,10 +184,10 @@ For a local role, the model picker lists every model **already downloaded** on t
 
 | Runtime | Default endpoint | What Enxame does when you use it |
 |---|---|---|
-| Ollama | `http://127.0.0.1:11434/v1` | Starts `ollama serve` with a 32k context if nothing is running. |
-| LM Studio | `http://127.0.0.1:1234/v1` | Starts the server with `lms server start` and loads the model with `lms load … --context-length 32768`. |
+| Ollama | `http://127.0.0.1:11434/v1` | Starts `ollama serve` with the context from `ENXAME_LOCAL_CONTEXT` (default 65536) if nothing is running. |
+| LM Studio | `http://127.0.0.1:1234/v1` | Starts the server with `lms server start` and loads the model with `lms load … --context-length <ENXAME_LOCAL_CONTEXT>`. |
 
-Picking a model from the other runtime switches the role's runtime and endpoint for you. Enxame only stops the servers it started itself.
+Picking a model from the other runtime switches the role's runtime and endpoint for you. Enxame only stops the servers it started itself: if you change `ENXAME_LOCAL_CONTEXT` or upgrade Enxame, stop any `ollama serve` you started outside the daemon so it gets restarted with the new context (an already-running one is used as-is, at whatever context it was started with).
 
 Cost is tracked per task and per goal: dollars for cloud models, GPU seconds for local ones.
 

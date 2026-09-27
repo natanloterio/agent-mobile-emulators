@@ -220,6 +220,16 @@ describe('runTask em modo missão', () => {
     expect(r.report?.did).toBe('ainda sem finish_subtask');
     expect(r.report?.blockers).toBe('terminou sem finish_subtask');
   });
+  it('pedido final consome os últimos passos do orçamento sem relatório → blockers continua "terminou sem finish_subtask" (não orçamento esgotado)', async () => {
+    const s = setup(); const mcp = fakeMcp();
+    // 1º segmento não usa passos (nenhuma tool call); o gate do pedido final passa (stepsUsed=0 < budget=1). O pedido
+    // final então usa 2 passos (get_screen_state x2) sem chamar finish_subtask, estourando o orçamento de 1 por causa
+    // dele mesmo — isso não deve virar "orçamento esgotado" (o gate só rodou o pedido porque havia orçamento de sobra).
+    const g = scriptedCalls([[], [[`${P}get_screen_state`, {}], [`${P}get_screen_state`, {}]]], ['divagou', 'ainda sem finish_subtask']);
+    const r = await s.run({ connect: mcp.connect, generate: g.generate }, 1);
+    expect(taskState(s.db, s.taskId)).toBe('failed');
+    expect(r.report?.blockers).toBe('terminou sem finish_subtask');
+  });
   it('missão poda telas para CONFIG.mission.keepScreens (1): com 3 leituras, só a última fica completa', async () => {
     const s = setup(); const mcp = fakeMcp();
     let prepareStep: ((a: { messages: unknown[] }) => Promise<{ messages: unknown[] }>) | null = null;
