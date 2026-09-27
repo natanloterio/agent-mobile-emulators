@@ -14,6 +14,9 @@ const ALLOWED: readonly { readonly method: 'GET' | 'POST' | 'PUT'; readonly path
   // Limites dos agentes (spec limites §UI): lidos e gravados direto pela tela, sem IPC dedicado.
   { method: 'GET', path: /^\/settings\/budgets$/ },
   { method: 'PUT', path: /^\/settings\/budgets$/ },
+  // Paralelismo local (spec paralelismo §UI): idem, direto pela tela.
+  { method: 'GET', path: /^\/settings\/local$/ },
+  { method: 'PUT', path: /^\/settings\/local$/ },
 ];
 
 export type ApiMethod = 'GET' | 'POST' | 'PUT';
