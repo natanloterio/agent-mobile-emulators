@@ -6,9 +6,12 @@ import { track, type ApiDeps } from './apiRequest';
 export const MISSION_START_KEY = 'missionStart';
 export const missionKey = (id: string): string => `mission:${id}`;
 export type MissionAction = 'pause' | 'resume' | 'continue' | 'abandon';
+export type MissionInstructThen = 'continue' | 'resume';
 export interface MissionActions {
   readonly start: (identityId: string, text: string) => Promise<boolean>;
   readonly act: (id: string, action: MissionAction, text?: string) => Promise<void>;
+  /** Instrução do operador (spec instruções): texto aparado; vazio não chama o daemon. */
+  readonly instruct: (id: string, text: string, then?: MissionInstructThen) => Promise<void>;
 }
 
 const MIN_CHARS = 3; // o daemon recusa menos que isso (GoalText)
@@ -27,6 +30,11 @@ export function createMissionActions(deps: ApiDeps & { readonly confirm: (m: str
     act: async (id, action, text) => {
       if (action === 'abandon' && !deps.confirm(createI18n(locale()).t('mission.confirm.abandon', { text: text ?? '' }))) return;
       await track(deps, missionKey(id), (b) => b.api?.('POST', `/missions/${encodeURIComponent(id)}/${action}`));
+    },
+    instruct: async (id, raw, then) => {
+      const text = raw.trim();
+      if (!text) return;
+      await track(deps, missionKey(id), (b) => b.api?.('POST', `/missions/${encodeURIComponent(id)}/instruct`, then ? { text, then } : { text }));
     },
   };
 }

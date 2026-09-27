@@ -14,7 +14,7 @@ const input: PlannerInput = {
   identity: { name: 'conta2', handle: 'sem conta', appPackage: 'com.instagram.android' },
   memory: [{ key: 'email.address', value: 'x@y.z', secret: false }, { key: 'email.password', value: 'mission:m:email.password', secret: true }],
   subtasks: [{ id: 't1', seq: 1, objective: 'conseguir e-mail no Gmail', successCriteria: 'caixa aberta', state: 'failed', report: { ok: false, did: 'abriu o cadastro', blockers: 'pediu telefone' }, costUsd: 0.1 }],
-  screen: 'app: com.android.chrome\n- Criar conta', lang: 'pt',
+  screen: 'app: com.android.chrome\n- Criar conta', lang: 'pt', notes: [],
 };
 
 describe('planejador da missão', () => {
@@ -27,6 +27,12 @@ describe('planejador da missão', () => {
     expect(p).toContain('#1 [failed] conseguir e-mail no Gmail');
     expect(p).toContain('pediu telefone');
     expect(p).toContain('app: com.android.chrome');
+  });
+  it('traz as instruções do operador numa seção própria, mais recentes primeiro; sem notas mostra "(nenhuma)"', () => {
+    expect(plannerPrompt(input)).toContain('Instruções do operador (siga-as antes do seu próprio plano; mais recentes primeiro):\n(nenhuma)');
+    const withNotes: PlannerInput = { ...input, notes: ['use o YopMail', 'não instale apps'] };
+    const p = plannerPrompt(withNotes);
+    expect(p).toMatch(/Instruções do operador.*:\n- use o YopMail\n- não instale apps/s);
   });
   it('lista as rotas já falhadas (objetivo de cada subtarefa failed) numa linha própria', () => {
     const twoFailed: PlannerInput = { ...input, subtasks: [
@@ -68,6 +74,13 @@ describe('planejador da missão', () => {
     await planNext(input, { providers: PROVIDERS, generate, model: {} as never });
     expect(seenInstructions).toMatch(/Não proponha de novo o mesmo objetivo, site ou provedor de uma subtarefa que falhou/);
     expect(seenInstructions).toMatch(/decida "human"/);
+  });
+  it('instruções dizem que a instrução do operador tem prioridade, exceto para contornar verificação humana', async () => {
+    const model = new MockLanguageModelV4({ doGenerate: [json({ ...EMPTY, decision: 'done', summary: 'ok' })] as never });
+    let seen = '';
+    const generate = (async (o: { instructions: string }) => { seen = o.instructions; return { output: { ...EMPTY, decision: 'done', summary: 'ok' }, totalUsage: { inputTokens: 1, outputTokens: 1 } }; }) as unknown as typeof generateText;
+    await planNext(input, { providers: PROVIDERS, generate, model });
+    expect(seen).toMatch(/Instruções do operador têm prioridade sobre o seu plano, exceto para contornar verificação humana/);
   });
   it('LM Studio: saída estruturada pede reasoning_effort none (modelos de raciocínio põem o JSON no reasoning_content)', async () => {
     const seen: unknown[] = [];

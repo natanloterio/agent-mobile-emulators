@@ -49,4 +49,9 @@ create table if not exists mission_memory (
 create table if not exists settings (
   key text primary key, value text not null, updated_at text not null default (datetime('now'))
 );
+-- Instruções do operador para uma missão (spec instruções): texto livre, lido pelo executor e pelo planejador.
+create table if not exists mission_note (
+  id integer primary key autoincrement, goal_id text not null references goal(id), text text not null,
+  created_at text not null default (datetime('now')), read_at text, read_seq integer
+);
 `;

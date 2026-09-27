@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, upsertIdentity } from '../src/db/identities.js';
-import { addSubtask, createMission, listMemory, listSubtasks } from '../src/db/missions.js';
+import { addSubtask, createMission, listMemory, listSubtasks, subtaskSeq } from '../src/db/missions.js';
+import { addNote, listNotes, markNotesRead, unreadNotes } from '../src/db/mission-notes.js';
 import { ProviderError } from '../src/provider/errors.js';
 import { createSecretMask, secretEntryId } from '../src/worker/mission-tools.js';
 import { PRUNED_PLACEHOLDER } from '../src/worker/prune.js';
@@ -80,14 +81,14 @@ function scriptedCalls(scripts: readonly (readonly (readonly [string, unknown])[
   return { generate, seen, opts };
 }
 
-function setup(vaultIn?: Vault, known: readonly string[] = []) {
+function setup(vaultIn?: Vault, known: readonly string[] = [], takeNotes?: () => readonly string[]) {
   const db = openDb(':memory:'); upsertIdentity(db, row);
   const missionId = createMission(db, 'conta2', 'missão', 'pt');
   const taskId = addSubtask(db, missionId, 'cadastrar', 'conta criada');
   const vault = vaultIn ?? memVault(); const mask = createSecretMask(known);
   const run = (deps: RunTaskDeps, stepBudget = 60) => runTask({
     db, identity: row, goalText: 'missão', goalId: missionId, taskId, instruction: 'Objetivo: cadastrar', apiKey: 'k',
-    isKilled: () => false, onStep: () => {}, providers: PROVIDERS, stepBudget, mission: { missionId, vault, mask },
+    isKilled: () => false, onStep: () => {}, providers: PROVIDERS, stepBudget, mission: { missionId, vault, mask, takeNotes },
   }, deps);
   return { db, missionId, taskId, vault, run };
 }
@@ -242,5 +243,31 @@ describe('runTask em modo missão', () => {
     const { messages } = await prepareStep!({ messages: [screenMsg('a'), screenMsg('b'), screenMsg('c')] });
     const texts = (messages as { content: { output: { value: string } }[] }[]).map((m) => m.content[0].output.value);
     expect(texts).toEqual([PRUNED_PLACEHOLDER, PRUNED_PLACEHOLDER, 'tela c']);
+  });
+  it('instrução do operador chegada durante a subtarefa entra no próximo passo e é marcada lida (2º passo do generate)', async () => {
+    const s = setup(undefined, [], () => {
+      const pending = unreadNotes(s.db, s.missionId);
+      if (!pending.length) return [];
+      markNotesRead(s.db, pending.map((n) => n.id), subtaskSeq(s.db, s.taskId));
+      return pending.map((n) => n.text);
+    });
+    const mcp = fakeMcp();
+    let prepareStep: ((a: { messages: unknown[] }) => Promise<{ messages: unknown[] }>) | null = null;
+    const generate = (async (o: { prepareStep: (a: { messages: unknown[] }) => Promise<{ messages: unknown[] }> }) => {
+      prepareStep = o.prepareStep;
+      return { text: 'fim', totalUsage: { inputTokens: 1, outputTokens: 1 }, steps: [], response: { messages: [] } };
+    }) as unknown as RunTaskDeps['generate'];
+    await s.run({ connect: mcp.connect, generate });
+    // 1º passo: nenhuma nota ainda (o operador escreve só depois de a subtarefa já estar rodando).
+    const first = await prepareStep!({ messages: [] });
+    expect(first.messages).toEqual([]);
+    addNote(s.db, s.missionId, 'use o YopMail pelo Chrome');
+    // 2º passo: a nota chegou nesse meio-tempo e entra na mensagem do próximo passo.
+    const second = await prepareStep!({ messages: [] });
+    expect(second.messages).toEqual([{ role: 'user', content: 'Instrução do operador: use o YopMail pelo Chrome' }]);
+    expect(listNotes(s.db, s.missionId)[0]).toMatchObject({ readSeq: subtaskSeq(s.db, s.taskId) });
+    // 3º passo: já foi marcada lida, não repete.
+    const third = await prepareStep!({ messages: [] });
+    expect(third.messages).toEqual([]);
   });
 });

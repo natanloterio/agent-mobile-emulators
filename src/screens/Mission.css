@@ -16,3 +16,27 @@
 .mission__id input { accent-color: currentColor; }
 .newgoal__modes { display: inline-flex; gap: 6px; }
 @media (max-width: 480px) { .mission__mem { grid-template-columns: 1fr; } }
+
+/* Instrução para o agente (spec instruções §Interface). */
+.instr { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: var(--radius-control); background: var(--color-grey); }
+.instr__head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.instr__hint { font-size: 13px; opacity: .7; }
+.instr__form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.instr__input {
+  flex: 1 1 320px; min-width: 0; font: inherit; font-size: 15px; line-height: 22px; padding: 10px 14px;
+  border: 1px solid var(--color-black); border-radius: var(--radius-control); background: var(--color-white); resize: vertical; min-height: 46px;
+}
+.instr__input::placeholder { color: var(--color-placeholder); }
+/* Foco visível: em Wayland + NVIDIA o Electron às vezes não desenha o caret; o anel mostra onde se digita. */
+.instr__input { caret-color: var(--color-black); }
+.instr__input:focus { box-shadow: 0 0 0 4px var(--color-green); outline: none; }
+.instr__list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.instr__item { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; font-size: 13px; padding: 8px 10px; border-radius: 10px; background: var(--color-white); align-items: baseline; }
+.instr__who { font-weight: 600; }
+.instr__state { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--color-green); white-space: nowrap; justify-self: start; }
+.instr__state--pending { background: var(--color-white); border: 1px solid var(--color-black); }
+/* No celular o selo desce para a linha de baixo em vez de esticar (achado do mockup, corrigido aqui). */
+@media (max-width: 759px) {
+  .instr__item { grid-template-columns: auto 1fr; }
+  .instr__state { grid-column: 1 / -1; }
+}

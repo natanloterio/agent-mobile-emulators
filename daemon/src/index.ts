@@ -40,6 +40,8 @@ import { getCredential } from './vault/credentials.js';
 import { keyringKeySource } from './vault/keyring.js';
 import { createVault } from './vault/vault.js';
 import { createSecretMask, loadMissionSecrets } from './worker/mission-tools.js';
+import { markNotesRead, unreadNotes } from './db/mission-notes.js';
+import { subtaskSeq } from './db/missions.js';
 import { startGoal, type WorkerJob } from './swarm/scheduler.js';
 import { singleFlightOllama } from './swarm/single-flight.js';
 import { createIdentityRoutes } from './server/routes-identities.js';
@@ -124,17 +126,26 @@ const runWorker = (j: WorkerJob) => runTask({
 }, { ollama });
 
 // Missões (spec missões): loop planejador → executor por identidade, fora do lock de objetivo.
+const missionMask = async (missionId: string) => createSecretMask(await loadMissionSecrets(db, vault, missionId)).mask;
 const missions = createMissionRunner({
   db, isKilled: () => server.isKilled(), onChange: () => server.broadcast(),
   plan: (input) => planNext(input, { providers: readProviderConfig(db), apiKey: env.anthropicApiKey, ollama }),
   readScreen: (identity) => readScreenOnce(db, identity, { ensureReady: (d, i) => ensureIdentityReady(d, i, { adb }) }),
-  mask: async (missionId) => createSecretMask(await loadMissionSecrets(db, vault, missionId)).mask,
+  mask: missionMask,
   runSubtask: async (j) => {
     const mask = createSecretMask(await loadMissionSecrets(db, vault, j.missionId));
+    const seq = subtaskSeq(db, j.taskId);
+    // Instruções do operador (spec instruções): ainda não lidas quando o executor pede o próximo passo; marcadas com o seq desta subtarefa.
+    const takeNotes = () => {
+      const pending = unreadNotes(db, j.missionId);
+      if (!pending.length) return [];
+      markNotesRead(db, pending.map((n) => n.id), seq);
+      return pending.map((n) => n.text);
+    };
     const r = await runTask({
       db, identity: j.identity, goalText: j.instruction, goalId: j.missionId, taskId: j.taskId, instruction: j.instruction,
       apiKey: env.anthropicApiKey, isKilled: j.shouldStop, onStep: () => server.broadcast(),
-      stepBudget: readStepBudgets(db).mission, pacing: CONFIG.swarm, mission: { missionId: j.missionId, vault, mask },
+      stepBudget: readStepBudgets(db).mission, pacing: CONFIG.swarm, mission: { missionId: j.missionId, vault, mask, takeNotes },
     }, { ollama });
     return { humanReason: r.humanReason, summary: r.platformBlock ?? r.summary };
   },
@@ -160,7 +171,7 @@ const server = await startServer({
   // missões e credenciais do cofre (spec missões) não usam o lock de objetivo.
   routes: [
     goalsRoutes({ plan: (text, lang) => planGoal(text, planDeps, lang) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) }),
-    missionRoutes({ runner: missions }), credentialRoutes({ vault }), settingsRoutes(),
+    missionRoutes({ runner: missions, mask: missionMask }), credentialRoutes({ vault }), settingsRoutes(),
   ],
   onProviderTest: async (role) => {
     const model = readProviderConfig(db)[role].model;
