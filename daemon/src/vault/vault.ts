@@ -50,7 +50,7 @@ export function createVault({ file, keys, fs = nodeFs }: { file: string; keys: K
     } catch (e) {
       if (isFileNotFound(e)) return {};
       if (e instanceof VaultError) throw e;
-      throw new VaultError(`não foi possível ler o cofre: ${String((e as Error).code ?? (e as Error).message ?? e).slice(0, 80)}`);
+      throw new VaultError(`não foi possível ler o cofre: ${String(((e as { code?: string }).code ?? (e as Error).message) ?? e).slice(0, 80)}`);
     }
   };
   const save = async (e: Entries) => {
