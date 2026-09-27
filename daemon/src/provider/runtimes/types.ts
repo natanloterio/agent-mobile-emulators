@@ -13,7 +13,7 @@ export interface RuntimeListing {
 /** Mesmo formato do status do Ollama, para os chamadores não mudarem (worker, líder, teste de provedor). */
 export interface RuntimeStatus {
   readonly running: boolean; readonly spawnedByUs: boolean; readonly adopted: boolean; readonly pid: number | null; readonly models: readonly string[];
-  /** Aviso de contexto do próprio runtime (null = contexto garantido ≥ 32k). Ausente: o chamador decide (regra do Ollama). */
+  /** Aviso de contexto do próprio runtime (null = contexto garantido ≥ `CONFIG.local.contextLength`). Ausente: o chamador decide (regra do Ollama). */
   readonly contextWarning?: string | null;
 }
 

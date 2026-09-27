@@ -1,3 +1,4 @@
+import { generateText } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { planNext, plannerPrompt, PlannerError, type PlannerInput } from '../src/mission/planner.js';
@@ -27,6 +28,16 @@ describe('planejador da missão', () => {
     expect(p).toContain('pediu telefone');
     expect(p).toContain('app: com.android.chrome');
   });
+  it('lista as rotas já falhadas (objetivo de cada subtarefa failed) numa linha própria', () => {
+    const twoFailed: PlannerInput = { ...input, subtasks: [
+      ...input.subtasks,
+      { id: 't2', seq: 2, objective: 'criar e-mail no Outlook', successCriteria: 'caixa aberta', state: 'failed', report: { ok: false, did: '', blockers: 'pediu telefone' }, costUsd: 0.1 },
+      { id: 't3', seq: 3, objective: 'abrir o Instagram', successCriteria: 'logado', state: 'done', report: { ok: true, did: 'logou', blockers: '' }, costUsd: 0.1 },
+    ] };
+    const p = plannerPrompt(twoFailed);
+    expect(p).toMatch(/Rotas que já falharam:.*conseguir e-mail no Gmail.*criar e-mail no Outlook/s);
+    expect(p).not.toMatch(/Rotas que já falharam:.*abrir o Instagram/s);
+  });
   it('next vira decisão com objetivo e critério; custo calculado', async () => {
     const model = new MockLanguageModelV4({ doGenerate: [json({ ...EMPTY, decision: 'next', objective: 'criar e-mail no Outlook', success_criteria: 'caixa de entrada aberta', rationale: 'Gmail pediu telefone' })] as never });
     const r = await planNext(input, { providers: PROVIDERS, model });
@@ -47,5 +58,15 @@ describe('planejador da missão', () => {
     const bad = json({ ...EMPTY, decision: 'next' });
     const model = new MockLanguageModelV4({ doGenerate: [bad, bad] as never });
     await expect(planNext(input, { providers: PROVIDERS, model })).rejects.toBeInstanceOf(PlannerError);
+  });
+  it('instruções pedem trocar de rota após falha em vez de repetir objetivo/site/provedor', async () => {
+    let seenInstructions = '';
+    const generate = (async (o: { instructions: string }) => {
+      seenInstructions = o.instructions;
+      return { output: { ...EMPTY, decision: 'done', summary: 'ok' }, totalUsage: { inputTokens: 100, outputTokens: 20 } };
+    }) as unknown as typeof generateText;
+    await planNext(input, { providers: PROVIDERS, generate, model: {} as never });
+    expect(seenInstructions).toMatch(/Não proponha de novo o mesmo objetivo, site ou provedor de uma subtarefa que falhou/);
+    expect(seenInstructions).toMatch(/decida "human"/);
   });
 });

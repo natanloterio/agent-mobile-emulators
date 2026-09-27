@@ -70,7 +70,7 @@ export function selectLiveSelStats(sel: TileVM, i18n: I18n = PT): readonly Stat[
   const { t, fmt } = i18n;
   const l = sel.live;
   return [
-    { value: `${sel.steps}/${sel.budget}`, label: t('common.stat.stepsBudget') },
+    { value: sel.budget === null ? `${sel.steps}` : `${sel.steps}/${sel.budget}`, label: t('common.stat.stepsBudget') },
     { value: String(l?.ledgerCount ?? 0), label: t('common.stat.ledgerItems') },
     { value: fmt.usd(sel.cost), label: t('common.stat.taskCost') },
     { value: fmtTokens(l?.lastStepTokens ?? 0, i18n), label: t('common.stat.lastStepTokens') },

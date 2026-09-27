@@ -116,7 +116,8 @@ export async function planGoal(text: string, d: PlanDeps, lang: Lang = DEFAULT_L
     identityId: r.identity.id, name: r.identity.name, handle: r.identity.handle,
     instruction: (!only || only.has(r.identity.id) ? decision.instructions.get(r.identity.id) : undefined) || text, signals: r.signals, ready: r.ready, readyLabel: r.readyLabel,
   }));
-  const stepBudget = d.stepBudget ?? Number(process.env.ENXAME_STEP_BUDGET ?? CONFIG.worker.stepBudget);
+  // Na estimativa, `0` significa "sem limite" (CONFIG.worker.stepBudget vira null quando ENXAME_STEP_BUDGET=0).
+  const stepBudget = d.stepBudget ?? CONFIG.worker.stepBudget ?? 0;
   const staggerMs = d.staggerMs ?? CONFIG.swarm.staggerMs;
   return {
     text, pattern: decision.pattern, rationale: decision.rationale, tasks,

@@ -4,6 +4,7 @@ import { getIdentity, upsertIdentity } from '../src/db/identities.js';
 import { addSubtask, createMission, listMemory, listSubtasks } from '../src/db/missions.js';
 import { ProviderError } from '../src/provider/errors.js';
 import { createSecretMask, secretEntryId } from '../src/worker/mission-tools.js';
+import { PRUNED_PLACEHOLDER } from '../src/worker/prune.js';
 import { runTask, type RunTaskDeps } from '../src/worker/run.js';
 import { VaultError, type Vault } from '../src/vault/vault.js';
 import { memVault } from './fixtures/mem-vault.js';
@@ -53,6 +54,28 @@ function scripted(script: readonly (readonly [string, unknown])[]) {
       await o.onStepFinish?.({ stepNumber: n - 1, text: '', content: [{ type: 'tool-call', toolCallId: id, toolName: name, input }, part], usage: { inputTokens: 10, outputTokens: 1 } });
     }
     return { text: 'fim', totalUsage: { inputTokens: 10, outputTokens: 1 }, steps: [], response: { messages: [] } };
+  }) as unknown as RunTaskDeps['generate'];
+  return { generate, seen, opts };
+}
+
+/** Como scripted(), mas um roteiro (e um texto final) por chamada de generate — simula vários segmentos (spec missões: pedido final). */
+function scriptedCalls(scripts: readonly (readonly (readonly [string, unknown])[])[], texts: readonly string[] = []) {
+  const seen: string[] = []; const opts: { toolApproval?: unknown; instructions?: string; messages?: unknown; activeTools?: unknown }[] = [];
+  let call = 0;
+  const generate = (async (o: { tools: Record<string, { execute: (i: unknown, x: unknown) => Promise<unknown> }>; onStepFinish?: (s: unknown) => void | Promise<void>; toolApproval?: unknown; instructions?: string; messages?: unknown; prepareStep?: (a: { messages: unknown[] }) => Promise<{ activeTools?: unknown }> }) => {
+    const idx = Math.min(call, scripts.length - 1); const script = scripts[idx]; call++;
+    const prepared = await o.prepareStep?.({ messages: [] });
+    opts.push({ toolApproval: o.toolApproval, instructions: o.instructions, messages: o.messages, activeTools: prepared?.activeTools });
+    let n = 0;
+    for (const [name, input] of script) {
+      const id = `c${idx}-${++n}`; let out: unknown; let err: unknown = null;
+      try { out = await o.tools[name].execute(input, { toolCallId: id, messages: [] }); } catch (e) { err = e; }
+      const text = err ? String((err as Error).message) : typeof out === 'string' ? out : JSON.stringify(out);
+      seen.push(text);
+      const part = err ? { type: 'tool-error', toolCallId: id, toolName: name, input, error: err } : { type: 'tool-result', toolCallId: id, toolName: name, input, output: out };
+      await o.onStepFinish?.({ stepNumber: n - 1, text: '', content: [{ type: 'tool-call', toolCallId: id, toolName: name, input }, part], usage: { inputTokens: 10, outputTokens: 1 } });
+    }
+    return { text: texts[idx] ?? 'fim', totalUsage: { inputTokens: 10, outputTokens: 1 }, steps: [], response: { messages: [] } };
   }) as unknown as RunTaskDeps['generate'];
   return { generate, seen, opts };
 }
@@ -178,5 +201,46 @@ describe('runTask em modo missão', () => {
     const r = await s.run({ connect: mcp.connect, generate: scripted([[`${P}get_screen_state`, {}]]).generate });
     expect(r.humanReason).toMatch(/not a robot •••/);
     expect(JSON.stringify(s.db.prepare('select * from task').all())).not.toContain('Segr3do!Forte');
+  });
+  it('1º segmento termina em texto solto (sem finish_subtask); pedido final chama finish_subtask → done com relatório', async () => {
+    const s = setup(); const mcp = fakeMcp();
+    const g = scriptedCalls([[], [['finish_subtask', { ok: true, did: 'fechou', blockers: '' }]]], ['pensei alto e esqueci de chamar finish_subtask', 'fim']);
+    const r = await s.run({ connect: mcp.connect, generate: g.generate });
+    expect(r.report).toEqual({ ok: true, did: 'fechou', blockers: '' });
+    expect(taskState(s.db, s.taskId)).toBe('done');
+    // pedido final: só finish_subtask e request_human, e a última mensagem é o pedido.
+    expect(g.opts[1].activeTools).toEqual(['finish_subtask', 'request_human']);
+    expect(JSON.stringify(g.opts[1].messages)).toMatch(/Você encerrou sem chamar finish_subtask/);
+  });
+  it('pedido final também termina sem finish_subtask → failed com did = último texto do modelo', async () => {
+    const s = setup(); const mcp = fakeMcp();
+    const g = scriptedCalls([[], []], ['divagou sobre o app', 'ainda sem finish_subtask']);
+    const r = await s.run({ connect: mcp.connect, generate: g.generate });
+    expect(taskState(s.db, s.taskId)).toBe('failed');
+    expect(r.report?.did).toBe('ainda sem finish_subtask');
+    expect(r.report?.blockers).toBe('terminou sem finish_subtask');
+  });
+  it('pedido final consome os últimos passos do orçamento sem relatório → blockers continua "terminou sem finish_subtask" (não orçamento esgotado)', async () => {
+    const s = setup(); const mcp = fakeMcp();
+    // 1º segmento não usa passos (nenhuma tool call); o gate do pedido final passa (stepsUsed=0 < budget=1). O pedido
+    // final então usa 2 passos (get_screen_state x2) sem chamar finish_subtask, estourando o orçamento de 1 por causa
+    // dele mesmo — isso não deve virar "orçamento esgotado" (o gate só rodou o pedido porque havia orçamento de sobra).
+    const g = scriptedCalls([[], [[`${P}get_screen_state`, {}], [`${P}get_screen_state`, {}]]], ['divagou', 'ainda sem finish_subtask']);
+    const r = await s.run({ connect: mcp.connect, generate: g.generate }, 1);
+    expect(taskState(s.db, s.taskId)).toBe('failed');
+    expect(r.report?.blockers).toBe('terminou sem finish_subtask');
+  });
+  it('missão poda telas para CONFIG.mission.keepScreens (1): com 3 leituras, só a última fica completa', async () => {
+    const s = setup(); const mcp = fakeMcp();
+    let prepareStep: ((a: { messages: unknown[] }) => Promise<{ messages: unknown[] }>) | null = null;
+    const generate = (async (o: { prepareStep: (a: { messages: unknown[] }) => Promise<{ messages: unknown[] }> }) => {
+      prepareStep = o.prepareStep;
+      return { text: 'fim', totalUsage: { inputTokens: 1, outputTokens: 1 }, steps: [], response: { messages: [] } };
+    }) as unknown as RunTaskDeps['generate'];
+    await s.run({ connect: mcp.connect, generate });
+    const screenMsg = (id: string) => ({ role: 'tool', content: [{ type: 'tool-result', toolCallId: id, toolName: `${P}get_screen_state`, output: { type: 'text', value: `tela ${id}` } }] });
+    const { messages } = await prepareStep!({ messages: [screenMsg('a'), screenMsg('b'), screenMsg('c')] });
+    const texts = (messages as { content: { output: { value: string } }[] }[]).map((m) => m.content[0].output.value);
+    expect(texts).toEqual([PRUNED_PLACEHOLDER, PRUNED_PLACEHOLDER, 'tela c']);
   });
 });

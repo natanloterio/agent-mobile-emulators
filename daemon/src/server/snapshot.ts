@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { CONFIG } from '../config.js';
 import { listIdentities, type IdentityRow, type ProbeSignalsRow } from '../db/identities.js';
+import { openMissionFor } from '../db/missions.js';
 import { readProviderConfig, type ProviderRow, type RoleKey } from '../provider/config.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import type { VideoState } from '../device/video.js';
@@ -9,7 +10,7 @@ import { missionViews, type MissionView } from './snapshot-missions.js';
 export interface ToolRow { readonly idx: number; readonly tool: string; readonly excerpt: string; readonly tokens: number; readonly gate: boolean; readonly provider: string | null }
 export interface IdentitySnapshot {
   readonly id: string; readonly name: string; readonly handle: string; readonly state: string; readonly task: string;
-  readonly steps: number; readonly budget: number; readonly costUsd: number; readonly error: string; readonly lastTools: readonly ToolRow[];
+  readonly steps: number; readonly budget: number | null; readonly costUsd: number; readonly error: string; readonly lastTools: readonly ToolRow[];
   readonly degraded: boolean; readonly genMs: number; readonly earlyStopRemaining: number;
   /** Estado do stream de vídeo do daemon: a UI mostra "ao vivo" por ele, não pela chegada de pacotes (tela parada não gera pacote). */
   readonly video: VideoState;
@@ -55,7 +56,6 @@ export interface SnapshotSources {
   readonly host?: () => HostMetrics | null;
 }
 
-const BUDGET = Number(process.env.ENXAME_STEP_BUDGET ?? 30);
 const DAY_MS = 86_400_000;
 
 /** SQLite grava `datetime('now')` sem fuso ("YYYY-MM-DD HH:MM:SS", UTC); ISO passa direto. */
@@ -78,9 +78,11 @@ function identitySnapshot(db: DatabaseSync, id: IdentityRow, videoState?: (id: s
   const steps = task ? (db.prepare('select idx, tool, result_excerpt, input_tokens, output_tokens, provider from step where task_id=? order by idx desc limit 6').all(task.id) as StepRow[]) : [];
   const lastTools = steps.map((s) => ({ idx: s.idx, tool: s.tool ?? '—', excerpt: s.result_excerpt ?? '', tokens: (s.input_tokens ?? 0) + (s.output_tokens ?? 0), gate: (s.result_excerpt ?? '').startsWith('GATE'), provider: s.provider }));
   const ledger = db.prepare('select count(*) as n from ledger where identity_id=?').get(id.id) as { n: number };
+  // Em missão o teto é o da subtarefa (spec missões); fora dela, o do worker comum.
+  const budget = openMissionFor(db, id.id) ? CONFIG.mission.subtaskStepBudget : CONFIG.worker.stepBudget;
   return {
     id: id.id, name: id.name, handle: id.handle, state: id.state, task: task?.instruction ?? 'Aguardando',
-    steps: agg.n, budget: BUDGET, costUsd: task?.cost_usd ?? 0, error: id.lastError ?? '', lastTools,
+    steps: agg.n, budget, costUsd: task?.cost_usd ?? 0, error: id.lastError ?? '', lastTools,
     degraded: (task?.degraded ?? 0) === 1, genMs: agg.g, earlyStopRemaining: task?.early_stop_remaining ?? 0,
     video: videoState?.(id.id) ?? 'idle',
     lifecycle: id.state, paused: id.paused ?? false, controlled: id.controlled ?? false,

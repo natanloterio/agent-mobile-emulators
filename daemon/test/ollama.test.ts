@@ -1,8 +1,8 @@
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { ProviderError } from '../src/provider/errors.js';
-import { createOllamaSupervisor, isLoopbackHost, modelListed, OLLAMA_ENV } from '../src/provider/ollama.js';
+import { createOllamaSupervisor, isLoopbackHost, modelListed, OLLAMA_ENV, resetExternalOllamaWarning, warnIfExternalOllama } from '../src/provider/ollama.js';
 
 const tags = (...names: string[]) => new Response(JSON.stringify({ models: names.map((name) => ({ name })) }), { status: 200 });
 const refused = () => { throw new Error('fetch failed: ECONNREFUSED'); };
@@ -25,6 +25,9 @@ function harness(script: (() => Response)[]) {
 }
 
 describe('supervisor do Ollama', () => {
+  it('OLLAMA_CONTEXT_LENGTH vem de CONFIG.local.contextLength', () => {
+    expect(OLLAMA_ENV.OLLAMA_CONTEXT_LENGTH).toBe(String(CONFIG.local.contextLength));
+  });
   it('endpoint vivo → não spawna, lista modelos, spawnedByUs=false e stop() não mata', async () => {
     const h = harness([() => tags('qwen3.5:27b')]);
     const st = await h.sup.ensure('http://127.0.0.1:11434/v1', 'qwen3.5:27b');
@@ -79,7 +82,7 @@ describe('supervisor — revisão final', () => {
   });
   it('Important 2: Ollama vivo com o env do daemon (órfão de um daemon anterior) é adotado e stop() o mata', async () => {
     const killed: number[] = [];
-    const sup = createOllamaSupervisor({ fetch: (async () => tags('m')) as never, findProcesses: () => [{ pid: 999, env: 'OLLAMA_HOST=127.0.0.1:11434\0OLLAMA_CONTEXT_LENGTH=32768\0' }], kill: (pid) => { killed.push(pid); } });
+    const sup = createOllamaSupervisor({ fetch: (async () => tags('m')) as never, findProcesses: () => [{ pid: 999, env: `OLLAMA_HOST=127.0.0.1:11434\0OLLAMA_CONTEXT_LENGTH=${CONFIG.local.contextLength}\0` }], kill: (pid) => { killed.push(pid); } });
     const st = await sup.ensure('http://127.0.0.1:11434/v1', 'm');
     expect(st).toMatchObject({ spawnedByUs: true, adopted: true, pid: 999 });
     sup.stop(); expect(killed).toEqual([999]);
@@ -106,7 +109,7 @@ describe('supervisor — incremento 3', () => {
     const dead = createOllamaSupervisor({ fetch: (async () => { throw new Error('ECONNREFUSED'); }) as never, sleep: async () => {}, findProcesses: () => [], spawn: () => { spawned.push('x'); return { pid: 1, kill: () => true, on: () => undefined }; } });
     await expect(dead.ensure('http://192.168.1.5:11434/v1', 'm')).rejects.toMatchObject({ kind: 'infra-local', message: expect.stringMatching(/remoto/) });
     expect(spawned).toEqual([]);
-    const alive = createOllamaSupervisor({ fetch: (async () => tags('m')) as never, findProcesses: () => [{ pid: 9, env: 'OLLAMA_HOST=127.0.0.1:11434\0OLLAMA_CONTEXT_LENGTH=32768\0' }] });
+    const alive = createOllamaSupervisor({ fetch: (async () => tags('m')) as never, findProcesses: () => [{ pid: 9, env: `OLLAMA_HOST=127.0.0.1:11434\0OLLAMA_CONTEXT_LENGTH=${CONFIG.local.contextLength}\0` }] });
     expect(await alive.ensure('http://192.168.1.5:11434/v1', 'm')).toMatchObject({ spawnedByUs: false, adopted: false });
   });
   it('endpoint loopback com path extra continua loopback: spawna com OLLAMA_HOST só host:porta e adota o órfão', async () => {
@@ -115,7 +118,7 @@ describe('supervisor — incremento 3', () => {
     const st = await h.sup.ensure(endpoint, 'm');
     expect(st.spawnedByUs).toBe(true);
     expect(h.spawned[0].env.OLLAMA_HOST).toBe('127.0.0.1:11434');
-    const alive = createOllamaSupervisor({ fetch: (async () => tags('m')) as never, findProcesses: () => [{ pid: 7, env: 'OLLAMA_HOST=127.0.0.1:11434\0OLLAMA_CONTEXT_LENGTH=32768\0' }], kill: () => {} });
+    const alive = createOllamaSupervisor({ fetch: (async () => tags('m')) as never, findProcesses: () => [{ pid: 7, env: `OLLAMA_HOST=127.0.0.1:11434\0OLLAMA_CONTEXT_LENGTH=${CONFIG.local.contextLength}\0` }], kill: () => {} });
     expect(await alive.ensure(endpoint, 'm')).toMatchObject({ running: true, adopted: true, pid: 7 });
   });
   it('logPath fica em CONFIG.dataDir e o fd é fechado no stop()', async () => {
@@ -131,5 +134,22 @@ describe('supervisor — incremento 3', () => {
       openLog: () => 77, closeLog: (fd) => { closed.push(fd); }, spawn: () => { throw new Error('spawn ollama ENOENT'); } });
     await expect(sup.ensure('http://127.0.0.1:11434/v1', 'm')).rejects.toMatchObject({ kind: 'infra-local' });
     expect(closed).toEqual([77]);
+  });
+});
+
+describe('warnIfExternalOllama', () => {
+  it('avisa uma vez (spawnedByUs=false); nosso e o segundo aviso não repetem; LM Studio (contextWarning presente) é ignorado', () => {
+    resetExternalOllamaWarning();
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnIfExternalOllama({ spawnedByUs: false });
+    warnIfExternalOllama({ spawnedByUs: false });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][0]).toContain(`ENXAME_LOCAL_CONTEXT=${CONFIG.local.contextLength}`);
+    spy.mockClear();
+    resetExternalOllamaWarning();
+    warnIfExternalOllama({ spawnedByUs: true });
+    warnIfExternalOllama({ spawnedByUs: false, contextWarning: null });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

@@ -64,7 +64,7 @@ export function selectPlanVM(p: GoalPlan, i18n: I18n = PT): PlanVM {
     estimate: [
       { label: t('goal.est.readyTasks'), value: String(p.estimate.tasks) },
       { label: t('goal.est.outOfProbe'), value: String(p.estimate.outOfProbe) },
-      { label: t('goal.est.stepBudget'), value: t('goal.est.stepBudgetValue', { steps: p.estimate.stepBudget }) },
+      { label: t('goal.est.stepBudget'), value: p.estimate.stepBudget === 0 ? t('goal.est.stepBudgetNone') : t('goal.est.stepBudgetValue', { steps: p.estimate.stepBudget }) },
       { label: t('goal.est.fleetReady'), value: t('goal.est.fleetReadyValue', { seconds: Math.ceil(p.estimate.fleetReadyMs / 1000) }) },
       { label: t('goal.est.leader'), value: `${p.leader.model} · ${fmt.usd(p.leader.costUsd)}` },
     ],

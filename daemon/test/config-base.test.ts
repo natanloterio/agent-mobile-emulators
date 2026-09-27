@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickBaseAvd, positiveIntOr } from '../src/config.js';
+import { localContextFrom, pickBaseAvd, stepBudgetFrom } from '../src/config.js';
 
 describe('pickBaseAvd', () => {
   it('env vence; senão a dourada se existir; senão o AVD da conta1', () => {
@@ -9,13 +9,25 @@ describe('pickBaseAvd', () => {
   });
 });
 
-describe('positiveIntOr (ENXAME_MISSION_STEP_BUDGET)', () => {
-  it('ausente, NaN, zero ou negativo → padrão; positivo → o valor', () => {
-    expect(positiveIntOr(undefined, 60)).toBe(60);
-    expect(positiveIntOr('abc', 60)).toBe(60);
-    expect(positiveIntOr('0', 60)).toBe(60);
-    expect(positiveIntOr('-5', 60)).toBe(60);
-    expect(positiveIntOr('', 60)).toBe(60);
-    expect(positiveIntOr('25', 60)).toBe(25);
+describe('stepBudgetFrom (ENXAME_STEP_BUDGET / ENXAME_MISSION_STEP_BUDGET)', () => {
+  it('"0" desliga o orçamento (null); inteiro positivo vale; o resto cai no padrão', () => {
+    expect(stepBudgetFrom('0', 60)).toBeNull();
+    expect(stepBudgetFrom('45', 60)).toBe(45);
+    expect(stepBudgetFrom(undefined, 60)).toBe(60);
+    expect(stepBudgetFrom('abc', 60)).toBe(60);
+    expect(stepBudgetFrom('-3', 60)).toBe(60);
+    expect(stepBudgetFrom('2.5', 60)).toBe(60);
+    expect(stepBudgetFrom('', 60)).toBe(60);
+  });
+});
+
+describe('localContextFrom (ENXAME_LOCAL_CONTEXT)', () => {
+  it('ausente, lixo ou pequeno demais (<8192) caem no padrão 65536; inteiro ≥8192 vale', () => {
+    expect(localContextFrom(undefined)).toBe(65536);
+    expect(localContextFrom('')).toBe(65536);
+    expect(localContextFrom('abc')).toBe(65536);
+    expect(localContextFrom('4096')).toBe(65536);
+    expect(localContextFrom('131072')).toBe(131072);
+    expect(localContextFrom('8192')).toBe(8192);
   });
 });

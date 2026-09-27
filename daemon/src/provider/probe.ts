@@ -1,5 +1,6 @@
 import { generateText, stepCountIs, type LanguageModel, type ToolSet } from 'ai';
 import type { DatabaseSync } from 'node:sqlite';
+import { CONFIG } from '../config.js';
 import type { IdentityRow } from '../db/identities.js';
 import { connectMcp } from '../device/mcp.js';
 import { textOf } from '../worker/record.js';
@@ -19,7 +20,7 @@ export interface ProbeDeps {
   readonly ollama?: OllamaSupervisor; readonly buildModel?: typeof defaultBuildModel;
 }
 
-const EXTERNAL_WARNING = 'contexto desconhecido (Ollama externo, não subido pelo daemon — garanta OLLAMA_CONTEXT_LENGTH ≥ 32768)';
+const EXTERNAL_WARNING = `contexto desconhecido (Ollama externo, não subido pelo daemon — garanta OLLAMA_CONTEXT_LENGTH ≥ ${CONFIG.local.contextLength})`;
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e) ?? '');
 
 /** Grava um resultado de teste (do probe ou produzido pelo daemon, ex.: identidade não pronta) para o snapshot/tela. */

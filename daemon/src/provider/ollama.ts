@@ -8,9 +8,14 @@ import { ProviderError } from './errors.js';
 /** Loopback nas formas usadas por `OLLAMA_HOST`/endpoint: IPv4, IPv6 (com ou sem colchetes) e `localhost`, com porta opcional. */
 export const isLoopbackHost = (host: string): boolean => /^(?:127\.0\.0\.1|localhost|\[::1\]|::1)(?::\d+)?$/i.test(host);
 
-/** Spec §4.3: contexto ≥ 32k (passos chegam a ~19k), modelo fica quente entre passos, um worker por vez neste incremento. */
-export const OLLAMA_ENV = { OLLAMA_CONTEXT_LENGTH: '32768', OLLAMA_KEEP_ALIVE: '30m', OLLAMA_NUM_PARALLEL: '1' } as const;
-/** Marcador que identifica um `ollama serve` subido por este daemon (sobrevive a SIGKILL do pai). */
+/** Spec §4.3: contexto configurável (`CONFIG.local.contextLength`, padrão 65536), modelo fica quente entre passos, um worker por vez neste incremento. */
+export const OLLAMA_ENV = { OLLAMA_CONTEXT_LENGTH: String(CONFIG.local.contextLength), OLLAMA_KEEP_ALIVE: '30m', OLLAMA_NUM_PARALLEL: '1' } as const;
+/**
+ * Marcador que identifica um `ollama serve` subido por este daemon (sobrevive a SIGKILL do pai). Um órfão de antes de
+ * trocar `ENXAME_LOCAL_CONTEXT` (ou de antes deste incremento, com o antigo 32768 fixo) carrega o valor VELHO no env
+ * e não bate com o marcador atual: vira "externo" (spawnedByUs=false) e é usado como está, no contexto antigo — pare
+ * o `ollama serve` rodando para o daemon subir um novo com o contexto certo.
+ */
 const CONTEXT_MARKER = `OLLAMA_CONTEXT_LENGTH=${OLLAMA_ENV.OLLAMA_CONTEXT_LENGTH}`;
 const DEFAULT_TIMEOUT_MS = 20_000;
 const POLL_MS = 250;
@@ -45,6 +50,22 @@ export interface OllamaSupervisor {
 export function modelListed(models: readonly string[], wanted: string): boolean {
   const hasTag = wanted.includes(':');
   return models.some((m) => m === wanted || (!hasTag && m === `${wanted}:latest`) || (wanted.endsWith(':latest') && m === wanted.slice(0, -7)));
+}
+
+let warnedExternalOllama = false;
+/** Só para teste: reseta o aviso de uma vez por processo. */
+export function resetExternalOllamaWarning(): void { warnedExternalOllama = false; }
+
+/**
+ * Aviso de uma vez por processo (console.warn) quando o Ollama em uso não foi subido pelo daemon (spawnedByUs=false):
+ * pode ser um órfão de antes de trocar `ENXAME_LOCAL_CONTEXT` (marcador antigo) ou um Ollama externo de verdade —
+ * dos dois jeitos, o contexto pode ser menor que o configurado e o daemon nunca reinicia esse processo sozinho.
+ * `contextWarning` presente identifica LM Studio (que já recarrega/avisa sozinho no próprio `ensure`); ignorado aqui.
+ */
+export function warnIfExternalOllama(status: { readonly spawnedByUs?: boolean; readonly contextWarning?: string | null }): void {
+  if (status.contextWarning !== undefined || status.spawnedByUs !== false || warnedExternalOllama) return;
+  warnedExternalOllama = true;
+  console.warn(`[ollama] Ollama externo em uso: o contexto pode ser menor que ENXAME_LOCAL_CONTEXT=${CONFIG.local.contextLength}; pare o ollama serve para o daemon subir um com o contexto certo`);
 }
 
 async function listModels(fetchFn: typeof fetch, base: string): Promise<readonly string[] | null> {

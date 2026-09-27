@@ -164,7 +164,9 @@ A **mission** is a long goal for one identity, such as *"create an email account
 | `ANTHROPIC_API_KEY` | none | Key for the cloud roles. Goes in `.env`. Leave it out to use only local models. |
 | `ENXAME_AVD_BASE` | `enxame_golden`, if it exists | AVD cloned when provisioning. |
 | `ENXAME_DEFAULT_PIN` | none | PIN given to new identities when you don't type one. 4–16 digits. |
-| `ENXAME_STEP_BUDGET` | `30` | Maximum agent steps per task. |
+| `ENXAME_STEP_BUDGET` | `30` | Maximum agent steps per task. `0` disables the step budget (the task runs until it finishes, is paused or the kill switch is hit). |
+| `ENXAME_MISSION_STEP_BUDGET` | `60` | Maximum agent steps per mission subtask. `0` disables the step budget (the task runs until it finishes, is paused or the kill switch is hit). |
+| `ENXAME_LOCAL_CONTEXT` | `65536` | Context length for local models (Ollama and LM Studio). More context uses more VRAM. |
 | `ENXAME_DATA_DIR` | `~/.local/share/enxame` | Database, logs and `daemon.json`. |
 | `ENXAME_PORT` | `47800` | Daemon HTTP/WebSocket port (loopback only). |
 | `ENXAME_SCRCPY_PORT` | `27183` | First local port used for video streams. |
@@ -182,10 +184,10 @@ For a local role, the model picker lists every model **already downloaded** on t
 
 | Runtime | Default endpoint | What Enxame does when you use it |
 |---|---|---|
-| Ollama | `http://127.0.0.1:11434/v1` | Starts `ollama serve` with a 32k context if nothing is running. |
-| LM Studio | `http://127.0.0.1:1234/v1` | Starts the server with `lms server start` and loads the model with `lms load … --context-length 32768`. |
+| Ollama | `http://127.0.0.1:11434/v1` | Starts `ollama serve` with the context from `ENXAME_LOCAL_CONTEXT` (default 65536) if nothing is running. |
+| LM Studio | `http://127.0.0.1:1234/v1` | Starts the server with `lms server start` and loads the model with `lms load … --context-length <ENXAME_LOCAL_CONTEXT>`. |
 
-Picking a model from the other runtime switches the role's runtime and endpoint for you. Enxame only stops the servers it started itself.
+Picking a model from the other runtime switches the role's runtime and endpoint for you. Enxame only stops the servers it started itself: if you change `ENXAME_LOCAL_CONTEXT` or upgrade Enxame, stop any `ollama serve` you started outside the daemon so it gets restarted with the new context (an already-running one is used as-is, at whatever context it was started with).
 
 Cost is tracked per task and per goal: dollars for cloud models, GPU seconds for local ones.
 

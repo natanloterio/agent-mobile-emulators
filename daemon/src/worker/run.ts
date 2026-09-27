@@ -8,7 +8,7 @@ import { createGoalAndTask, createTask, finishGoal, ledgerHas, ledgerPut, markDe
 import { providerLabel, readProviderConfig, type ProviderConfig, type ProviderRow } from '../provider/config.js';
 import { isLocalInfraError, ProviderError } from '../provider/errors.js';
 import { buildModel as defaultBuildModel, pricingFor, providerOptionsFor } from '../provider/factory.js';
-import { createOllamaSupervisor, type OllamaSupervisor } from '../provider/ollama.js';
+import { createOllamaSupervisor, warnIfExternalOllama, type OllamaSupervisor } from '../provider/ollama.js';
 import { createQualityFloor } from '../provider/quality.js';
 import { connectMcp } from '../device/mcp.js';
 import { detectLoggedOut, detectPlatformBlock } from '../screen/checks.js';
@@ -16,7 +16,8 @@ import { detectHumanCheck } from '../screen/human-check.js';
 import { parseScreen, type ScreenState, type ScreenWindow } from '../screen/parse.js';
 import { createPacer, type Pacer, type PacingConfig } from '../swarm/pacing.js';
 import { buildToolApproval } from './gate.js';
-import { MISSION_ESCALATION_NOTE, MISSION_SYSTEM_PROMPT, pickMissionTools } from './mission-prompt.js';
+import { buildMissionFinishMessages, MISSION_FINISH_STEPS, MISSION_FINISH_TOOLS, shouldRunMissionFinish } from './mission-finish.js';
+import { MISSION_ESCALATION_NOTE, MISSION_FINISH_NUDGE, MISSION_SYSTEM_PROMPT, pickMissionTools } from './mission-prompt.js';
 import { missionOutcome } from './mission-outcome.js';
 import { maskOut, missionTools, type MissionRunCtx } from './mission-tools.js';
 import { ESCALATION_NOTE, SYSTEM_PROMPT, taskInstruction } from './prompt.js';
@@ -27,7 +28,7 @@ import { humanStopped, settleIdentity } from './stop.js';
 
 export interface RunTaskOpts {
   readonly db: DatabaseSync; readonly identity: IdentityRow; readonly goalText: string; readonly apiKey: string;
-  readonly isKilled: () => boolean; readonly onStep: () => void; readonly stepBudget?: number;
+  readonly isKilled: () => boolean; readonly onStep: () => void; readonly stepBudget?: number | null;
   readonly providers?: ProviderConfig;
   /**
    * Scheduler (spec inc. 5): objetivo/tarefa já criados e a instrução da fatia desta identidade.
@@ -174,7 +175,8 @@ function openTask(db: DatabaseSync, identityId: string, o: RunTaskOpts): { taskI
 export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise<RunTaskResult> {
   const deps = { connect: depsIn.connect ?? connectMcp, generate: depsIn.generate ?? generateText, buildModel: depsIn.buildModel ?? defaultBuildModel, ollama: depsIn.ollama ?? createOllamaSupervisor() };
   const { db, identity } = o;
-  const budget = o.stepBudget ?? Number(process.env.ENXAME_STEP_BUDGET ?? CONFIG.worker.stepBudget);
+  // `null` = orçamento desligado (spec orçamento desligável): a tarefa roda até terminar, pausar ou o kill switch.
+  const budget = o.stepBudget !== undefined ? o.stepBudget : CONFIG.worker.stepBudget;
   const cfg = o.providers ?? readProviderConfig(db);
   const { taskId, ownGoalId } = openTask(db, identity.id, o);
   const mission = o.mission ?? null;
@@ -189,6 +191,9 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
 
   let lastScreen: ScreenState | null = null; let halt: Halt = null; let costUsd = 0; let genMsTotal = 0; let lastGenMs: number | null = null;
   let degraded = false; let escalatedAtStep: number | null = null; let stepsUsed = 0;
+  let lastNonEmptyText = ''; // missão: último texto não vazio, para o `did` automático sem finish_subtask
+  // Passos do pedido final não contam como "orçamento esgotado": o gate só roda o pedido com orçamento de sobra.
+  let missionFinishRan = false;
   let activeMode: ProviderRow['mode'] | null = null; // papel em execução, para classificar erro de API do provedor local
   const floor = createQualityFloor(CONFIG.worker.qualityFloor);
   const pending = new Map<string, number>();
@@ -198,7 +203,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     const base = { taskId, outcome, costUsd, usage, platformBlock: h?.kind === 'platform-block' ? h.text : null, summary,
       degraded, escalatedAtStep, provider: providerLabel(cfg.worker), genMs: genMsTotal, invalidCalls: floor.count() };
     if (mission) {
-      const m = missionOutcome({ outcome, report, halt: h, summary, budgetHit: stepsUsed >= budget });
+      const m = missionOutcome({ outcome, report, halt: h, summary, budgetHit: budget !== null && stepsUsed >= budget && !missionFinishRan });
       if (m.report) setSubtaskReport(db, taskId, m.report);
       setTaskState(db, taskId, m.state);
       return { ...base, earlyStopRemaining: 0, report: m.report, humanReason: m.humanReason };
@@ -214,13 +219,13 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       : outcome === 'infra' ? (h?.kind === 'auth' ? 'failed' : 'todo') : outcome === 'interrupted' || outcome === 'killed' ? 'todo' : 'done';
     setTaskState(db, taskId, taskState);
     if (ownGoalId) finishGoal(db, ownGoalId);
-    const earlyStopRemaining = outcome === 'done' ? Math.max(0, budget - stepsUsed) : 0;
+    const earlyStopRemaining = outcome === 'done' && budget !== null ? Math.max(0, budget - stepsUsed) : 0;
     setEarlyStop(db, taskId, earlyStopRemaining);
     return { ...base, earlyStopRemaining, report: null, humanReason: null };
   };
 
   /** Um segmento = um generateText sobre `messages` com um papel do registro (spec §5). */
-  const segment = (row: ProviderRow, model: LanguageModel, tools: ToolSet, messages: ModelMessage[], stopIfHalted: StopCondition<ToolSet>, slug: string | null, steps: number) => {
+  const segment = (row: ProviderRow, model: LanguageModel, tools: ToolSet, messages: ModelMessage[], stopIfHalted: StopCondition<ToolSet>, slug: string | null, steps: number | null, forcedTools?: readonly string[]) => {
     activeMode = row.mode;
     return deps.generate({
       model, tools, messages,
@@ -230,11 +235,12 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       providerOptions: providerOptionsFor(row) as never,
       // Missão roda sem gate (decisão do spec missões); objetivos comuns continuam somente-leitura.
       ...(mission ? {} : { toolApproval: buildToolApproval(slug, () => lastScreen, 'read-only') as never }),
-      stopWhen: [stepCountIs(steps), stopIfHalted, () => report !== null, () => floor.tripped() && row.role === 'worker'],
-      // Pacing antes de cada passo (spec §4.3). Parada durante a espera: o passo roda sem tools (não age) e o stopWhen encerra.
+      // `steps === null` = orçamento desligado: sem stepCountIs, o segmento só para por halt/report/piso.
+      stopWhen: [...(steps === null ? [] : [stepCountIs(steps)]), stopIfHalted, () => report !== null, () => floor.tripped() && row.role === 'worker'],
+      // Pacing (spec §4.3): parada roda sem tools; `forcedTools` restringe o passo a um conjunto fixo (pedido final da missão).
       prepareStep: async ({ messages: m }) => {
         const go = pacer ? await pacer.beforeStep() : 'go';
-        return { messages: pruneScreens(m, CONFIG.worker.keepScreens), ...(go === 'stop' ? { activeTools: [] } : {}) };
+        return { messages: pruneScreens(m, mission ? CONFIG.mission.keepScreens : CONFIG.worker.keepScreens), ...(go === 'stop' ? { activeTools: [] } : forcedTools ? { activeTools: forcedTools as string[] } : {}) };
       },
       onLanguageModelCallEnd: (e) => { lastGenMs = Math.round((e as { performance?: { responseTimeMs?: number } }).performance?.responseTimeMs ?? 0); },
       onStepFinish: (step) => {
@@ -251,7 +257,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
   let client: Awaited<ReturnType<typeof deps.connect>> | null = null;
   try {
     // Provedor local: o Ollama tem de estar de pé antes de abrir a conversa (falha aqui é infra-local, não do device).
-    if (cfg.worker.mode === 'local') await deps.ollama.ensure(cfg.worker.endpoint, cfg.worker.model, cfg.worker.runtime);
+    if (cfg.worker.mode === 'local') warnIfExternalOllama(await deps.ollama.ensure(cfg.worker.endpoint, cfg.worker.model, cfg.worker.runtime));
     const model = depsIn.model ?? deps.buildModel(cfg.worker, { anthropicApiKey: o.apiKey });
 
     client = await deps.connect(`http://127.0.0.1:${identity.mcpHostPort}/mcp`, identity.mcpToken);
@@ -297,18 +303,31 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     const stopIfHalted: StopCondition<ToolSet> = () => halt !== null || stopped();
     const messages: ModelMessage[] = [{ role: 'user', content: mission ? (o.instruction ?? o.goalText) : taskInstruction(o.instruction ?? o.goalText) }];
 
-    let result = await segment(cfg.worker, model, tools, messages, stopIfHalted, slug, budget);
+    let history: ModelMessage[] = messages;
+    let currentRow = cfg.worker; let currentModel = model;
+    let result = await segment(currentRow, currentModel, tools, history, stopIfHalted, slug, budget);
+    if (mission && result.text.trim()) lastNonEmptyText = result.text;
 
-    const remaining = budget - stepsUsed;
+    // Orçamento desligado: escalonamento continua possível (sem teto a respeitar).
+    const remaining = budget === null ? Infinity : budget - stepsUsed;
     if (floor.tripped() && !halt && !stopped() && remaining > 0 && report === null) {
       const canEscalate = cfg.esc.mode === 'nuvem' && !!o.apiKey;
       if (!canEscalate) return finish('quality-floor', `piso de qualidade: ${floor.count()} tool calls inválidas com ${providerLabel(cfg.worker)}; sem escalonamento na nuvem`);
       degraded = true; escalatedAtStep = stepsUsed; markDegraded(db, taskId, stepsUsed);
-      const escModel = depsIn.escModel ?? deps.buildModel(cfg.esc, { anthropicApiKey: o.apiKey });
+      currentRow = cfg.esc; currentModel = depsIn.escModel ?? deps.buildModel(cfg.esc, { anthropicApiKey: o.apiKey });
       // O SDK descarta dos response.messages os passos com tool call inválida; a nota conta ao esc o que aconteceu.
       const note = mission ? MISSION_ESCALATION_NOTE(floor.count(), cfg.worker.model) : ESCALATION_NOTE(floor.count(), cfg.worker.model);
-      const continued: ModelMessage[] = [...messages, ...result.response.messages, { role: 'user', content: note }];
-      result = await segment(cfg.esc, escModel, tools, continued, stopIfHalted, slug, remaining);
+      history = [...history, ...result.response.messages, { role: 'user', content: note }];
+      result = await segment(currentRow, currentModel, tools, history, stopIfHalted, slug, remaining);
+      if (mission && result.text.trim()) lastNonEmptyText = result.text;
+    }
+
+    // Executor terminou sem finish_subtask: um pedido final curto antes de a subtarefa falhar (spec missões §Executor).
+    if (shouldRunMissionFinish({ mission: !!mission, report, halted: !!halt, stopped: stopped(), budget, stepsUsed })) {
+      missionFinishRan = true;
+      history = buildMissionFinishMessages(history, result.response.messages, MISSION_FINISH_NUDGE);
+      result = await segment(currentRow, currentModel, tools, history, stopIfHalted, slug, MISSION_FINISH_STEPS, MISSION_FINISH_TOOLS);
+      if (result.text.trim()) lastNonEmptyText = result.text;
     }
 
     const h = halt as Halt;
@@ -318,7 +337,8 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     if (h) return finish('infra', mission ? maskHalt(h.text) : result.text);
     if (o.isKilled()) return finish('killed', result.text);
     if (humanStopped(db, identity.id)) return finish('interrupted', result.text);
-    return finish(stepsUsed >= budget ? 'budget' : 'done', result.text);
+    // Sem finish_subtask o texto final pode vir vazio (parou em tool call); o último texto não vazio vira o `did`.
+    return finish(budget !== null && stepsUsed >= budget ? 'budget' : 'done', mission ? (result.text.trim() || lastNonEmptyText) : result.text);
   } catch (e) {
     // Erro fora das tools (ex.: chave da Anthropic inválida) é falha da tarefa, não do device.
     const h = halt as Halt;

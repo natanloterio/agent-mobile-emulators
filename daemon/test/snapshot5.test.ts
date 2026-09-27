@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { CONFIG } from '../src/config.js';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, setIdentityFlags, upsertIdentity } from '../src/db/identities.js';
+import { createMission } from '../src/db/missions.js';
 import { createGoalAndTask, ledgerPut, setTaskState } from '../src/db/tasks.js';
 import { startServer } from '../src/server/api.js';
 import { buildSnapshot, isRestoreUnsafe, listGoals, sqliteUtcMs } from '../src/server/snapshot.js';
@@ -51,6 +53,12 @@ describe('snapshot do incremento 5', () => {
     const db = openDb(':memory:'); upsertIdentity(db, row);
     createGoalAndTask(db, 'conta1', 'um'); createGoalAndTask(db, 'conta1', 'dois');
     expect(listGoals(db).map((g) => g.text)).toEqual(['dois', 'um']);
+  });
+  it('budget: identidade com missão aberta usa o orçamento da subtarefa; sem missão, o do worker', () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    expect(buildSnapshot(db, false).identities[0].budget).toBe(CONFIG.worker.stepBudget);
+    createMission(db, 'conta1', 'objetivo da missão', 'pt');
+    expect(buildSnapshot(db, false).identities[0].budget).toBe(CONFIG.mission.subtaskStepBudget);
   });
 });
 

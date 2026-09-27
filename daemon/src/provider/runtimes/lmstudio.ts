@@ -2,13 +2,14 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { CONFIG } from '../../config.js';
 import { ollamaBase } from '../config.js';
 import { ProviderError } from '../errors.js';
 import { isLoopbackHost } from '../ollama.js';
 import type { Exec, LocalModelEntry, RuntimeListing, RuntimeStatus } from './types.js';
 
-/** Mesmo contexto que o daemon pede ao Ollama (spec §4.3: passos chegam a ~19k tokens). */
-const CONTEXT_LENGTH = '32768';
+/** Mesmo contexto configurável que o daemon pede ao Ollama (`CONFIG.local.contextLength`, padrão 65536). */
+const CONTEXT_LENGTH = String(CONFIG.local.contextLength);
 const START_TIMEOUT_MS = 20_000;
 const LOAD_TIMEOUT_MS = 180_000;
 const LIST_TIMEOUT_MS = 20_000;
@@ -71,14 +72,21 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
     return r.code === 0 ? parseLmsLs(r.stdout) : null;
   };
 
-  /** Contexto real do modelo carregado (`lms ps --json`): abaixo de 32k os passos longos seriam truncados. */
-  const contextWarning = async (model: string): Promise<string | null> => {
-    if (!lms) return 'contexto desconhecido (sem o CLI lms): garanta contexto ≥ 32768 no LM Studio';
+  /** Contexto real do modelo carregado (`lms ps --json`); null = desconhecido (sem CLI ou saída ilegível). */
+  const loadedContext = async (model: string): Promise<number | null> => {
+    if (!lms) return null;
     const r = await exec(lms, ['ps', '--json'], { timeoutMs: LIST_TIMEOUT_MS });
     let loaded: { modelKey?: string; identifier?: string; contextLength?: number }[] = [];
     try { loaded = JSON.parse(r.stdout.slice(Math.max(0, r.stdout.indexOf('[')))) as typeof loaded; } catch { /* saída ilegível */ }
     const ctx = loaded.find((m) => m.identifier === model || m.modelKey === model)?.contextLength;
-    if (typeof ctx !== 'number') return 'contexto desconhecido no LM Studio: garanta contexto ≥ 32768';
+    return typeof ctx === 'number' ? ctx : null;
+  };
+
+  /** Abaixo do contexto configurado os passos longos seriam truncados (spec local: contexto configurável). */
+  const contextWarning = async (model: string): Promise<string | null> => {
+    if (!lms) return `contexto desconhecido (sem o CLI lms): garanta contexto ≥ ${CONTEXT_LENGTH} no LM Studio`;
+    const ctx = await loadedContext(model);
+    if (ctx === null) return `contexto desconhecido no LM Studio: garanta contexto ≥ ${CONTEXT_LENGTH}`;
     return ctx >= Number(CONTEXT_LENGTH) ? null : `contexto do modelo no LM Studio é ${ctx} (< ${CONTEXT_LENGTH}): recarregue com lms load ${model} --context-length ${CONTEXT_LENGTH}`;
   };
 
@@ -114,6 +122,14 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
       if (!lms) throw new ProviderError('infra-local', `modelo ${model} não está carregado e o CLI \`lms\` não foi encontrado: carregue-o no LM Studio`);
       const r = await exec(lms, ['load', model, '--context-length', CONTEXT_LENGTH, '-y'], { timeoutMs: LOAD_TIMEOUT_MS });
       if (r.code !== 0) throw new ProviderError('infra-local', `lms load ${model} falhou: ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
+    } else if (lms) {
+      // Já carregado com contexto menor que o configurado: recarrega (spec local: contexto configurável).
+      const ctx = await loadedContext(model);
+      if (typeof ctx === 'number' && ctx < Number(CONTEXT_LENGTH)) {
+        await exec(lms, ['unload', model], { timeoutMs: LIST_TIMEOUT_MS });
+        const r = await exec(lms, ['load', model, '--context-length', CONTEXT_LENGTH, '-y'], { timeoutMs: LOAD_TIMEOUT_MS });
+        if (r.code !== 0) throw new ProviderError('infra-local', `lms load ${model} falhou: ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
+      }
     }
     return { running: true, spawnedByUs: startedByUs, adopted: false, pid: null, models: (api.data ?? []).map((m) => m.id), contextWarning: await contextWarning(model) };
   };

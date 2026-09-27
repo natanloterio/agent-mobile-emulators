@@ -28,7 +28,7 @@ export interface Identity {
   readonly state: DeviceState;
   readonly task: string;
   readonly steps: number;
-  readonly budget: number;
+  readonly budget: number | null;
   readonly cost: number;
   readonly error: string;
   readonly genMs?: number;

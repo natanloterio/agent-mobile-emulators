@@ -125,7 +125,7 @@ export function selectLog(sel: TileVM, i18n: I18n = PT): readonly LogRow[] {
 
 export function selectSelStats(sel: TileVM, i18n: I18n = PT): readonly Stat[] {
   const { t, fmt } = i18n;
-  const steps = sel.earlyStopRemaining
+  const steps = sel.budget === null ? `${sel.steps}` : sel.earlyStopRemaining
     ? t('common.stat.stepsLeft', { steps: sel.steps, budget: sel.budget, n: sel.earlyStopRemaining })
     : `${sel.steps}/${sel.budget}`;
   return [
