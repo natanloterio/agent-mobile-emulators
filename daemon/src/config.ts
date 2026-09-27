@@ -34,6 +34,8 @@ export const CONFIG = {
   targetApp: { package: 'com.instagram.android', versionName: '448.0.0.52.84' },
   ports: { consoleFrom: 5554, consoleMax: 5584, mcpHostFrom: 8080 },
   worker: { stepBudget: 30, keepScreens: 2, qualityFloor: 3 },
+  /** Missões (spec missões): orçamento de passos por subtarefa; a missão em si não tem teto. */
+  mission: { subtaskStepBudget: Number(process.env.ENXAME_MISSION_STEP_BUDGET ?? 60) },
   /** Enxame (spec §4.3 Pacing, inc. 5 §2): starts escalonados com jitter, atraso entre passos e teto de ações/hora por identidade. */
   swarm: { staggerMs: 8000, jitterMs: 3000, stepDelayMs: 1500, stepJitterMs: 1000, maxActionsPerHour: 120 },
   /** Ciclo de vida (spec inc. 5 §2): snapshot mais velho que isto exige confirmação humana para restaurar. */
