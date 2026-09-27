@@ -44,6 +44,26 @@ describe('rotas de missão', () => {
     expect((await t.post('/missions', { identityId: 'ocupada', text: 'crie um e-mail' })).status).toBe(409);
     expect(t.calls).toEqual(['start conta2 crie um e-mail en', 'start ocupada crie um e-mail pt']);
   });
+  it('POST /missions com identityIds: uma missão por identidade (sem repetir); falhas por identidade não barram as outras', async () => {
+    let n = 0;
+    const t = await mk({ start: (identityId, text, lang) => { t.calls.push(`start ${identityId} ${text} ${lang}`); if (identityId === 'ocupada') throw new MissionError('identidade já tem uma missão aberta', 409); return `m-${++n}`; } });
+    const r = await t.post('/missions', { identityIds: ['conta1', 'ocupada', 'conta2', 'conta1'], text: 'abra o youtube', lang: 'pt' });
+    expect(r.status).toBe(201);
+    expect(await r.json()).toEqual({
+      started: [{ identityId: 'conta1', goalId: 'm-1' }, { identityId: 'conta2', goalId: 'm-2' }],
+      failed: [{ identityId: 'ocupada', error: 'identidade já tem uma missão aberta' }],
+    });
+    expect(t.calls).toEqual(['start conta1 abra o youtube pt', 'start ocupada abra o youtube pt', 'start conta2 abra o youtube pt']);
+  });
+  it('POST /missions com identityIds: nenhuma iniciada → status do primeiro erro; lista vazia ou inválida → 400', async () => {
+    const t = await mk();
+    const r = await t.post('/missions', { identityIds: ['ocupada'], text: 'abra o youtube' });
+    expect(r.status).toBe(409);
+    expect(await r.json()).toEqual({ error: 'ocupada: identidade já tem uma missão aberta' });
+    expect((await t.post('/missions', { identityIds: [], text: 'abra o youtube' })).status).toBe(400);
+    expect((await t.post('/missions', { identityIds: ['../x'], text: 'abra o youtube' })).status).toBe(400);
+    expect((await t.post('/missions', { identityId: 'conta2', identityIds: ['conta2'], text: 'abra o youtube' })).status).toBe(400);
+  });
   it('ações: 200 com estado; erros do runner viram 404/409', async () => {
     const t = await mk();
     const r = await t.post('/missions/m-1/pause');
