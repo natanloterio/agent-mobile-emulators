@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { listIdentities, setIdentityFlags, type IdentityRow, type ProbeSignalsRow } from '../db/identities.js';
+import { openMissionFor } from '../db/missions.js';
 import type { ProbeResult } from '../device/probe.js';
 
 /** Prontidão de uma identidade para o plano (spec inc. 5 §3.3: `signals`, `ready`, `readyLabel`). */
@@ -39,6 +40,8 @@ export function probeLabel(r: ProbeResult): string {
 export async function readinessOf(db: DatabaseSync, i: IdentityRow, ensureReady: EnsureReady): Promise<Readiness> {
   const blocked = humanBlockLabel(i);
   if (blocked) return { identity: i, signals: i.lastSignals ?? null, ready: false, readyLabel: blocked };
+  // Identidade com missão aberta pertence à missão (spec missões §Ciclo de vida).
+  if (openMissionFor(db, i.id)) return { identity: i, signals: i.lastSignals ?? null, ready: false, readyLabel: 'em missão' };
   try {
     const r = await ensureReady(i);
     setIdentityFlags(db, i.id, { lastSignals: r.signals });
