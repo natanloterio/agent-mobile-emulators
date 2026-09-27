@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
@@ -7,7 +7,8 @@ import WebSocket from 'ws';
 import { dispatchWsMessage, type WsHandlers } from './ws-dispatch.js';
 
 // Mesmo diretório do daemon (ENXAME_DATA_DIR): permite uma segunda instância isolada para verificação.
-const INFO = path.join(process.env.ENXAME_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'enxame'), 'daemon.json');
+const DATA_DIR = process.env.ENXAME_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'enxame');
+const INFO = path.join(DATA_DIR, 'daemon.json');
 export type DaemonInfo = { port: number; token: string; pid: number };
 type Info = DaemonInfo;
 
@@ -36,11 +37,19 @@ export function daemonSpawnSpec(o: {
   };
 }
 
-/** Sobe o daemon se não houver um vivo. `windowsHide`: no Windows, sem ele o daemon abre uma janela de console. */
+/**
+ * Sobe o daemon se não houver um vivo. `windowsHide`: no Windows, sem ele o daemon abre uma janela de console.
+ * stdio vai para `daemon.log` (não `inherit`): o daemon é feito para sobreviver ao app (fica rodando entre
+ * reaberturas), então não faz sentido ele ficar preso ao stdout/stderr do processo Electron que o subiu — mesma
+ * convenção usada para o `ollama serve` e o emulador (daemon/src/provider/ollama.ts, daemon/src/fleet/emulator.ts).
+ */
 export function ensureDaemon(spec: DaemonSpawn): ChildProcess | null {
   const info = readInfo();
   if (info && alive(info.pid)) return null;
-  const child = spawn(spec.cmd, spec.args, { cwd: spec.cwd, stdio: 'inherit', env: spec.env, windowsHide: true });
+  mkdirSync(DATA_DIR, { recursive: true });
+  const log = openSync(path.join(DATA_DIR, 'daemon.log'), 'a');
+  const child = spawn(spec.cmd, spec.args, { cwd: spec.cwd, stdio: ['ignore', log, log], env: spec.env, windowsHide: true });
+  closeSync(log);
   // Sem este ouvinte um erro de spawn derrubaria o main; o waitForInfo expira e a tela mostra o erro.
   child.on('error', (e) => console.error('[enxame] não deu para subir o daemon:', e.message));
   return child;
