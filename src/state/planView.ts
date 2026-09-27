@@ -37,6 +37,7 @@ const READY_KEY: Readonly<Record<string, MessageKey>> = {
   'pausada': 'goal.ready.paused',
   'sob controle humano': 'goal.ready.controlled',
   'aguardando login': 'goal.ready.awaitingLogin',
+  'fora do objetivo': 'goal.ready.notTargeted',
   'banida': 'goal.ready.banned',
   'descartada': 'goal.ready.discarded',
 };

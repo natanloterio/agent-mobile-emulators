@@ -49,6 +49,14 @@ export async function readinessOf(db: DatabaseSync, i: IdentityRow, ensureReady:
 }
 
 /** Sonda a frota candidata em paralelo (cada identidade tem o próprio serial e porta). */
-export function probeFleet(db: DatabaseSync, ensureReady: EnsureReady): Promise<readonly Readiness[]> {
-  return Promise.all(candidateIdentities(db).map((i) => readinessOf(db, i, ensureReady)));
+export const NOT_TARGETED = 'fora do objetivo';
+
+/**
+ * Sonda a frota candidata em paralelo (cada identidade tem o próprio serial e porta). Com `only`, as demais nem são
+ * sondadas: entram como "fora do objetivo" (o objetivo citou identidades específicas).
+ */
+export function probeFleet(db: DatabaseSync, ensureReady: EnsureReady, only?: ReadonlySet<string>): Promise<readonly Readiness[]> {
+  return Promise.all(candidateIdentities(db).map((i) => (only && !only.has(i.id)
+    ? Promise.resolve({ identity: i, signals: i.lastSignals ?? null, ready: false, readyLabel: NOT_TARGETED })
+    : readinessOf(db, i, ensureReady))));
 }

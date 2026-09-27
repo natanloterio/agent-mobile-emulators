@@ -37,3 +37,19 @@ export function detectPlatformBlock(s: ScreenState): string | null {
   }
   return null;
 }
+
+/** Campo de usuário da tela de login do Instagram (en/pt/es), medido na conta2 deslogada em 2026-09-27. */
+const LOGIN_USER = /username, email or (mobile|phone) number|nome de usu[aá]rio, e-?mail ou (n[uú]mero de )?(celular|telefone)|usuario, correo electr[oó]nico o (n[uú]mero de )?(celular|tel[eé]fono|m[oó]vil)/i;
+const LOGIN_SECRET = /^(password|senha|contrase[nñ]a),?$|forgot password|esqueceu a senha|olvidaste tu contrase[nñ]a/i;
+
+/**
+ * Instagram na tela de login: a sessão da identidade caiu. Exige o campo de usuário E (senha ou "esqueci a senha"),
+ * para um "Log in" solto num feed não parar a conta. Pela spec §4.1/§6: sessão inválida vira needs-human, nunca re-login automático.
+ */
+export function detectLoggedOut(s: ScreenState): string | null {
+  const w = focusedWindow(s);
+  if (!w || !w.pkg.startsWith('com.instagram')) return null;
+  const labels = w.nodes.flatMap((n) => [n.text, n.desc]).map((t) => t.trim()).filter((t) => t && t !== '-');
+  if (!labels.some((t) => LOGIN_USER.test(t)) || !labels.some((t) => LOGIN_SECRET.test(t))) return null;
+  return 'Instagram deslogado (tela de login): faça login à mão no device e depois marque como resolvido';
+}

@@ -2,12 +2,13 @@ import { generateText, Output, type LanguageModel } from 'ai';
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { CONFIG } from '../config.js';
+import type { IdentityRow } from '../db/identities.js';
 import { readProviderConfig, type ProviderConfig } from '../provider/config.js';
 import { buildModel as defaultBuildModel, pricingFor } from '../provider/factory.js';
 import { createOllamaSupervisor } from '../provider/ollama.js';
 import { costOf, type UsageLike } from '../worker/record.js';
 import { DEFAULT_LANG, LEADER_TEXTS, sliceInstruction, type Lang } from './lang.js';
-import { probeFleet, type EnsureReady, type Readiness } from './readiness.js';
+import { candidateIdentities, probeFleet, type EnsureReady, type Readiness } from './readiness.js';
 import type { GoalPlan, Pattern } from './types.js';
 
 /** Dependências do líder; tudo que toca rede ou device é injetável. */
@@ -86,6 +87,15 @@ async function llmDecision(text: string, fleet: readonly Readiness[], cfg: Provi
   return { decision: { pattern: out.pattern, rationale, instructions }, costUsd: costOf(usage, pricingFor(row)) };
 }
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Nome ou @ citado como palavra inteira ("papaia" não casa "papaia.me"; "conta1" não casa "conta10"). */
+const cites = (text: string, word: string) => !!word && new RegExp(`(^|[^\\w.@])@?${escapeRe(word)}(?![\\w.])`, 'i').test(text);
+
+/** Identidades que o objetivo cita pelo nome (`conta2`) ou pelo @ da conta (`@papaia`). */
+export function mentionedIdentities(text: string, ids: readonly IdentityRow[]): readonly IdentityRow[] {
+  return ids.filter((i) => cites(text, i.name) || cites(text, i.handle.replace(/^@/, '')));
+}
+
 /**
  * Líder (spec §4.3, inc. 5 §3.3): sonda a frota, decide fan-out × sharding e a instrução de cada identidade.
  * Sem chave (papel na nuvem) ou erro do modelo: regra determinística e o erro vai em `leader.error`. Nunca lança por causa do modelo.
@@ -93,14 +103,18 @@ async function llmDecision(text: string, fleet: readonly Readiness[], cfg: Provi
  */
 export async function planGoal(text: string, d: PlanDeps, lang: Lang = DEFAULT_LANG): Promise<GoalPlan> {
   const cfg = d.providers ?? readProviderConfig(d.db);
-  const fleet = await probeFleet(d.db, d.ensureReady);
+  // Objetivo que cita identidades (nome ou @) vale só para elas: regra fixa, vale mesmo quando o modelo erra a atribuição.
+  const cited = mentionedIdentities(text, candidateIdentities(d.db));
+  const only = cited.length ? new Set(cited.map((i) => i.id)) : undefined;
+  const fleet = await probeFleet(d.db, d.ensureReady, only);
+  const targeted = only ? fleet.filter((r) => only.has(r.identity.id)) : fleet;
   const readyIds = fleet.filter((r) => r.ready).map((r) => r.identity.id);
   let decision: Decision; let costUsd = 0; let error: string | null = null;
-  try { ({ decision, costUsd } = await llmDecision(text, fleet, cfg, d, lang)); }
+  try { ({ decision, costUsd } = await llmDecision(text, targeted, cfg, d, lang)); }
   catch (e) { error = String((e as Error)?.message ?? e).slice(0, 300); decision = deterministicPlan(text, readyIds, lang); }
   const tasks = fleet.map((r) => ({
     identityId: r.identity.id, name: r.identity.name, handle: r.identity.handle,
-    instruction: decision.instructions.get(r.identity.id) || text, signals: r.signals, ready: r.ready, readyLabel: r.readyLabel,
+    instruction: (!only || only.has(r.identity.id) ? decision.instructions.get(r.identity.id) : undefined) || text, signals: r.signals, ready: r.ready, readyLabel: r.readyLabel,
   }));
   const stepBudget = d.stepBudget ?? Number(process.env.ENXAME_STEP_BUDGET ?? CONFIG.worker.stepBudget);
   const staggerMs = d.staggerMs ?? CONFIG.swarm.staggerMs;
