@@ -31,4 +31,9 @@ describe('decideStartup', () => {
     const half = { version: 1 as const, completedAt: null, paths: { sdkRoot: '/sdk', ollamaBin: null } };
     expect((await decideStartup({ supported: true, saved: half, paths, probe: probeWith((id) => (id === 'kvm' ? 'user' : 'ok')), now })).completed).toBe(false);
   });
+  it('só o Ollama falta (ele é opcional; nuvem funciona sem): conclui sozinho, sem binário do Ollama', async () => {
+    const probe = async (): Promise<ProbeResult> => ({ ...(await probeWith((id) => (id === 'ollama' ? 'todo' : 'ok'))()), ollamaBin: null });
+    const r = await decideStartup({ supported: true, saved: null, paths, probe, now });
+    expect(r).toEqual({ completed: true, write: { version: 1, completedAt: now(), paths: { sdkRoot: paths.sdkRoot, ollamaBin: null } } });
+  });
 });
