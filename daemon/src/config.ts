@@ -26,6 +26,8 @@ export const CONFIG = {
   dataDir: DATA_DIR,
   dbPath: path.join(DATA_DIR, 'enxame.sqlite'),
   daemonInfoPath: path.join(DATA_DIR, 'daemon.json'),
+  /** Cofre de segredos do daemon (spec missões §Cofre); a chave fica no chaveiro do SO. */
+  vaultPath: path.join(DATA_DIR, 'vault.json'),
   adbPath: '/home/loterio/Android/Sdk/platform-tools/adb',
   adbServerPort: 5038,
   mcpAppPackage: 'com.danielealbano.androidremotecontrolmcp.gms.debug',
