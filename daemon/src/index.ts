@@ -9,7 +9,7 @@ import { createScreenCapture } from './device/screen.js';
 import { createVideoStreams } from './device/video.js';
 import { cloneAvd, deleteAvd } from './fleet/avd.js';
 import { createDiskUsage, startDiskCollector } from './fleet/disk.js';
-import { bootEmulator, createEmulatorSupervisor } from './fleet/emulator.js';
+import { bootEmulator, createEmulatorSupervisor, saveSnapshot } from './fleet/emulator.js';
 import { ensureIdentityReady } from './fleet/identity.js';
 import { pickTestIdentity } from './fleet/pick.js';
 import { reconcileOnStart } from './fleet/reconcile.js';
@@ -25,9 +25,19 @@ import { createOllamaSupervisor } from './provider/ollama.js';
 import { createLmStudio } from './provider/runtimes/lmstudio.js';
 import { createLocalRuntimes } from './provider/runtimes/local.js';
 import { recordProviderTest, testProvider } from './provider/probe.js';
+import { createMissionRunner } from './mission/runner.js';
+import { planNext } from './mission/planner.js';
+import { promoteAccounts } from './mission/promote.js';
+import { readScreenOnce } from './mission/screen-io.js';
 import { startServer } from './server/api.js';
 import { controlRoutes } from './server/routes-control.js';
+import { credentialRoutes } from './server/routes-credentials.js';
 import { goalsRoutes } from './server/routes-goals.js';
+import { missionRoutes } from './server/routes-missions.js';
+import { getCredential } from './vault/credentials.js';
+import { secretToolKeySource } from './vault/keyring.js';
+import { createVault } from './vault/vault.js';
+import { createSecretMask, loadMissionSecrets } from './worker/mission-tools.js';
 import { startGoal, type WorkerJob } from './swarm/scheduler.js';
 import { singleFlightOllama } from './swarm/single-flight.js';
 import { createIdentityRoutes } from './server/routes-identities.js';
@@ -39,8 +49,10 @@ mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath);
 // Nada em voo é retomado sozinho depois de uma queda (spec §4.3).
 const reconciled = reconcileOnStart(db);
-if (reconciled.tasks + reconciled.goals + reconciled.identities > 0) console.log('[enxame-daemon] reconciliação na subida:', reconciled);
+if (reconciled.tasks + reconciled.goals + reconciled.identities + reconciled.subtasks > 0) console.log('[enxame-daemon] reconciliação na subida:', reconciled);
 const adb = createAdb();
+// Cofre do daemon (spec missões §Cofre): senhas geradas por missões e credenciais de login; chave no chaveiro do SO.
+const vault = createVault({ file: CONFIG.vaultPath, keys: secretToolKeySource() });
 // Supervisor do Ollama: só mata o processo que ele mesmo subiu (spec §4.3).
 // Single-flight: workers do enxame pedem o Ollama quase juntos; só um `ollama serve` sobe.
 // Runtimes locais (Ollama e LM Studio) atrás da mesma cara; single-flight: workers pedem o runtime quase juntos.
@@ -96,6 +108,7 @@ const identityRoutes = createIdentityRoutes({
   setPin: (identity, pin) => setDevicePin(adb, identity.serial, pin),
   defaultPin: process.env.ENXAME_DEFAULT_PIN && isValidPin(process.env.ENXAME_DEFAULT_PIN) ? process.env.ENXAME_DEFAULT_PIN : null,
   clearAccount: async (identity) => { await clearTargetAccount(adb, identity.serial, identity.appPackage); },
+  credentials: (id) => getCredential(vault, id),
 });
 
 // Enxame (spec inc. 5 §3.2): líder planeja sobre a frota; scheduler roda um worker por identidade pronta, com pacing.
@@ -105,6 +118,23 @@ const runWorker = (j: WorkerJob) => runTask({
   db, identity: j.identity, goalText: j.goalText, goalId: j.goalId, taskId: j.taskId, instruction: j.instruction,
   apiKey: env.anthropicApiKey, isKilled: () => server.isKilled(), onStep: () => server.broadcast(), pacing: CONFIG.swarm,
 }, { ollama });
+
+// Missões (spec missões): loop planejador → executor por identidade, fora do lock de objetivo.
+const missions = createMissionRunner({
+  db, isKilled: () => server.isKilled(), onChange: () => server.broadcast(),
+  plan: (input) => planNext(input, { providers: readProviderConfig(db), apiKey: env.anthropicApiKey, ollama }),
+  readScreen: (identity) => readScreenOnce(db, identity, { ensureReady: (d, i) => ensureIdentityReady(d, i, { adb }) }),
+  runSubtask: async (j) => {
+    const mask = createSecretMask(await loadMissionSecrets(db, vault, j.missionId));
+    const r = await runTask({
+      db, identity: j.identity, goalText: j.instruction, goalId: j.missionId, taskId: j.taskId, instruction: j.instruction,
+      apiKey: env.anthropicApiKey, isKilled: j.shouldStop, onStep: () => server.broadcast(),
+      stepBudget: CONFIG.mission.subtaskStepBudget, pacing: CONFIG.swarm, mission: { missionId: j.missionId, vault, mask },
+    }, { ollama });
+    return { humanReason: r.humanReason, summary: r.platformBlock ?? r.summary };
+  },
+  promote: (missionId) => promoteAccounts(missionId, { db, vault, snapshot: (i) => saveSnapshot(adb, i.serial) }),
+});
 
 const daemonToken = randomUUID();
 const server = await startServer({
@@ -121,8 +151,12 @@ const server = await startServer({
     const started = startGoal(plan, { db, isKilled: () => server.isKilled(), runWorker, ensureReady, onChange: () => server.broadcast() });
     return { goalId: started.goalId, done: started.done };
   },
-  // Rotas das frentes do incremento 5: objetivos, ciclo de vida da identidade, controle humano (input via `adb shell input`).
-  routes: [goalsRoutes({ plan: (text, lang) => planGoal(text, planDeps, lang) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) })],
+  // Rotas das frentes do incremento 5: objetivos, ciclo de vida da identidade, controle humano (input via `adb shell input`);
+  // missões e credenciais do cofre (spec missões) não usam o lock de objetivo.
+  routes: [
+    goalsRoutes({ plan: (text, lang) => planGoal(text, planDeps, lang) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) }),
+    missionRoutes({ runner: missions }), credentialRoutes({ vault }),
+  ],
   onProviderTest: async (role) => {
     const model = readProviderConfig(db)[role].model;
     const fail = (error: string) => recordProviderTest(db, { role, model, latencyMs: 0, tokensPerSec: null, argsValid: false, warning: null, error, at: new Date().toISOString() });
@@ -139,3 +173,6 @@ host.start(() => server.broadcast()); // só em mudança relevante (RAM ±0,5 Gi
 stopDisk = startDiskCollector(db, disk, () => server.broadcast());
 writeFileSync(CONFIG.daemonInfoPath, JSON.stringify({ port: server.port, token: daemonToken, pid: process.pid }));
 console.log(`[enxame-daemon] http://127.0.0.1:${server.port} · info em ${CONFIG.daemonInfoPath}`);
+
+const resumed = missions.resumeAllOnStart();
+if (resumed > 0) console.log(`[enxame-daemon] ${resumed} missão(ões) retomada(s)`);

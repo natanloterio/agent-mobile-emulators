@@ -4,6 +4,7 @@ import { listIdentities, type IdentityRow, type ProbeSignalsRow } from '../db/id
 import { readProviderConfig, type ProviderRow, type RoleKey } from '../provider/config.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import type { VideoState } from '../device/video.js';
+import { missionViews, type MissionView } from './snapshot-missions.js';
 
 export interface ToolRow { readonly idx: number; readonly tool: string; readonly excerpt: string; readonly tokens: number; readonly gate: boolean; readonly provider: string | null }
 export interface IdentitySnapshot {
@@ -47,6 +48,7 @@ export interface FleetSnapshot {
   readonly identities: readonly IdentitySnapshot[]; readonly providers: Readonly<Record<RoleKey, ProviderSnapshot>>;
   readonly killed: boolean; readonly updatedAt: string;
   readonly goal: GoalSummary | null; readonly host: HostMetrics | null;
+  readonly missions: readonly MissionView[];
 }
 export interface SnapshotSources {
   readonly videoState?: (id: string) => VideoState;
@@ -114,8 +116,9 @@ export function listGoals(db: DatabaseSync, limit = 20): readonly GoalSummary[] 
   return (db.prepare(`select ${GOAL_COLS} from goal order by created_at desc, rowid desc limit ?`).all(limit) as GoalDbRow[]).map((g) => goalSummary(db, g));
 }
 
+/** Missão tem painel próprio no cockpit: fica de fora do "objetivo atual" (spec missões §Snapshot). */
 export function currentGoal(db: DatabaseSync): GoalSummary | null {
-  const g = db.prepare(`select ${GOAL_COLS} from goal order by created_at desc, rowid desc limit 1`).get() as GoalDbRow | undefined;
+  const g = db.prepare(`select ${GOAL_COLS} from goal where pattern != 'mission' order by created_at desc, rowid desc limit 1`).get() as GoalDbRow | undefined;
   return g ? goalSummary(db, g) : null;
 }
 
@@ -127,5 +130,5 @@ export function buildSnapshot(db: DatabaseSync, killed: boolean, sources?: Snaps
   const providers = Object.fromEntries((Object.keys(cfg) as RoleKey[]).map((k) => [k, { ...cfg[k], lastTest: tests[k] ?? null }])) as Record<RoleKey, ProviderSnapshot>;
   let host: HostMetrics | null = null;
   try { host = src.host?.() ?? null; } catch { host = null; }
-  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host };
+  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db) };
 }
