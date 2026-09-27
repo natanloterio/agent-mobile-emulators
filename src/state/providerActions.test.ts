@@ -90,4 +90,44 @@ describe('createProviderActions', () => {
     ]);
     expect(getProviderModels).not.toHaveBeenCalled();
   });
+
+  it('loadProviderModels repassa entries e runtimes do daemon novo', async () => {
+    const runtimes = [{ kind: 'ollama', label: 'Ollama', endpoint: 'http://127.0.0.1:11434/v1', installed: true, running: true, error: null }] as const;
+    const entries = [{ id: 'qwen3:8b', runtime: 'ollama', label: 'qwen3:8b', sizeBytes: 5.2e9, loaded: true, toolUse: true }] as const;
+    const getProviderModels = vi.fn(() => Promise.resolve({ source: 'local', models: ['qwen3:8b'], error: null, runtimes, entries }));
+    const { actions, created } = setup({ getProviderModels });
+    created.loadProviderModels('worker');
+    await flush();
+    expect(actions[0]).toStrictEqual({ type: 'providerModels', role: 'worker', models: ['qwen3:8b'], entries, runtimes });
+  });
+
+  it('daemon antigo: providerModels sai sem entries/runtimes', async () => {
+    const { actions, created } = setup({ getProviderModels: models(['qwen3:8b']) });
+    created.loadProviderModels('worker');
+    await flush();
+    expect(actions[0]).toStrictEqual({ type: 'providerModels', role: 'worker', models: ['qwen3:8b'] });
+  });
+
+  it('setProviderField com runtime: PUT { runtime, model } e recarrega a lista depois', async () => {
+    const setProvider = vi.fn(() => Promise.resolve());
+    const getProviderModels = models(['qwen/qwen3-8b']);
+    const { actions, created } = setup({ setProvider, getProviderModels });
+    created.setProviderField('worker', { runtime: 'lmstudio', model: 'qwen/qwen3-8b' });
+    await flush();
+    expect(setProvider).toHaveBeenCalledWith('worker', { runtime: 'lmstudio', model: 'qwen/qwen3-8b' });
+    expect(getProviderModels).toHaveBeenCalledWith('worker');
+    expect(actions.map((a) => a.type)).toEqual(['providerError', 'providerModels', 'providerModelsError']);
+  });
+
+  it('setProviderField sem runtime não relê a lista; com runtime recusado também não', async () => {
+    const getProviderModels = models([]);
+    const ok = setup({ setProvider: vi.fn(() => Promise.resolve()), getProviderModels });
+    ok.created.setProviderField('worker', { model: 'qwen3:8b' });
+    await flush();
+    const bad = setup({ setProvider: vi.fn(() => Promise.reject(new Error('busy'))), getProviderModels });
+    bad.created.setProviderField('worker', { runtime: 'lmstudio', model: 'x' });
+    await flush();
+    expect(getProviderModels).not.toHaveBeenCalled();
+    expect(bad.actions).toEqual([{ type: 'providerError', role: 'worker', message: 'busy' }]);
+  });
 });

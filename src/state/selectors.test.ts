@@ -12,6 +12,13 @@ describe('selectors — incremento 3', () => {
     expect(roles.find((r) => r.key === 'esc')?.error).toBe('endpoint precisa ser http(s)');
     const lider = roles.find((r) => r.key === 'lider')!; expect(lider.models).toEqual([]); expect(lider.error).toBeNull();
   });
+  it('selectRoles repassa o catálogo local do papel; sem ele, catalog null e runtime null', () => {
+    const runtimes = [{ kind: 'ollama', label: 'Ollama', endpoint: 'http://127.0.0.1:11434/v1', installed: true, running: true, error: null }] as const;
+    const s = fleetReducer(createInitialState(), { type: 'providerModels', role: 'worker', models: [], entries: [], runtimes });
+    const roles = selectRoles(s);
+    expect(roles.find((r) => r.key === 'worker')?.catalog).toEqual({ entries: [], runtimes });
+    const lider = roles.find((r) => r.key === 'lider')!; expect(lider.catalog).toBeNull(); expect(lider.runtime).toBeNull();
+  });
   it('liveRoles sem lista carregada não oferece rótulo do mock (models vazio)', () => {
     const snap = { killed: false, updatedAt: 'x', identities: [], providers: {
       lider: { role: 'lider', mode: 'nuvem', model: 'claude-sonnet-5', endpoint: 'anthropic', lastTest: null },

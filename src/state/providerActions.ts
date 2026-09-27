@@ -1,6 +1,6 @@
 import type { Dispatch } from 'react';
 import { modelFor } from '../data/providers';
-import type { EnxameBridge } from '../live/types';
+import type { EnxameBridge, ProviderPatch } from '../live/types';
 import type { ProviderMode, RoleKey } from '../types/fleet';
 import type { FleetAction } from './fleetReducer';
 
@@ -26,7 +26,7 @@ export interface ProviderActionDeps {
 export interface ProviderActions {
   readonly pickMode: (role: RoleKey, mode: ProviderMode) => void;
   readonly testConnection: (role: RoleKey) => void;
-  readonly setProviderField: (role: RoleKey, patch: { model?: string; endpoint?: string }) => void;
+  readonly setProviderField: (role: RoleKey, patch: Omit<ProviderPatch, 'mode'>) => void;
   readonly loadProviderModels: (role: RoleKey) => void;
 }
 
@@ -40,7 +40,9 @@ export function createProviderActions({ dispatch, getBridge, getMode }: Provider
     // Sem daemon o seletor mostra a lista mock do papel (spec §4.5).
     if (!get) { dispatch({ type: 'providerModels', role, models: [modelFor(role, getMode(role))] }); return; }
     get(role).then((r) => {
-      dispatch({ type: 'providerModels', role, models: r.models });
+      // Catálogo local só quando o daemon o manda (daemon antigo: a tela segue só com `models`).
+      const catalog = r.entries || r.runtimes ? { entries: r.entries, runtimes: r.runtimes } : {};
+      dispatch({ type: 'providerModels', role, models: r.models, ...catalog });
       // Lista limpa apaga o erro de carga anterior (ex.: "Ollama parado"); erro novo substitui.
       modelsError(role, r.error);
     }).catch((e: Error) => modelsError(role, bridgeMessage(e)));
@@ -60,7 +62,11 @@ export function createProviderActions({ dispatch, getBridge, getMode }: Provider
     setProviderField: (role, patch) => {
       const set = getBridge()?.setProvider; if (!set) return;
       set(role, patch)
-        .then(() => putError(role, null))
+        .then(() => {
+          putError(role, null);
+          // Trocar o runtime troca o endpoint do papel: o erro de carga e o "atual" da lista mudam.
+          if (patch.runtime) loadProviderModels(role);
+        })
         .catch((e: Error) => putError(role, bridgeMessage(e)));
     },
     loadProviderModels,

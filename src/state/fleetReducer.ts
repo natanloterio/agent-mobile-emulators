@@ -1,6 +1,6 @@
 import { EXTRA_IDENTITIES, IDENTITIES } from '../data/identities';
 import { DEFAULT_MODES } from '../data/providers';
-import type { GoalPlan, GoalSummary } from '../live/types';
+import type { GoalPlan, GoalSummary, ModelEntry, RuntimeInfo } from '../live/types';
 import type {
   ExtraIdentity, Identity, PlanStage, ProviderMode, RoleKey, Screen, TestStage,
 } from '../types/fleet';
@@ -8,6 +8,9 @@ import type {
 /** Estado de uma chamada ao daemon, por chave ('plan', 'launch', 'goals', 'provision', 'id:<id>'…). */
 export interface RequestStatus { readonly busy: boolean; readonly error: string | null }
 const IDLE_REQUEST: RequestStatus = { busy: false, error: null };
+
+/** Modelos baixados de todos os runtimes locais e o estado de cada runtime (spec runtimes locais). */
+export interface LocalCatalog { readonly entries: readonly ModelEntry[]; readonly runtimes: readonly RuntimeInfo[] }
 
 export interface FleetState {
   readonly screen: Screen;
@@ -26,6 +29,8 @@ export interface FleetState {
   /** Erro da última carga da lista de modelos (ex.: "Ollama parado"); separado para um PUT não apagá-lo. */
   readonly providerModelsErrors: Partial<Record<RoleKey, string>>;
   readonly providerModels: Partial<Record<RoleKey, readonly string[]>>;
+  /** Catálogo local por papel; ausente na nuvem e com daemon antigo (a tela segue só com `providerModels`). */
+  readonly providerCatalogs: Partial<Record<RoleKey, LocalCatalog>>;
   /** Chamadas ao daemon em andamento ou com erro visível na tela. */
   readonly requests: Readonly<Record<string, RequestStatus>>;
   /** Plano devolvido por `POST /goals/plan` (modo vivo). */
@@ -52,7 +57,7 @@ export type FleetAction =
   | { type: 'testStart'; role: RoleKey }
   | { type: 'testDone'; role: RoleKey }
   | { type: 'providerError'; role: RoleKey; message: string | null }
-  | { type: 'providerModels'; role: RoleKey; models: readonly string[] }
+  | { type: 'providerModels'; role: RoleKey; models: readonly string[]; entries?: readonly ModelEntry[]; runtimes?: readonly RuntimeInfo[] }
   | { type: 'providerModelsError'; role: RoleKey; message: string | null }
   | { type: 'provision' }
   | { type: 'extraAction'; index: number }
@@ -79,6 +84,7 @@ export function createInitialState(screen: Screen = 'cockpit'): FleetState {
   providerErrors: {},
   providerModelsErrors: {},
   providerModels: {},
+  providerCatalogs: {},
   requests: {},
   plan: null,
   pastGoals: null,
@@ -141,6 +147,15 @@ function withRoleMessage(
   return message ? { ...rest, [role]: message } : rest;
 }
 
+/** Resposta sem `entries` nem `runtimes` (nuvem ou daemon antigo) apaga o catálogo do papel. */
+function withCatalog(
+  catalogs: Partial<Record<RoleKey, LocalCatalog>>, role: RoleKey,
+  entries: readonly ModelEntry[] | undefined, runtimes: readonly RuntimeInfo[] | undefined,
+): Partial<Record<RoleKey, LocalCatalog>> {
+  const { [role]: _drop, ...rest } = catalogs;
+  return entries || runtimes ? { ...rest, [role]: { entries: entries ?? [], runtimes: runtimes ?? [] } } : rest;
+}
+
 export function fleetReducer(s: FleetState, a: FleetAction): FleetState {
   switch (a.type) {
     case 'go':
@@ -186,7 +201,7 @@ export function fleetReducer(s: FleetState, a: FleetAction): FleetState {
     case 'providerModelsError':
       return { ...s, providerModelsErrors: withRoleMessage(s.providerModelsErrors, a.role, a.message) };
     case 'providerModels':
-      return { ...s, providerModels: { ...s.providerModels, [a.role]: a.models } };
+      return { ...s, providerModels: { ...s.providerModels, [a.role]: a.models }, providerCatalogs: withCatalog(s.providerCatalogs, a.role, a.entries, a.runtimes) };
     case 'provision':
       return { ...s, extra: [...s.extra, newProvisionedIdentity(s.extra.length)] };
     case 'extraAction':
