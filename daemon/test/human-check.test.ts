@@ -3,7 +3,7 @@ import { detectHumanCheck, summarizeScreen } from '../src/screen/human-check.js'
 import { parseScreen } from '../src/screen/parse.js';
 
 const screen = (pkg: string, labels: readonly string[]) => parseScreen(
-  `screen:1080x2400 density:420 orientation:portrait\n--- window:1 type:APPLICATION pkg:${pkg} title:x layer:0 focused:true ---\n`
+  `screen:1080x2400 density:420 orientation:portrait\n--- window:1 type:APPLICATION pkg:${pkg} title:x layer:0 focused:true ---\nnode_id\tclass\ttext\tdesc\tres_id\tbounds\tflags\n`
   + labels.map((l, i) => `node_${i}\tTextView\t${l}\t-\t-\t0,${i * 10},10,${i * 10 + 10}\ton,ena`).join('\n') + '\n');
 
 describe('detectHumanCheck (modo missão)', () => {
@@ -28,4 +28,11 @@ describe('summarizeScreen', () => {
     expect(s).toBe('app: com.microsoft.office.outlook\n- Caixa de entrada\n- Instagram: código 123456');
   });
   it('sem tela → texto fixo', () => { expect(summarizeScreen(null)).toBe('(tela indisponível)'); });
+  it('cabeçalho de coluna não vira rótulo', () => {
+    // Verifica que o header row "node_id\tclass\ttext\t..." não é parseado como nó
+    const s = summarizeScreen(screen('com.test', ['Label1', 'Label2']));
+    expect(s).not.toMatch(/^- text$/m);
+    expect(s).not.toMatch(/^- class$/m);
+    expect(s).toMatch(/Label1/);
+  });
 });
