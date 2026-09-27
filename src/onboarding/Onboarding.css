@@ -122,7 +122,7 @@
 .onb-next h3 { margin: 0; font-size: 24px; font-weight: var(--weight-medium); }
 .onb-next p { color: var(--color-grey-2); line-height: 1.4; }
 
-@media (max-width: 900px) {
+@media (max-width: 759px) {
   .onb { grid-template-columns: 1fr; }
   .onb__rail { position: static; height: auto; padding: 16px; gap: 14px; }
   .onb__railnote { display: none; }

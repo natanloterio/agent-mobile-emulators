@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Heading } from '../components/Heading';
 import { useI18n } from '../i18n/I18nProvider';
 import type { MessageKey } from '../i18n/messages';
+import { RAM_PER_EMULATOR_GIB } from './catalog';
 import type { OnboardingState } from './reducer';
 import type { UserFix } from './schema';
 import { depRows, emulatorCapacity, formatMb, summarize, type DepRow } from './view';
@@ -94,7 +95,7 @@ export function CheckStep({ state, onRecheck }: { readonly state: OnboardingStat
           <div className="onb-phones" aria-hidden="true">
             {Array.from({ length: Math.max(cap.count, 12) }, (_, i) => <i key={i} className={i < cap.count ? 'on' : ''} />)}
           </div>
-          <span className="onb-cap__note">{t('onboarding.hw.capacityNote', { ram: `${i18n.fmt.decimal(4.6)} GB` })} {t(`onboarding.hw.limit.${cap.limit}` as MessageKey)}</span>
+          <span className="onb-cap__note">{t('onboarding.hw.capacityNote', { ram: `${i18n.fmt.decimal(RAM_PER_EMULATOR_GIB)} GB` })} {t(`onboarding.hw.limit.${cap.limit}` as MessageKey)}</span>
         </div>
       </div>
     </>

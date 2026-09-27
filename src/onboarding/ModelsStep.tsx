@@ -3,7 +3,7 @@ import { useI18n } from '../i18n/I18nProvider';
 import type { MessageKey } from '../i18n/messages';
 import { LOCAL_MODELS, MODE_ROLES, MODES, type SetupMode } from './catalog';
 import type { OnboardingState } from './reducer';
-import { modelEntry, modelFit, needsLocal, vramBar } from './view';
+import { defaultMode, modelEntry, modelFit, needsLocal, vramBar } from './view';
 
 const ROLE_KEYS: readonly MessageKey[] = ['onboarding.role.lider', 'onboarding.role.worker', 'onboarding.role.esc'];
 
@@ -19,7 +19,7 @@ export function ModelsStep({ state, onMode, onModel, onKey, onTestKey }: ModelsS
   const i18n = useI18n();
   const { t } = i18n;
   const gpu = state.report?.hardware.gpu ?? null;
-  const recommended: SetupMode = gpu ? 'misto' : 'nuvem';
+  const recommended: SetupMode = defaultMode(gpu);
   const current = modelEntry(state.model) ?? LOCAL_MODELS[0];
   const bar = vramBar(current, gpu);
   const gb = (n: number) => `${i18n.fmt.decimal(n)} GB`;
