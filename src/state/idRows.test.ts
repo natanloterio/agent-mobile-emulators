@@ -90,9 +90,11 @@ describe('credenciais e login pelo daemon', () => {
   });
   it('sem credencial: só "Credenciais"; com: nome na linha, "Fazer login" nos estados certos e "Esquecer"', () => {
     expect(kinds(one({ lifecycle: 'idle' }, { status: {}, results: {} }).actions)).toEqual(['creds']);
-    for (const lc of ['blank', 'provisioned', 'needs-human', 'offline']) expect(kinds(one({ lifecycle: lc }, saved).actions)).toContain('autologin');
+    for (const lc of ['blank', 'provisioned', 'needs-human', 'offline', 'idle', 'logged-in']) expect(kinds(one({ lifecycle: lc }, saved).actions)).toContain('autologin');
+    expect(kinds(one({ lifecycle: 'running' }, saved).actions)).not.toContain('autologin');
+    expect(kinds(one({ lifecycle: 'idle', controlled: true }, saved).actions)).not.toContain('autologin');
     const idle = one({ lifecycle: 'idle' }, saved);
-    expect(kinds(idle.actions)).toEqual(['creds', 'forget']);
+    expect(kinds(idle.actions)).toEqual(['autologin', 'creds', 'forget']);
     expect(idle.credUser).toBe('loja.sul');
     expect(kinds(one({ lifecycle: 'banned' }, saved).actions)).toEqual(['discard']);
     expect(one({ lifecycle: 'running', discardedAt: 'x' }, saved).actions).toEqual([]);

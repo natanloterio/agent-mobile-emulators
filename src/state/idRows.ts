@@ -44,7 +44,8 @@ export interface LoginNote { readonly tone: 'ok' | 'human'; readonly text: strin
 export interface CredRowInput { readonly status: CredentialsStatus | null; readonly results: Readonly<Record<string, LoginResult>> }
 const NO_CREDS: CredRowInput = { status: null, results: {} };
 // Estados em que o daemon aceita tentar o login (spec login determinístico).
-const AUTOLOGIN_STATES: readonly string[] = ['blank', 'provisioned', 'needs-human', 'offline'];
+/** Onde o daemon recusa o login (409): rodando. Banida/descartada nem chegam aqui. "idle" não garante sessão: o roteiro responde "já logada" sem digitar. */
+const NO_AUTOLOGIN_STATES: readonly string[] = ['running'];
 
 const GiB = 2 ** 30;
 export const DISK_CAP_BYTES = 8 * GiB;
@@ -92,7 +93,7 @@ function liveRowActions(l: LiveIdentity, tileIndex: number, { t }: I18n, creds: 
   if (l.hasPin === false) out.push({ kind: 'pin', label: t('identities.action.pin') });
   if (!creds.status) return out;
   const saved = !!creds.status[l.id];
-  if (saved && AUTOLOGIN_STATES.includes(lc)) out.push({ kind: 'autologin', label: t('identities.action.login') });
+  if (saved && !NO_AUTOLOGIN_STATES.includes(lc) && !l.controlled) out.push({ kind: 'autologin', label: t('identities.action.login') });
   out.push({ kind: 'creds', label: t('identities.action.credentials') });
   if (saved) out.push({ kind: 'forget', label: t('identities.action.forgetCredentials') });
   return out;
