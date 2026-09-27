@@ -99,7 +99,8 @@ export async function runMission(missionId: string, d: MissionDeps): Promise<Mis
     try {
       const r = await d.plan({
         missionText: m.text, identity: { name: identity.name, handle: identity.handle, appPackage: identity.appPackage },
-        memory: listMemory(d.db, m.id), subtasks: listSubtasks(d.db, m.id), screen: mask(summarizeScreen(screen)), lang: asLang(m.lang),
+        // mask entra em summarizeScreen (mascara cada rótulo antes do corte de 120; achado residual) em vez de envolver o resultado.
+        memory: listMemory(d.db, m.id), subtasks: listSubtasks(d.db, m.id), screen: summarizeScreen(screen, 40, mask), lang: asLang(m.lang),
       });
       addMissionCost(d.db, m.id, r.costUsd);
       decision = maskDecision(r.decision, mask);

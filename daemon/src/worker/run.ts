@@ -153,8 +153,9 @@ function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
           const noted = withNote(out, NOT_CLICKABLE_NOTE);
           return ctx.mask ? maskOut(noted, ctx.mask) : noted;
         }
-        const h = classifyMcpError(e); if (h) ctx.onHalt(h);
-        // A mensagem crua pode ecoar o input da tool (ex.: um segredo digitado); mascarada antes de subir ao modelo.
+        // A mensagem crua pode ecoar o input da tool (ex.: um segredo digitado); mascarada antes do halt (achado
+        // residual: só o erro que sobe ao modelo era mascarado, não o halt que vira resumo/motivo de pausa da missão).
+        const h = classifyMcpError(e); if (h) ctx.onHalt(ctx.mask ? { ...h, text: ctx.mask(h.text) } : h);
         throw ctx.mask ? new Error(ctx.mask(String((e as Error)?.message ?? e))) : e;
       }
     };
@@ -177,6 +178,8 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
   const cfg = o.providers ?? readProviderConfig(db);
   const { taskId, ownGoalId } = openTask(db, identity.id, o);
   const mission = o.mission ?? null;
+  // Em missão, todo halt/summary vindo de erro cru passa por aqui antes de virar pausa/relatório; fora, é identidade.
+  const maskHalt = (text: string): string => (mission ? mission.mask.mask(text) : text);
   // Em missão o loop é dono do estado da identidade (spec missões §Loop).
   if (!mission) setIdentityState(db, identity.id, 'running', { lastError: null });
   let report: SubtaskReport | null = null;
@@ -258,8 +261,9 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       db, taskId, pending, mask: mission?.mask.mask,
       onScreen: (s) => {
         lastScreen = s;
-        const b = s ? (mission ? detectHumanCheck(s) : detectPlatformBlock(s) ?? detectLoggedOut(s)) : null;
-        if (b) halt = { kind: 'platform-block', text: mission ? mission.mask.mask(b) : b }; // o texto do nó pode ter um segredo
+        // detectHumanCheck já mascara o rótulo antes do corte de 200; o pós-mask antigo virou redundante e saiu.
+        const b = s ? (mission ? detectHumanCheck(s, mission.mask.mask) : detectPlatformBlock(s) ?? detectLoggedOut(s)) : null;
+        if (b) halt = { kind: 'platform-block', text: b };
       },
       onHalt: (h) => { halt = h; },
     });
@@ -278,8 +282,9 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
         try {
           out = await typeRaw.execute({ node_id: nodeId, text }, { toolCallId: `secret-${nodeId}`, messages: [] });
         } catch (e) {
-          // O erro cru do MCP pode ecoar os parâmetros (a senha); nunca sobe como veio. Infra ainda pausa a missão.
-          const h = classifyMcpError(e); if (h) halt = h;
+          // O erro cru do MCP pode ecoar os parâmetros (a senha); nunca sobe como veio, nem vira halt cru (achado
+          // residual: o halt ia sem máscara até o resumo/motivo de pausa). Infra ainda pausa a missão.
+          const h = classifyMcpError(e); if (h) halt = { ...h, text: maskHalt(h.text) };
           throw new Error('type_append_text falhou no device');
         }
         if (isErrorResult(out)) throw new Error('type_append_text falhou no device');
@@ -308,30 +313,31 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
 
     const h = halt as Halt;
     if (h?.kind === 'platform-block') return finish('platform-block', result.text);
-    // Em missão o motivo da parada (device, cofre) vira o resumo: é o que a missão mostra ao pausar.
-    if (h) return finish('infra', mission ? h.text : result.text);
+    // Em missão o motivo da parada (device, cofre) vira o resumo mostrado ao pausar; maskHalt é reforço (h.text já
+    // vem mascarado da origem: onHalt/typeText/onScreen).
+    if (h) return finish('infra', mission ? maskHalt(h.text) : result.text);
     if (o.isKilled()) return finish('killed', result.text);
     if (humanStopped(db, identity.id)) return finish('interrupted', result.text);
     return finish(stepsUsed >= budget ? 'budget' : 'done', result.text);
   } catch (e) {
     // Erro fora das tools (ex.: chave da Anthropic inválida) é falha da tarefa, não do device.
     const h = halt as Halt;
-    if (h?.kind === 'platform-block') return finish('platform-block', String((e as Error).message ?? e));
-    if (h) return finish('infra', String((e as Error).message ?? e));
+    if (h?.kind === 'platform-block') return finish('platform-block', maskHalt(String((e as Error).message ?? e)));
+    if (h) return finish('infra', maskHalt(String((e as Error).message ?? e)));
     if (ProviderError.isInstance(e)) {
       // Chave ausente é falha da tarefa, não do device: identidade volta a idle (spec inc. 3 §4.4). Em missão, pausa a missão.
-      if (e.kind === 'auth') { if (mission) { halt = { kind: 'auth', text: e.message }; return finish('infra', e.message); } return finish('failed', e.message); }
-      halt = { kind: e.kind, text: e.message }; return finish('infra', e.message);
+      if (e.kind === 'auth') { if (mission) { const text = maskHalt(e.message); halt = { kind: 'auth', text }; return finish('infra', text); } return finish('failed', e.message); }
+      const text = maskHalt(e.message); halt = { kind: e.kind, text }; return finish('infra', text);
     }
     // Ollama caiu/recusou/OOM no meio da tarefa: infra-local → tarefa volta a todo, identidade idle (spec §7).
-    if (activeMode === 'local' && isLocalInfraError(e)) { const text = String((e as Error).message ?? e).slice(0, 200); halt = { kind: 'infra-local', text }; return finish('infra', text); }
+    if (activeMode === 'local' && isLocalInfraError(e)) { const text = maskHalt(String((e as Error).message ?? e).slice(0, 200)); halt = { kind: 'infra-local', text }; return finish('infra', text); }
     // Missão: infra ANTES do loop (connect, client.tools(), ollama.ensure) também interrompe a subtarefa, nunca falha (spec missões §Erros).
     if (mission) {
       const mc = classifyMcpError(e);
-      if (mc) { halt = mc; return finish('infra', mc.text); }
-      if (isLocalInfraError(e)) { const text = String((e as Error).message ?? e).slice(0, 200); halt = { kind: 'infra-local', text }; return finish('infra', text); }
+      if (mc) { const text = maskHalt(mc.text); halt = { ...mc, text }; return finish('infra', text); }
+      if (isLocalInfraError(e)) { const text = maskHalt(String((e as Error).message ?? e).slice(0, 200)); halt = { kind: 'infra-local', text }; return finish('infra', text); }
     }
-    return finish('failed', String((e as Error).message ?? e));
+    return finish('failed', maskHalt(String((e as Error).message ?? e)));
   } finally {
     await client?.close().catch(() => undefined);
   }
