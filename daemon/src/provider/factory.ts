@@ -24,6 +24,15 @@ export function providerOptionsFor(row: ProviderRow): Record<string, Record<stri
   return row.mode === 'nuvem' ? { anthropic: { disableParallelToolUse: true, cacheControl: { type: 'ephemeral', ttl: '1h' } } } : {};
 }
 
+/**
+ * Opções para chamadas de saída estruturada (planejador, líder). No LM Studio, modelos de raciocínio (Qwen 3.x) põem o
+ * JSON inteiro em `reasoning_content` e deixam `content` vazio — o SDK não acha o objeto. `reasoning_effort: none`
+ * faz o JSON voltar no `content` (medido com qwen/qwen3.6-27b, 2026-09-27). Ollama e nuvem: nada muda.
+ */
+export function structuredOutputOptions(row: ProviderRow): Record<string, Record<string, unknown>> | undefined {
+  return row.mode === 'local' && row.runtime === 'lmstudio' ? { openaiCompatible: { reasoningEffort: 'none' } } : undefined;
+}
+
 /** US$ por milhão de tokens (tabela da API Anthropic, 2026-06); cache read = 0,1× o input. */
 export const CLOUD_PRICING: Readonly<Record<string, Pricing>> = {
   'claude-haiku-4-5': HAIKU_PRICING,

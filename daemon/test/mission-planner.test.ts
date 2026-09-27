@@ -69,4 +69,16 @@ describe('planejador da missão', () => {
     expect(seenInstructions).toMatch(/Não proponha de novo o mesmo objetivo, site ou provedor de uma subtarefa que falhou/);
     expect(seenInstructions).toMatch(/decida "human"/);
   });
+  it('LM Studio: saída estruturada pede reasoning_effort none (modelos de raciocínio põem o JSON no reasoning_content)', async () => {
+    const seen: unknown[] = [];
+    const generate = (async (o: { providerOptions?: unknown }) => {
+      seen.push(o.providerOptions);
+      return { output: { ...EMPTY, decision: 'done', summary: 'ok' }, totalUsage: { inputTokens: 1, outputTokens: 1 } };
+    }) as unknown as typeof generateText;
+    const LM = { role: 'lider' as const, mode: 'local' as const, model: 'qwen/qwen3.6-27b', endpoint: 'http://127.0.0.1:1234/v1', runtime: 'lmstudio' as const };
+    await planNext(input, { providers: { ...PROVIDERS, lider: LM }, generate, model: {} as never });
+    await planNext(input, { providers: { ...PROVIDERS, lider: { ...LM, runtime: 'ollama' as const, endpoint: 'http://127.0.0.1:11434/v1' } }, generate, model: {} as never });
+    await planNext(input, { providers: PROVIDERS, generate, model: {} as never });
+    expect(seen).toEqual([{ openaiCompatible: { reasoningEffort: 'none' } }, undefined, undefined]);
+  });
 });
