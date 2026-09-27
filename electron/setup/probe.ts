@@ -4,7 +4,7 @@ import path from 'node:path';
 import { sizesFor } from './artifacts.js';
 import { execOrNull, readHardware, type HardwareDeps } from './hardware.js';
 import type { SetupPaths } from './paths.js';
-import { systemImage, type PlatformId } from './platform.js';
+import type { PlatformId } from './platform.js';
 import type { DepId, DepStatus, SetupReport, UserFix } from './types.js';
 
 export interface ProbeDeps {
@@ -17,11 +17,6 @@ export interface ProbeDeps {
   readonly keyringOk: () => Promise<boolean>;
 }
 export interface ProbeResult { readonly report: SetupReport; readonly ollamaBin: string | null }
-
-// removido na Task 5 (runners.ts deixa de importar SIZES_MB/SYSTEM_IMAGE)
-export const SIZES_MB = sizesFor('linux-x64');
-// removido na Task 5
-export const SYSTEM_IMAGE = systemImage('linux-x64');
 
 export const parseSourceProperties = (text: string): string | null => /^Pkg\.Revision=(.+)$/m.exec(text)?.[1].trim() ?? null;
 /** Versão maior do `java -version` ("17.0.12", "21", ou o antigo "1.8.0_392" = 8). */

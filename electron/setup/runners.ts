@@ -1,32 +1,18 @@
 import { access, chmod, mkdir, readdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import extractZip from 'extract-zip';
-import { downloadResumable, type Checksum, type DownloadOpts } from './download.js';
+import { artifactsFor, sizesFor, type Pinned } from './artifacts.js';
+import { downloadResumable, type DownloadOpts } from './download.js';
 import { SetupError } from './errors.js';
 import { nodePullDeps, pullModel } from './ollama-pull.js';
 import type { SetupPaths } from './paths.js';
-import { SIZES_MB, SYSTEM_IMAGE } from './probe.js';
+import { isWindows, systemImage } from './platform.js';
 import { runProcess, type ProcOpts } from './proc.js';
 import type { JobId } from './types.js';
 
 export type Progress = (doneMb: number, totalMb: number) => void;
 export type JobRunner = (progress: Progress) => Promise<void>;
 export type JobRunners = Readonly<Record<JobId, JobRunner>>;
-
-interface Pinned { readonly url: string; readonly checksum: Checksum; readonly sizeMb: number }
-/** Versões fixadas (spec onboarding §Arquitetura). Para atualizar: nova URL, novo checksum da fonte oficial, novo tamanho. */
-export const JRE: Pinned = {
-  url: 'https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jre_x64_linux_hotspot_17.0.20.1_1.tar.gz',
-  checksum: { algo: 'sha256', hex: '0b2b640e3046b64c8ec504de0ab9d91bb5610182bda21fad454681ce54d45a62' }, sizeMb: 47,
-};
-export const CMDLINE_TOOLS: Pinned = {
-  url: 'https://dl.google.com/android/repository/commandlinetools-linux-16111833_latest.zip',
-  checksum: { algo: 'sha1', hex: 'e025545c62a8e64c7559119566a569fb1dec5f60' }, sizeMb: 181,
-};
-export const OLLAMA: Pinned = {
-  url: 'https://github.com/ollama/ollama/releases/download/v0.34.4/ollama-linux-amd64.tar.zst',
-  checksum: { algo: 'sha256', hex: 'c238986e61d40c0cc5f4a9b9e40b9eea104350b77efa34741fc134e105cb9533' }, sizeMb: SIZES_MB.ollama,
-};
 
 export interface RunnerDeps {
   readonly paths: SetupPaths;
@@ -52,54 +38,86 @@ export function parseSdkPercent(line: string): number | null {
   return m ? Math.min(100, Number(m[1])) : null;
 }
 
-const sdkmanager = (d: RunnerDeps) => path.join(d.paths.sdkRoot, 'cmdline-tools', 'latest', 'bin', 'sdkmanager');
+/** No Windows os caminhos usam `\`; nas demais plataformas, `/`. */
+const pathOf = (d: RunnerDeps) => (isWindows(d.paths.platform) ? path.win32 : path.posix);
 
 /** JAVA_HOME no JRE do Enxame quando ele existe; senão o Java que a pessoa já tem. */
 async function sdkEnv(d: RunnerDeps): Promise<NodeJS.ProcessEnv> {
-  if (!(await d.exists(path.join(d.paths.jreDir, 'bin', 'java')))) return process.env;
-  return { ...process.env, JAVA_HOME: d.paths.jreDir, PATH: `${path.join(d.paths.jreDir, 'bin')}:${process.env.PATH ?? ''}` };
+  if (!(await d.exists(d.paths.javaBin))) return process.env;
+  return {
+    ...process.env,
+    JAVA_HOME: d.paths.javaHome,
+    PATH: `${pathOf(d).join(d.paths.javaHome, 'bin')}${isWindows(d.paths.platform) ? ';' : ':'}${process.env.PATH ?? ''}`,
+  };
+}
+
+/** No Windows o sdkmanager é um .bat, que o spawn só roda pelo cmd. */
+function runSdkmanager(d: RunnerDeps, args: readonly string[], o: ProcOpts): Promise<void> {
+  return isWindows(d.paths.platform) ? d.run('cmd', ['/c', d.paths.sdkmanager, ...args], o) : d.run(d.paths.sdkmanager, args, o);
+}
+
+/** Abre o pacote conforme o formato; `strip` tira a pasta de cima (JRE). */
+async function extractArchive(d: RunnerDeps, a: Pinned, file: string, dest: string, strip: boolean): Promise<void> {
+  if (a.format === 'zip') {
+    if (!strip) { await d.extractZip(file, dest); return; }
+    const tmp = `${dest}-unzip`;
+    await d.fs.rm(tmp, { recursive: true, force: true });
+    await d.extractZip(file, tmp);
+    const [inner] = await d.fs.readdir(tmp);
+    await d.fs.rm(dest, { recursive: true, force: true });
+    await d.fs.rename(pathOf(d).join(tmp, inner), dest);
+    await d.fs.rm(tmp, { recursive: true, force: true });
+    return;
+  }
+  const flags = a.format === 'tar.zst' ? ['--zstd', '-xf'] : ['-xzf'];
+  await d.fs.mkdir(dest, { recursive: true });
+  await d.run('tar', [...flags, file, '-C', dest, ...(strip ? ['--strip-components=1'] : [])], { onLine: d.log });
 }
 
 /** JRE do Enxame; pulado quando já foi extraído antes. */
 async function installJre(d: RunnerDeps, onBytes: (b: number) => void): Promise<void> {
-  const jreFile = path.join(d.paths.downloadsDir, 'jre.tar.gz');
-  await d.download({ url: JRE.url, dest: jreFile, checksum: JRE.checksum, onProgress: onBytes });
+  const a = artifactsFor(d.paths.platform).jre;
+  const file = pathOf(d).join(d.paths.downloadsDir, a.format === 'zip' ? 'jre.zip' : 'jre.tar.gz');
+  await d.download({ url: a.url, dest: file, checksum: a.checksum, onProgress: onBytes });
   await d.fs.rm(d.paths.jreDir, { recursive: true, force: true });
-  await d.fs.mkdir(d.paths.jreDir, { recursive: true });
-  await d.run('tar', ['-xzf', jreFile, '-C', d.paths.jreDir, '--strip-components=1'], { onLine: d.log });
-  await d.fs.rm(jreFile, { recursive: true, force: true });
+  await extractArchive(d, a, file, d.paths.jreDir, true);
+  await d.fs.rm(file, { recursive: true, force: true });
 }
 
 /** cmdline-tools em `<sdk>/cmdline-tools/latest`; pulado quando o sdkmanager já existe (repetir não baixa de novo). */
 async function installToolsZip(d: RunnerDeps, onBytes: (b: number) => void): Promise<void> {
+  const a = artifactsFor(d.paths.platform).cmdlineTools;
   const dl = d.paths.downloadsDir;
-  const zip = path.join(dl, 'cmdline-tools.zip');
-  await d.download({ url: CMDLINE_TOOLS.url, dest: zip, checksum: CMDLINE_TOOLS.checksum, onProgress: onBytes });
-  const unzipDir = path.join(dl, 'cmdline-tools-unzip');
+  const zip = pathOf(d).join(dl, 'cmdline-tools.zip');
+  await d.download({ url: a.url, dest: zip, checksum: a.checksum, onProgress: onBytes });
+  const unzipDir = pathOf(d).join(dl, 'cmdline-tools-unzip');
   await d.fs.rm(unzipDir, { recursive: true, force: true });
   await d.extractZip(zip, unzipDir); // o zip traz uma pasta `cmdline-tools/`
-  const latest = path.join(d.paths.sdkRoot, 'cmdline-tools', 'latest');
+  const latest = pathOf(d).join(d.paths.sdkRoot, 'cmdline-tools', 'latest');
   await d.fs.rm(latest, { recursive: true, force: true });
-  await d.fs.mkdir(path.dirname(latest), { recursive: true });
-  await d.fs.rename(path.join(unzipDir, 'cmdline-tools'), latest);
-  const bin = path.join(latest, 'bin');
-  for (const f of await d.fs.readdir(bin)) await d.fs.chmod(path.join(bin, f), 0o755);
+  await d.fs.mkdir(pathOf(d).dirname(latest), { recursive: true });
+  await d.fs.rename(pathOf(d).join(unzipDir, 'cmdline-tools'), latest);
+  if (!isWindows(d.paths.platform)) {
+    const bin = pathOf(d).join(latest, 'bin');
+    for (const f of await d.fs.readdir(bin)) await d.fs.chmod(pathOf(d).join(bin, f), 0o755);
+  }
   await d.fs.rm(zip, { recursive: true, force: true });
 }
 
 async function installCmdlineTools(d: RunnerDeps, progress: Progress): Promise<void> {
-  const needJre = !(await d.exists(path.join(d.paths.jreDir, 'bin', 'java')));
-  const needTools = !(await d.exists(sdkmanager(d)));
-  const jreMb = needJre ? JRE.sizeMb : 0;
-  const total = jreMb + (needTools ? CMDLINE_TOOLS.sizeMb : 0);
-  if (needJre) await installJre(d, (b) => progress(Math.min(JRE.sizeMb, toMb(b)), total));
-  if (needTools) await installToolsZip(d, (b) => progress(jreMb + Math.min(CMDLINE_TOOLS.sizeMb, toMb(b)), total));
-  await d.run(sdkmanager(d), [`--sdk_root=${d.paths.sdkRoot}`, '--licenses'], { env: await sdkEnv(d), stdin: 'y\n'.repeat(30), onLine: d.log });
+  const { jre, cmdlineTools } = artifactsFor(d.paths.platform);
+  const needJre = !(await d.exists(d.paths.javaBin));
+  const needTools = !(await d.exists(d.paths.sdkmanager));
+  const jreMb = needJre ? jre.sizeMb : 0;
+  const total = jreMb + (needTools ? cmdlineTools.sizeMb : 0);
+  if (needJre) await installJre(d, (b) => progress(Math.min(jre.sizeMb, toMb(b)), total));
+  if (needTools) await installToolsZip(d, (b) => progress(jreMb + Math.min(cmdlineTools.sizeMb, toMb(b)), total));
+  await runSdkmanager(d, [`--sdk_root=${d.paths.sdkRoot}`, '--licenses'], { env: await sdkEnv(d), stdin: 'y\n'.repeat(30), onLine: d.log });
   progress(total, total);
 }
 
 async function installSdkPackage(pkg: string, sizeMb: number, d: RunnerDeps, progress: Progress): Promise<void> {
-  await d.run(sdkmanager(d), [`--sdk_root=${d.paths.sdkRoot}`, '--install', pkg], {
+  await runSdkmanager(d, [`--sdk_root=${d.paths.sdkRoot}`, '--install', pkg], {
     env: await sdkEnv(d), stdin: 'y\n'.repeat(5),
     onLine: (line) => { d.log(line); const pct = parseSdkPercent(line); if (pct !== null) progress((sizeMb * pct) / 100, sizeMb); },
   });
@@ -107,26 +125,32 @@ async function installSdkPackage(pkg: string, sizeMb: number, d: RunnerDeps, pro
 }
 
 async function installOllama(d: RunnerDeps, progress: Progress): Promise<void> {
-  const file = path.join(d.paths.downloadsDir, 'ollama-linux-amd64.tar.zst');
-  await d.download({ url: OLLAMA.url, dest: file, checksum: OLLAMA.checksum, onProgress: (b) => progress(Math.min(OLLAMA.sizeMb, toMb(b)), OLLAMA.sizeMb) });
+  const a = artifactsFor(d.paths.platform).ollama;
+  const file = pathOf(d).join(d.paths.downloadsDir, a.file);
+  await d.download({ url: a.url, dest: file, checksum: a.checksum, onProgress: (b) => progress(Math.min(a.sizeMb, toMb(b)), a.sizeMb) });
   await d.fs.rm(d.paths.ollamaDir, { recursive: true, force: true });
   await d.fs.mkdir(d.paths.ollamaDir, { recursive: true });
   try {
-    await d.run('tar', ['--zstd', '-xf', file, '-C', d.paths.ollamaDir], { onLine: d.log });
+    await extractArchive(d, a, file, d.paths.ollamaDir, false);
   } catch (e) {
     if (/zstd/i.test(String((e as Error).message))) throw new SetupError('process', 'o tar precisa do zstd para abrir o Ollama; rode no terminal: sudo apt install zstd', { cause: e });
     throw e;
   }
   await d.fs.rm(file, { recursive: true, force: true });
-  progress(OLLAMA.sizeMb, OLLAMA.sizeMb);
+  if (!(await d.exists(d.paths.ollamaBin))) {
+    throw new SetupError('process', `o pacote do Ollama não trouxe ${pathOf(d).relative(d.paths.ollamaDir, d.paths.ollamaBin)}`);
+  }
+  if (!isWindows(d.paths.platform)) await d.fs.chmod(d.paths.ollamaBin, 0o755);
+  progress(a.sizeMb, a.sizeMb);
 }
 
 export function createRunners(localModel: string, ollamaBin: string, d: RunnerDeps): JobRunners {
+  const sizes = sizesFor(d.paths.platform);
   return {
     sdk: (p) => installCmdlineTools(d, p),
-    adb: (p) => installSdkPackage('platform-tools', SIZES_MB.adb, d, p),
-    emu: (p) => installSdkPackage('emulator', SIZES_MB.emu, d, p),
-    img: (p) => installSdkPackage(SYSTEM_IMAGE, SIZES_MB.img, d, p),
+    adb: (p) => installSdkPackage('platform-tools', sizes.adb, d, p),
+    emu: (p) => installSdkPackage('emulator', sizes.emu, d, p),
+    img: (p) => installSdkPackage(systemImage(d.paths.platform), sizes.img, d, p),
     ollama: (p) => installOllama(d, p),
     model: (p) => d.pull(localModel, ollamaBin, p),
   };
