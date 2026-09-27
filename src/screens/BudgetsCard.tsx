@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Heading } from '../components/Heading';
 import { useI18n } from '../i18n/I18nProvider';
+import type { LocalParallelStatus } from '../live/types';
 import {
   BUDGET_MAX, BUDGET_MIN, budgetFieldFrom, budgetFieldToPatchValue, clampBudgetInput, type BudgetField,
 } from './budgetsField';
+import { clampLocalParallelInput, LOCAL_PARALLEL_MAX, LOCAL_PARALLEL_MIN, localParallelStateKind } from './localParallelField';
 
 export interface BudgetsCardProps {
   /** Valor atual no daemon (spec limites §UI); `null` = sem limite. */
@@ -12,6 +14,11 @@ export interface BudgetsCardProps {
   readonly busy: boolean;
   readonly error: string | null;
   readonly onSave: (patch: { goal?: number | null; mission?: number | null }) => void;
+  /** Paralelismo local configurável (spec paralelismo §UI); ausente esconde a linha (daemon antigo). */
+  readonly localParallel?: LocalParallelStatus;
+  readonly localParallelBusy?: boolean;
+  readonly localParallelError?: string | null;
+  readonly onSaveLocalParallel?: (parallel: number) => void;
 }
 
 // Número mostrado no campo quando o valor atual é "sem limite" (nada mais sensato para editar a partir daí);
@@ -48,8 +55,46 @@ function BudgetRow({ label, field, onChange, ariaLabel, unlimitedLabel }: {
   );
 }
 
+/** Linha "Gerações simultâneas no modelo local" (spec paralelismo §UI): input 1..8, Salvar próprio e o estado da troca. */
+function LocalParallelRow({ status, busy, error, onSave }: {
+  readonly status: LocalParallelStatus; readonly busy: boolean; readonly error: string | null; readonly onSave: (n: number) => void;
+}) {
+  const { t } = useI18n();
+  const [value, setValue] = useState(status.wanted);
+  useEffect(() => setValue(status.wanted), [status.wanted]);
+  const kind = localParallelStateKind(status);
+  const stateText = kind === 'pending' ? t('providers.budgets.localParallel.pending')
+    : kind === 'external' ? t('providers.budgets.localParallel.external', { n: status.wanted })
+      : t('providers.budgets.localParallel.applied');
+  return (
+    <div className="budgets__row">
+      <label className="role__field budgets__row">
+        <span>{t('providers.budgets.localParallel.label')}</span>
+        <span className="budgets__controls">
+          <input
+            className="role__input budgets__input"
+            type="number"
+            min={LOCAL_PARALLEL_MIN}
+            max={LOCAL_PARALLEL_MAX}
+            step={1}
+            value={value}
+            aria-label={t('providers.budgets.localParallel.label')}
+            onChange={(e) => setValue(clampLocalParallelInput(e.target.value, value))}
+          />
+          <button type="button" className="btn btn--primary" onClick={() => onSave(value)} disabled={busy}>
+            {t('providers.budgets.localParallel.save')}
+          </button>
+        </span>
+      </label>
+      {error && <div className="role__error" role="alert">{error}</div>}
+      <p className="muted-14">{stateText}</p>
+      <p className="budgets__note muted-14">{t('providers.budgets.localParallel.note')}</p>
+    </div>
+  );
+}
+
 /** Cartão "Limites dos agentes" em Provedores (spec limites §UI): limites de passos que valem sem reiniciar. */
-export function BudgetsCard({ goal, mission, busy, error, onSave }: BudgetsCardProps) {
+export function BudgetsCard({ goal, mission, busy, error, onSave, localParallel, localParallelBusy, localParallelError, onSaveLocalParallel }: BudgetsCardProps) {
   const { t } = useI18n();
   const [goalField, setGoalField] = useState<BudgetField>(() => budgetFieldFrom(goal, DEFAULT_GOAL_VISIBLE));
   const [missionField, setMissionField] = useState<BudgetField>(() => budgetFieldFrom(mission, DEFAULT_MISSION_VISIBLE));
@@ -74,6 +119,12 @@ export function BudgetsCard({ goal, mission, busy, error, onSave }: BudgetsCardP
       {error && <div className="role__error" role="alert">{error}</div>}
       <button type="button" className="btn btn--primary" onClick={save} disabled={busy}>{t('providers.budgets.save')}</button>
       <p className="budgets__note muted-14">{t('providers.budgets.note')}</p>
+      {localParallel && onSaveLocalParallel && (
+        <LocalParallelRow
+          status={localParallel} busy={localParallelBusy ?? false} error={localParallelError ?? null}
+          onSave={onSaveLocalParallel}
+        />
+      )}
     </div>
   );
 }

@@ -176,6 +176,7 @@ export function App() {
       case 'prov': {
         const vram = isLive ? liveVram(live?.host, fleetSize, i18n) : null;
         const budgetsReq = requestOf(state, 'budgets');
+        const localParallelReq = requestOf(state, 'localParallel');
         return (
           <Providers
             roles={liveRoles(selectRoles(state, i18n), live, i18n)}
@@ -196,6 +197,10 @@ export function App() {
               busy: budgetsReq.busy,
               error: budgetsReq.error,
               onSave: (patch) => void settings.saveBudgets(patch),
+              localParallel: live.localParallel,
+              localParallelBusy: localParallelReq.busy,
+              localParallelError: localParallelReq.error,
+              onSaveLocalParallel: (n) => void settings.saveLocalParallel(n),
             } : null}
           />
         );
