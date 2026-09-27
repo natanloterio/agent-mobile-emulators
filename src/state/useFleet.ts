@@ -2,6 +2,7 @@ import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { DEFAULT_GOAL_TEXT } from '../data/goals';
 import type { ProviderMode, RoleKey, Screen } from '../types/fleet';
 import { createInitialState, fleetReducer, type FleetState } from './fleetReducer';
+import { createCredentialActions, type CredentialActions } from './credentialActions';
 import { createGoalActions, type GoalActions } from './goalActions';
 import { createIdentityActions, type IdentityActions } from './identityActions';
 import { createProviderActions } from './providerActions';
@@ -49,6 +50,8 @@ export interface UseFleet {
   /** Ações que falam com o daemon (modo vivo). */
   readonly goal: GoalActions;
   readonly identity: IdentityActions;
+  /** Credenciais no cofre do main e login pelo daemon. */
+  readonly credentials: CredentialActions;
 }
 
 /** Bridge do preload; a presença de `api` marca o modo vivo. */
@@ -111,7 +114,8 @@ export function useFleet(): UseFleet {
   i18nRef.current = i18n;
   const live = useMemo(() => {
     const deps = { dispatch, getBridge: () => window.enxame, getI18n: () => i18nRef.current };
-    return { goal: createGoalActions(deps), identity: createIdentityActions({ ...deps, confirm: (m: string) => window.confirm(m) }) };
+    const confirm = (m: string) => window.confirm(m);
+    return { goal: createGoalActions(deps), identity: createIdentityActions({ ...deps, confirm }), credentials: createCredentialActions({ ...deps, confirm }) };
   }, []);
 
   return { state, actions, bridged, ...live };

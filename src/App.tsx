@@ -11,7 +11,7 @@ import { liveRoles } from './live/merge';
 import { useLiveFleet } from './live/useLiveFleet';
 import { Cockpit } from './screens/Cockpit';
 import { Device } from './screens/Device';
-import { Identities } from './screens/Identities';
+import { Identities, type CredentialHandlers } from './screens/Identities';
 import { NewGoal } from './screens/NewGoal';
 import { Providers } from './screens/Providers';
 import { Report } from './screens/Report';
@@ -34,7 +34,7 @@ const SHOW_COST = true;
 const DEMO_PAST = PAST_GOALS.map((g) => ({ ...g, key: g.text }));
 
 export function App() {
-  const { state, actions, bridged, goal, identity } = useFleet();
+  const { state, actions, bridged, goal, identity, credentials } = useFleet();
   const isMobile = useIsMobile();
   const { snap: live, frames, bus } = useLiveFleet();
   const i18n = useI18n();
@@ -43,6 +43,15 @@ export function App() {
   const view = useMemo(() => buildFleetView(state, live, frames, bridged, i18n), [state, live, frames, bridged, i18n]);
   const { isLive, tiles, fleetSize } = view;
   const sel = tiles.length ? selectSelected(tiles, state.sel) : undefined;
+
+  // Estável: a tela recarrega o status num efeito que depende desta referência.
+  const credHandlers = useMemo<CredentialHandlers>(() => ({
+    load: () => void credentials.load(),
+    open: (id) => credentials.prepare(id),
+    save: (id, u, p) => void credentials.save(id, u, p),
+    forget: (id, name) => void credentials.forget(id, name),
+    login: (id) => void credentials.login(id),
+  }), [credentials]);
 
   const onRowAction = (r: IdRow, a: RowAction) => {
     if (a.kind === 'open' && a.index !== undefined && a.index >= 0) { actions.openDevice(a.index); return; }
@@ -130,13 +139,16 @@ export function App() {
       case 'ids':
         return (
           <Identities
-            rows={isLive ? selectLiveIdRows(live?.identities ?? [], state.requests, Date.now(), i18n) : selectIdRows(state, fleetSize, i18n)}
+            rows={isLive
+              ? selectLiveIdRows(live?.identities ?? [], state.requests, Date.now(), i18n, { status: state.credentials, results: state.loginResults })
+              : selectIdRows(state, fleetSize, i18n)}
             isMobile={isMobile}
             provisionReq={requestOf(state, 'provision')}
             onProvision={(pin) => (isLive ? void identity.provision(pin) : actions.provision())}
             onAction={onRowAction}
             onLoginDone={(id, handle) => void identity.loginDone(id, handle)}
             onRegisterPin={(id, pin) => void identity.registerPin(id, pin)}
+            creds={isLive ? credHandlers : undefined}
           />
         );
       case 'prov': {

@@ -15,6 +15,9 @@ export interface ApiDeps {
   readonly getI18n?: () => I18n;
 }
 
+/** `ApiDeps` com outra fatia da bridge (ex.: credenciais). */
+export type TrackDeps<B> = Omit<ApiDeps, 'getBridge'> & { readonly getBridge: () => B | undefined };
+
 export type Outcome<T> = { readonly ok: true; readonly value: T } | { readonly ok: false };
 
 /** Texto em português; na tela sai no idioma de `getI18n` (chave `identities.err.noDaemon`). */
@@ -26,8 +29,8 @@ const toMessage = (e: unknown) => (e instanceof Error ? bridgeMessage(e) : Strin
  * Roda uma chamada ao daemon sob `key`: ocupado → ok, ou erro legível no estado.
  * `run` recebe a bridge; sem bridge (ou sem o método) o erro "daemon não conectado" aparece na tela.
  */
-export async function track<T>(
-  { dispatch, getBridge, getI18n }: ApiDeps, key: string, run: (b: ApiBridge) => Promise<T> | undefined,
+export async function track<T, B = ApiBridge>(
+  { dispatch, getBridge, getI18n }: TrackDeps<B>, key: string, run: (b: B) => Promise<T> | undefined,
 ): Promise<Outcome<T>> {
   const bridge = getBridge();
   const p = bridge ? run(bridge) : undefined;

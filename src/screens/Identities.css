@@ -13,6 +13,7 @@
 .idrow__name { font-weight: var(--weight-medium); font-size: 17px; }
 .idrow__handle { font-size: 13px; }
 .idrow__version { font-size: 13px; }
+.idrow__cred { font-size: 12px; overflow-wrap: anywhere; }
 .idrow__disk { display: flex; flex-direction: column; gap: 5px; }
 .idrow__disk-label { font-size: 13px; }
 .idrow__ports { font-family: var(--font-mono); font-size: 12px; line-height: 17px; }
