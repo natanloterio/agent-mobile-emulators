@@ -124,6 +124,7 @@ const missions = createMissionRunner({
   db, isKilled: () => server.isKilled(), onChange: () => server.broadcast(),
   plan: (input) => planNext(input, { providers: readProviderConfig(db), apiKey: env.anthropicApiKey, ollama }),
   readScreen: (identity) => readScreenOnce(db, identity, { ensureReady: (d, i) => ensureIdentityReady(d, i, { adb }) }),
+  mask: async (missionId) => createSecretMask(await loadMissionSecrets(db, vault, missionId)).mask,
   runSubtask: async (j) => {
     const mask = createSecretMask(await loadMissionSecrets(db, vault, j.missionId));
     const r = await runTask({

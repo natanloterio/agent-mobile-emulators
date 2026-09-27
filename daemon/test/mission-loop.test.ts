@@ -6,6 +6,7 @@ import { setTaskState } from '../src/db/tasks.js';
 import { runMission, type MissionDeps, type SubtaskJob } from '../src/mission/loop.js';
 import type { PlannerDecision, PlannerInput } from '../src/mission/planner.js';
 import { parseScreen } from '../src/screen/parse.js';
+import { createSecretMask } from '../src/worker/mission-tools.js';
 
 const row = { id: 'conta2', name: 'conta2', handle: 'sem conta', avdName: 'x', serial: 's', consolePort: 5556, mcpHostPort: 8081, mcpToken: 't', deviceSlug: 'conta2', appPackage: 'com.instagram.android', appVersionName: '1', state: 'idle' as const };
 const SCREEN = parseScreen('screen:1080x2400 density:420 orientation:portrait\n--- window:1 type:APPLICATION pkg:com.android.chrome title:x layer:0 focused:true ---\nnode_id\tclass\ttext\tdesc\tres_id\tbounds\tflags\nnode_1\tTextView\tCriar conta\t-\t-\t0,0,10,10\ton,ena\n');
@@ -28,6 +29,7 @@ function harness(decisions: readonly PlannerDecision[], steps: readonly Step[] =
       return { humanReason: st === 'needs-human' ? 'captcha no cadastro' : null, summary: st === 'interrupted' ? 'MCP caiu' : '' };
     },
     readScreen: async () => SCREEN,
+    mask: async () => (t: string) => t,
     promote: async (m) => { promoted.push(m); },
   };
   return { db, id, deps, inputs, jobs, promoted };
@@ -107,5 +109,36 @@ describe('runMission', () => {
     expect(getMission(h.db, h.id)?.humanReason).toContain('restauração falhou');
     expect(getIdentity(h.db, 'conta2')).toMatchObject({ state: 'needs-human', lastError: 'restauração falhou' });
     expect(h.inputs).toHaveLength(0);
+  });
+  it('segredo na tela nunca chega ao planejador; eco do planejador é mascarado antes de gravar', async () => {
+    const pwd = 'Xy7!senhaForte2026';
+    const screenWithPwd = parseScreen(`screen:1080x2400 density:420 orientation:portrait\n--- window:1 type:APPLICATION pkg:com.android.chrome title:x layer:0 focused:true ---\nnode_id\tclass\ttext\tdesc\tres_id\tbounds\tflags\nnode_1\tEditText\t${pwd}\t-\t-\t0,0,10,10\ton,ena\n`);
+    const h = harness([{ kind: 'next', objective: `confirmar a senha ${pwd}`, successCriteria: `campo com ${pwd}`, rationale: pwd }, { kind: 'human', reason: `digite ${pwd}` }]);
+    const r = await runMission(h.id, { ...h.deps, readScreen: async () => screenWithPwd, mask: async () => createSecretMask([pwd]).mask });
+    expect(r).toBe('awaiting-human');
+    expect(h.inputs[0].screen).toContain('•••');
+    expect(JSON.stringify(h.inputs)).not.toContain(pwd);
+    expect(listSubtasks(h.db, h.id)[0]).toMatchObject({ objective: 'confirmar a senha •••' });
+    expect(h.jobs[0].instruction).not.toContain(pwd);
+    expect(JSON.stringify(h.db.prepare('select * from task').all())).not.toContain(pwd);
+    expect(getMission(h.db, h.id)?.humanReason).toBe('digite •••');
+    expect(getIdentity(h.db, 'conta2')?.lastError).toBe('digite •••');
+  });
+  it('cofre indisponível ao montar a máscara → paused "cofre: …" sem chamar o planejador', async () => {
+    const h = harness([next('x')]);
+    const r = await runMission(h.id, { ...h.deps, mask: async () => { throw new Error('chaveiro travado'); } });
+    expect(r).toBe('paused');
+    expect(getMission(h.db, h.id)?.humanReason).toBe('cofre: chaveiro travado');
+    expect(h.inputs).toHaveLength(0);
+  });
+  it('kill switch durante o planejamento → paused sem criar subtarefa', async () => {
+    let planned = false;
+    const h = harness([next('x')], [], { killed: () => planned });
+    const plan = h.deps.plan;
+    const r = await runMission(h.id, { ...h.deps, plan: async (i) => { const out = await plan(i); planned = true; return out; } });
+    expect(r).toBe('paused');
+    expect(getMission(h.db, h.id)?.humanReason).toBe('kill switch');
+    expect(listSubtasks(h.db, h.id)).toEqual([]);
+    expect(h.jobs).toHaveLength(0);
   });
 });

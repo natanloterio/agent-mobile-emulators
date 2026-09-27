@@ -22,6 +22,8 @@ export interface MissionDeps {
   /** Lê a tela atual; lança se o device não responde. */
   readonly readScreen: (identity: IdentityRow) => Promise<ScreenState>;
   readonly promote: (missionId: string) => Promise<unknown>;
+  /** Máscara dos segredos já guardados da missão (lê o cofre); lança VaultError se o cofre não abre. */
+  readonly mask: (missionId: string) => Promise<(s: string) => string>;
   readonly onChange?: () => void;
 }
 
@@ -65,6 +67,13 @@ function leftRunning(d: MissionDeps, m: MissionRow): MissionState | null {
   return cur?.state ?? 'abandoned';
 }
 
+/** Texto do planejador pode ecoar um segredo que estava na tela: mascarado antes de virar subtarefa/motivo. */
+function maskDecision(dec: PlannerDecision, mask: (s: string) => string): PlannerDecision {
+  if (dec.kind === 'next') return { ...dec, objective: mask(dec.objective), successCriteria: mask(dec.successCriteria), rationale: mask(dec.rationale) };
+  if (dec.kind === 'done') return { ...dec, summary: mask(dec.summary) };
+  return { ...dec, reason: mask(dec.reason) };
+}
+
 const taskState = (db: DatabaseSync, taskId: string) => (db.prepare('select state from task where id=?').get(taskId) as { state: string } | undefined)?.state ?? 'failed';
 
 /** Um ciclo: tela → planejador → executor → resultado. Repete até a missão sair de `running` (spec missões §O loop). */
@@ -82,16 +91,23 @@ export async function runMission(missionId: string, d: MissionDeps): Promise<Mis
     try { screen = await d.readScreen(identity); }
     catch (e) { return pause(d, m, `device indisponível: ${msg(e)}`); }
 
+    let mask: (s: string) => string;
+    try { mask = await d.mask(m.id); }
+    catch (e) { return pause(d, m, `cofre: ${msg(e)}`); }
+
     let decision: PlannerDecision;
     try {
       const r = await d.plan({
         missionText: m.text, identity: { name: identity.name, handle: identity.handle, appPackage: identity.appPackage },
-        memory: listMemory(d.db, m.id), subtasks: listSubtasks(d.db, m.id), screen: summarizeScreen(screen), lang: asLang(m.lang),
+        memory: listMemory(d.db, m.id), subtasks: listSubtasks(d.db, m.id), screen: mask(summarizeScreen(screen)), lang: asLang(m.lang),
       });
       addMissionCost(d.db, m.id, r.costUsd);
-      decision = r.decision;
+      decision = maskDecision(r.decision, mask);
     } catch (e) { return pause(d, m, `planejador: ${msg(e)}`); }
     const moved = leftRunning(d, m); if (moved) return moved;
+    // Kill switch/pausa/controle chegou durante o planejamento: não abre subtarefa.
+    const stopNow = stopReason(d, getIdentity(d.db, m.identityId));
+    if (stopNow) return pause(d, m, stopNow);
 
     if (decision.kind === 'done') {
       setMissionState(d.db, m.id, 'done');
