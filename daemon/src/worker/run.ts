@@ -259,7 +259,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       onScreen: (s) => {
         lastScreen = s;
         const b = s ? (mission ? detectHumanCheck(s) : detectPlatformBlock(s) ?? detectLoggedOut(s)) : null;
-        if (b) halt = { kind: 'platform-block', text: b };
+        if (b) halt = { kind: 'platform-block', text: mission ? mission.mask.mask(b) : b }; // o texto do nó pode ter um segredo
       },
       onHalt: (h) => { halt = h; },
     });

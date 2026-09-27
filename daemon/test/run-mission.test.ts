@@ -52,11 +52,11 @@ function scripted(script: readonly (readonly [string, unknown])[]) {
   return { generate, seen, opts };
 }
 
-function setup(vaultIn?: Vault) {
+function setup(vaultIn?: Vault, known: readonly string[] = []) {
   const db = openDb(':memory:'); upsertIdentity(db, row);
   const missionId = createMission(db, 'conta2', 'missão', 'pt');
   const taskId = addSubtask(db, missionId, 'cadastrar', 'conta criada');
-  const vault = vaultIn ?? memVault(); const mask = createSecretMask();
+  const vault = vaultIn ?? memVault(); const mask = createSecretMask(known);
   const run = (deps: RunTaskDeps, stepBudget = 60) => runTask({
     db, identity: row, goalText: 'missão', goalId: missionId, taskId, instruction: 'Objetivo: cadastrar', apiKey: 'k',
     isKilled: () => false, onStep: () => {}, providers: PROVIDERS, stepBudget, mission: { missionId, vault, mask },
@@ -151,5 +151,12 @@ describe('runTask em modo missão', () => {
     await s.run({ connect: mcp.connect, generate: g.generate });
     expect(taskState(s.db, s.taskId)).toBe('interrupted');
     expect(mcp.typed).toEqual([]);
+  });
+  it('motivo da verificação humana passa pela máscara de segredos', async () => {
+    const s = setup(undefined, ['Segr3do!Forte']);
+    const mcp = fakeMcp({ pkg: 'com.android.chrome', labels: ["I'm not a robot Segr3do!Forte"] });
+    const r = await s.run({ connect: mcp.connect, generate: scripted([[`${P}get_screen_state`, {}]]).generate });
+    expect(r.humanReason).toMatch(/not a robot •••/);
+    expect(JSON.stringify(s.db.prepare('select * from task').all())).not.toContain('Segr3do!Forte');
   });
 });
