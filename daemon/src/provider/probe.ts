@@ -38,7 +38,7 @@ export async function testProvider(db: DatabaseSync, row: ProviderRow, identity:
   let client: Awaited<ReturnType<typeof connect>> | null = null;
   try {
     let warning: string | null = null;
-    if (row.mode === 'local') { const st = await ollama.ensure(row.endpoint, row.model); if (!st.spawnedByUs) warning = EXTERNAL_WARNING; }
+    if (row.mode === 'local') { const st = await ollama.ensure(row.endpoint, row.model, row.runtime); if (!st.spawnedByUs) warning = EXTERNAL_WARNING; }
     const model = deps.model ?? build(row, env);
     client = await connect(`http://127.0.0.1:${identity.mcpHostPort}/mcp`, identity.mcpToken);
     const all = await client.tools();

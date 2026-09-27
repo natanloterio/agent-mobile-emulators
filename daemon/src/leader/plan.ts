@@ -19,7 +19,7 @@ export interface PlanDeps {
   readonly generate?: typeof generateText;
   readonly model?: LanguageModel;
   readonly buildModel?: typeof defaultBuildModel;
-  readonly ollama?: { ensure(endpoint: string, model: string): Promise<unknown> };
+  readonly ollama?: { ensure(endpoint: string, model: string, runtime?: 'ollama' | 'lmstudio' | null): Promise<unknown> };
   readonly stepBudget?: number; readonly staggerMs?: number;
 }
 
@@ -66,7 +66,7 @@ function leaderPrompt(text: string, fleet: readonly Readiness[]): string {
 async function llmDecision(text: string, fleet: readonly Readiness[], cfg: ProviderConfig, d: PlanDeps, lang: Lang): Promise<{ decision: Decision; costUsd: number }> {
   const row = cfg.lider;
   // Papel local: o Ollama tem de estar de pé antes da chamada, como no worker (run.ts).
-  if (row.mode === 'local') await (d.ollama ?? createOllamaSupervisor()).ensure(row.endpoint, row.model);
+  if (row.mode === 'local') await (d.ollama ?? createOllamaSupervisor()).ensure(row.endpoint, row.model, row.runtime);
   const model = d.model ?? (d.buildModel ?? defaultBuildModel)(row, { anthropicApiKey: d.apiKey });
   const call = () => (d.generate ?? generateText)({ model, instructions: leaderInstructions(lang), prompt: leaderPrompt(text, fleet), output: Output.object({ schema: LeaderOut, name: 'plano' }) });
   // Modelo local às vezes escapa da gramática e responde prosa (gpt-oss:20b, ~1 em 3 medido): uma nova tentativa antes da regra.

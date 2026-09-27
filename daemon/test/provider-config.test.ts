@@ -17,7 +17,7 @@ describe('provider_config', () => {
   it('updateProvider aplica patch, endpoint default do local, e valida', () => {
     const db = openDb(':memory:');
     const w = updateProvider(db, 'worker', { mode: 'local', model: 'qwen3.5:27b' });
-    expect(w).toEqual({ role: 'worker', mode: 'local', model: 'qwen3.5:27b', endpoint: LOCAL_ENDPOINT_DEFAULT });
+    expect(w).toEqual({ role: 'worker', mode: 'local', model: 'qwen3.5:27b', endpoint: LOCAL_ENDPOINT_DEFAULT, runtime: 'ollama' });
     expect(readProviderConfig(db).worker.model).toBe('qwen3.5:27b');
     expect(updateProvider(db, 'worker', { mode: 'nuvem' }).endpoint).toBe('anthropic');
     expect(() => updateProvider(db, 'worker', { mode: 'x' } as never)).toThrow();

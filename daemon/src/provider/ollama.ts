@@ -31,7 +31,8 @@ export interface OllamaDeps {
 }
 export interface OllamaStatus { readonly running: boolean; readonly spawnedByUs: boolean; readonly adopted: boolean; readonly pid: number | null; readonly models: readonly string[] }
 export interface OllamaSupervisor {
-  ensure(endpoint: string, model: string): Promise<OllamaStatus>;
+  /** `runtime` é ignorado aqui; existe para o despacho de runtimes locais (provider/runtimes/local.ts). */
+  ensure(endpoint: string, model: string, runtime?: 'ollama' | 'lmstudio' | null): Promise<OllamaStatus>;
   unload(endpoint: string, model: string): Promise<void>;
   stop(): void;
   status(): OllamaStatus | null;

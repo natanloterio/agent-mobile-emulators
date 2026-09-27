@@ -22,6 +22,8 @@ const COLUMNS: readonly { table: string; column: string; ddl: string }[] = [
   { table: 'identity', column: 'account_cleared_at', ddl: 'text' },
   // PIN do bloqueio de tela da identidade: o daemon destrava sozinho após boot/restore/tela apagada.
   { table: 'identity', column: 'lock_pin', ddl: 'text' },
+  // Runtime local do papel (Ollama ou LM Studio); null na nuvem.
+  { table: 'provider_config', column: 'runtime', ddl: 'text' },
 ];
 
 export function applyMigrations(db: DatabaseSync): void {

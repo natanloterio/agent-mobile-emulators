@@ -223,3 +223,18 @@ describe('ws — quadros e vídeo (incremento 4)', () => {
     expect((await collect(ws, 1))[0].type).toBe('snapshot'); ws.close();
   });
 });
+
+describe('GET /providers/models com runtimes locais (integrador)', () => {
+  it('papel local: ids do runtime atual, erro dele, runtimes sem a lista e entries de todos', async () => {
+    const db = openDb(':memory:');
+    const listLocal = async () => [
+      { kind: 'ollama' as const, label: 'Ollama', endpoint: 'http://127.0.0.1:11434/v1', installed: true, running: false, error: 'Ollama parado', models: [{ id: 'gpt-oss:20b', runtime: 'ollama' as const, label: 'gpt-oss:20b', sizeBytes: 13, loaded: null, toolUse: null }] },
+      { kind: 'lmstudio' as const, label: 'LM Studio', endpoint: 'http://127.0.0.1:1234/v1', installed: true, running: true, error: null, models: [{ id: 'g', runtime: 'lmstudio' as const, label: 'G', sizeBytes: 7, loaded: false, toolUse: true }] },
+    ];
+    const s = await startServer({ db, port: 0, token: 'seg', onGoal: async () => ({ goalId: 'g', done: Promise.resolve() }) as never, onKill: () => {}, onProviderTest: async () => { throw new Error('n/a'); }, listLocal }); stop = s.close;
+    const r = await (await fetch(`http://127.0.0.1:${s.port}/providers/models?role=worker`, { headers: { authorization: 'Bearer seg' } })).json() as Record<string, unknown>;
+    expect(r).toMatchObject({ source: 'local', models: ['gpt-oss:20b'], error: 'Ollama parado' });
+    expect((r.runtimes as { kind: string; models?: unknown }[]).map((x) => [x.kind, 'models' in x])).toEqual([['ollama', false], ['lmstudio', false]]);
+    expect((r.entries as { id: string }[]).map((e) => e.id)).toEqual(['gpt-oss:20b', 'g']);
+  });
+});

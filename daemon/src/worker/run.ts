@@ -201,7 +201,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
   let client: Awaited<ReturnType<typeof deps.connect>> | null = null;
   try {
     // Provedor local: o Ollama tem de estar de pé antes de abrir a conversa (falha aqui é infra-local, não do device).
-    if (cfg.worker.mode === 'local') await deps.ollama.ensure(cfg.worker.endpoint, cfg.worker.model);
+    if (cfg.worker.mode === 'local') await deps.ollama.ensure(cfg.worker.endpoint, cfg.worker.model, cfg.worker.runtime);
     const model = depsIn.model ?? deps.buildModel(cfg.worker, { anthropicApiKey: o.apiKey });
 
     client = await deps.connect(`http://127.0.0.1:${identity.mcpHostPort}/mcp`, identity.mcpToken);

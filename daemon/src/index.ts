@@ -20,6 +20,8 @@ import { leasePorts } from './fleet/ports.js';
 import { createHostMetrics } from './host/metrics.js';
 import { readProviderConfig } from './provider/config.js';
 import { createOllamaSupervisor } from './provider/ollama.js';
+import { createLmStudio } from './provider/runtimes/lmstudio.js';
+import { createLocalRuntimes } from './provider/runtimes/local.js';
 import { recordProviderTest, testProvider } from './provider/probe.js';
 import { startServer } from './server/api.js';
 import { controlRoutes } from './server/routes-control.js';
@@ -39,7 +41,9 @@ if (reconciled.tasks + reconciled.goals + reconciled.identities > 0) console.log
 const adb = createAdb();
 // Supervisor do Ollama: só mata o processo que ele mesmo subiu (spec §4.3).
 // Single-flight: workers do enxame pedem o Ollama quase juntos; só um `ollama serve` sobe.
-const ollama = singleFlightOllama(createOllamaSupervisor());
+// Runtimes locais (Ollama e LM Studio) atrás da mesma cara; single-flight: workers pedem o runtime quase juntos.
+const localRuntimes = createLocalRuntimes({ ollama: createOllamaSupervisor(), lmstudio: createLmStudio() });
+const ollama = singleFlightOllama(localRuntimes);
 
 // Emuladores que o daemon subiu (boot pela UI); só esses morrem no SIGINT — nunca um aberto por fora (spec inc. 5 §2).
 const emulators = createEmulatorSupervisor();
@@ -103,6 +107,7 @@ const daemonToken = randomUUID();
 const server = await startServer({
   db, token: daemonToken, screen, video, port: process.env.ENXAME_PORT ? Number(process.env.ENXAME_PORT) : undefined, videoState: (id) => video.state(id),
   host: () => host.read(),
+  listLocal: (current) => localRuntimes.listAll(current),
   // Kill switch derruba o Ollama que é nosso (spec §4.3); /resume + próximo objetivo o sobem de novo.
   onKill: () => { ollama.stop(); server.broadcast(); },
   // Kill switch já é recusado na rota (409). Plano do cliente é re-sondado no start de cada identidade.

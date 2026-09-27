@@ -8,11 +8,11 @@ export function singleFlightOllama(sup: OllamaSupervisor): OllamaSupervisor {
   const inflight = new Map<string, ReturnType<OllamaSupervisor['ensure']>>();
   return {
     ...sup,
-    ensure: (endpoint, model) => {
-      const key = `${endpoint}|${model}`;
+    ensure: (endpoint, model, runtime) => {
+      const key = `${runtime ?? ''}|${endpoint}|${model}`;
       const cur = inflight.get(key);
       if (cur) return cur;
-      const p = sup.ensure(endpoint, model).finally(() => { inflight.delete(key); });
+      const p = sup.ensure(endpoint, model, runtime).finally(() => { inflight.delete(key); });
       inflight.set(key, p);
       return p;
     },

@@ -6,6 +6,8 @@ import { CLOUD_MODELS, ollamaBase, patchErrorMessage, ProviderPatch, readProvide
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import type { ScreenCapture } from '../device/screen.js';
 import type { VideoState, VideoStreams } from '../device/video.js';
+import type { LocalRuntimeKind } from '../provider/config.js';
+import type { RuntimeListing } from '../provider/runtimes/types.js';
 import { buildSnapshot, listGoals, type HostMetrics, type SnapshotSources } from './snapshot.js';
 import { attachWs } from './ws.js';
 
@@ -32,6 +34,8 @@ export interface ServerOpts {
   readonly host?: () => HostMetrics | null;
   /** Rotas de outras frentes (spec inc. 5 §3.2): avaliadas antes do 404, na ordem; `true` = tratou. */
   readonly routes?: readonly Route[];
+  /** Modelos baixados de todos os runtimes locais (spec runtimes-locais); ausente = só o Ollama pela API, como antes. */
+  readonly listLocal?: (current: { runtime?: LocalRuntimeKind | null; endpoint?: string }) => Promise<readonly RuntimeListing[]>;
 }
 
 export interface GoalStart { readonly goalId: string; readonly done: Promise<unknown> }
@@ -110,6 +114,14 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
         if (!isRole(role)) return send(res, 404, { error: 'papel desconhecido' });
         const cfg = readProviderConfig(o.db)[role];
         if (cfg.mode === 'nuvem') return send(res, 200, { source: 'anthropic', models: CLOUD_MODELS, error: null });
+        if (o.listLocal) {
+          const runtimes = await o.listLocal({ runtime: cfg.runtime, endpoint: cfg.endpoint });
+          const mine = runtimes.find((r) => r.kind === cfg.runtime) ?? runtimes[0];
+          return send(res, 200, {
+            source: 'local', models: mine?.models.map((m) => m.id) ?? [], error: mine?.error ?? null,
+            runtimes: runtimes.map(({ models: _m, ...r }) => r), entries: runtimes.flatMap((r) => r.models),
+          });
+        }
         const { models, error } = await listOllamaModels(fetchFn, ollamaBase(cfg.endpoint));
         return send(res, 200, { source: 'ollama', models, error });
       }
