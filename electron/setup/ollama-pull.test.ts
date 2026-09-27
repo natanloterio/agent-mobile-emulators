@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
-import { ndjsonLines, pullModel, pullProgress, type PullDeps } from './ollama-pull.js';
+import { ndjsonLines, pullModel, pullProgress, stopTemporaryOllama, type PullDeps } from './ollama-pull.js';
 
 const stream = (chunks: string[]) => new ReadableStream<Uint8Array>({
   start(c) { for (const ch of chunks) c.enqueue(new TextEncoder().encode(ch)); c.close(); },
@@ -56,6 +56,19 @@ describe('pullModel', () => {
     await pullModel('gpt-oss:20b', '/opt/ollama/bin/ollama', d, () => {});
     expect(d.spawned).toEqual(['/opt/ollama/bin/ollama']);
     expect(d.killedCount()).toBe(1);
+  });
+  it('stopTemporaryOllama derruba o serve temporário se o app fecha no meio do pull; sem pull, não faz nada', async () => {
+    let close: () => void = () => {};
+    const open = new ReadableStream<Uint8Array>({ start(c) { close = () => c.close(); } });
+    const d = deps({ alive: [false, true], pull: () => new Response(open) });
+    const pulling = pullModel('gpt-oss:20b', '/opt/ollama/bin/ollama', d, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    stopTemporaryOllama();
+    expect(d.killedCount()).toBe(1);
+    close();
+    await pulling;
+    stopTemporaryOllama();
+    expect(d.killedCount()).toBe(1); // já derrubado: nem o finally nem a segunda chamada matam de novo
   });
   it('erro de disco cheio no meio do pull vira disk-full e ainda derruba o serve', async () => {
     const d = deps({ alive: [false, true], pull: () => new Response(stream([

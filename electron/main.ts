@@ -15,6 +15,7 @@ import { testAnthropicKey } from './setup/anthropic-key.js';
 import { finishSetup } from './setup/finish.js';
 import { nodeHardwareDeps } from './setup/hardware.js';
 import { registerSetupIpc } from './setup/ipc.js';
+import { stopTemporaryOllama } from './setup/ollama-pull.js';
 import { resolveSetupPaths } from './setup/paths.js';
 import { nodeProbeDeps, probeSetup } from './setup/probe.js';
 import { createRunners, nodeRunnerDeps } from './setup/runners.js';
@@ -150,6 +151,9 @@ app.whenReady().then(() => {
     }),
   });
 });
+
+// Pull do modelo em andamento ao fechar: o `ollama serve` temporário do onboarding não pode ficar órfão.
+app.on('before-quit', () => stopTemporaryOllama());
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

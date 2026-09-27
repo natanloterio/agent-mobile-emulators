@@ -31,6 +31,16 @@ export async function* ndjsonLines(body: ReadableStream<Uint8Array>): AsyncGener
   if (buf.trim()) yield buf.trim();
 }
 
+/** `serve` temporário do pull em andamento; o main derruba no before-quit para não deixar órfão. */
+let temporary: Pick<ChildProcess, 'kill'> | null = null;
+
+/** Derruba o `serve` temporário, se houver (chamado no before-quit do Electron). */
+export function stopTemporaryOllama(): void {
+  const child = temporary;
+  temporary = null;
+  child?.kill('SIGTERM');
+}
+
 const alive = (fetchFn: typeof fetch) => fetchFn(`${BASE}/api/version`).then((r) => r.ok, () => false);
 
 /**
@@ -40,6 +50,7 @@ const alive = (fetchFn: typeof fetch) => fetchFn(`${BASE}/api/version`).then((r)
 async function withServer<T>(bin: string, d: PullDeps, fn: () => Promise<T>): Promise<T> {
   if (await alive(d.fetch)) return fn();
   const child = d.spawn(bin, ['serve'], { env: { ...process.env, OLLAMA_HOST: '127.0.0.1:11434' } });
+  temporary = child;
   let spawnErr: unknown = null;
   child.on('error', (e) => { spawnErr = e; });
   try {
@@ -50,7 +61,7 @@ async function withServer<T>(bin: string, d: PullDeps, fn: () => Promise<T>): Pr
     }
     throw new SetupError('process', 'o Ollama não respondeu em 20 s');
   } finally {
-    child.kill('SIGTERM');
+    if (temporary === child) stopTemporaryOllama();
   }
 }
 
