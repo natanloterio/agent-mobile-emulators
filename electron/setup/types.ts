@@ -1,8 +1,8 @@
 /** DTOs do onboarding trocados com o renderer. O renderer valida o mesmo formato em src/onboarding/schema.ts. */
-export type DepId = 'node' | 'sdk' | 'adb' | 'emu' | 'img' | 'kvm' | 'ollama' | 'keyring';
+export type DepId = 'sdk' | 'adb' | 'emu' | 'img' | 'kvm' | 'ollama' | 'keyring';
 export type DepState = 'ok' | 'todo' | 'user';
 /** O que a pessoa precisa fazer quando não dá para instalar sozinho. */
-export type UserFix = 'node-missing' | 'kvm-group' | 'kvm-bios' | 'keyring-locked';
+export type UserFix = 'kvm-group' | 'kvm-bios' | 'hvf-off' | 'whpx-off' | 'keyring-locked';
 export interface DepStatus {
   readonly id: DepId;
   readonly state: DepState;
@@ -15,7 +15,7 @@ export interface Hardware {
   readonly ramGiB: number;
   readonly threads: number;
   readonly cpuModel: string;
-  readonly gpu: { readonly name: string; readonly totalGiB: number } | null;
+  readonly gpu: { readonly name: string; readonly totalGiB: number; readonly unified: boolean } | null;
   readonly diskFreeGiB: number;
 }
 export interface SetupReport {
