@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { sdkPaths } from './device/sdk.js';
 
 const DATA_DIR = process.env.ENXAME_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'enxame');
 
@@ -13,6 +14,8 @@ export function pickBaseAvd(envBase: string | undefined, avdHome: string, exists
   if (envBase) return envBase;
   return exists(path.join(avdHome, `${GOLDEN_AVD}.avd`)) ? GOLDEN_AVD : 'mcp_test_playstore';
 }
+/** adb e emulator do Android SDK (`ANDROID_HOME`/`ANDROID_SDK_ROOT` ou o local padrão do SO). */
+const SDK = sdkPaths(process.env, process.platform, os.homedir());
 const AVD_HOME = process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd');
 
 /** Orçamento de passos de uma env var: `"0"` desliga (`null` = sem limite); inteiro positivo vale; ausente, vazio, NaN, negativo ou não inteiro caem no `fallback`. */
@@ -43,7 +46,7 @@ export const CONFIG = {
   daemonInfoPath: path.join(DATA_DIR, 'daemon.json'),
   /** Cofre de segredos do daemon (spec missões §Cofre); a chave fica no chaveiro do SO. */
   vaultPath: path.join(DATA_DIR, 'vault.json'),
-  adbPath: '/home/loterio/Android/Sdk/platform-tools/adb',
+  adbPath: SDK.adb,
   adbServerPort: 5038,
   mcpAppPackage: 'com.danielealbano.androidremotecontrolmcp.gms.debug',
   targetApp: { package: 'com.instagram.android', versionName: '448.0.0.52.84' },
@@ -63,7 +66,7 @@ export const CONFIG = {
     home: AVD_HOME,
     /** AVD dourado clonado no provisionamento; `ENXAME_AVD_BASE` troca sem rebuild (ex.: uma base sem conta e desligada). */
     base: pickBaseAvd(process.env.ENXAME_AVD_BASE, AVD_HOME),
-    emulatorPath: '/home/loterio/Android/Sdk/emulator/emulator',
+    emulatorPath: SDK.emulator,
     bootTimeoutMs: 180_000, diskCacheMs: 60_000, snapshotName: 'enxame',
   },
   /** Miniatura ao vivo (spec inc. 4): captura por identidade, só com alguém assistindo. */
