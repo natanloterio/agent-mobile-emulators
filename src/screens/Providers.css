@@ -12,8 +12,8 @@
 .role__test { border: 1px solid var(--color-dark); border-radius: var(--radius-control); padding: 14px; font-size: 17px; background: var(--color-dark); color: var(--color-white); }
 .role__test--green { background: var(--color-green); color: var(--color-black); }
 .role__result { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid currentColor; padding-top: 14px; }
-.role__result-row { display: flex; justify-content: space-between; font-size: 15px; }
-.role__result-row b { font-weight: var(--weight-medium); }
+.role__result-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 15px; }
+.role__result-row b { font-weight: var(--weight-medium); text-align: right; min-width: 0; overflow-wrap: anywhere; }
 
 .vram { gap: 18px; }
 .vram__stack { display: flex; height: 40px; border-radius: var(--radius-control); overflow: hidden; border: 1px solid var(--color-dark); font-size: 13px; }
