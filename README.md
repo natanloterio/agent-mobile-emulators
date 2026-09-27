@@ -166,6 +166,7 @@ A **mission** is a long goal for one identity, such as *"create an email account
 | `ENXAME_DEFAULT_PIN` | none | PIN given to new identities when you don't type one. 4–16 digits. |
 | `ENXAME_STEP_BUDGET` | `30` | Maximum agent steps per task. `0` disables the step budget (the task runs until it finishes, is paused or the kill switch is hit). |
 | `ENXAME_MISSION_STEP_BUDGET` | `60` | Maximum agent steps per mission subtask. `0` disables the step budget (the task runs until it finishes, is paused or the kill switch is hit). |
+| `ENXAME_LOCAL_CONTEXT` | `65536` | Context length for local models (Ollama and LM Studio). More context uses more VRAM. |
 | `ENXAME_DATA_DIR` | `~/.local/share/enxame` | Database, logs and `daemon.json`. |
 | `ENXAME_PORT` | `47800` | Daemon HTTP/WebSocket port (loopback only). |
 | `ENXAME_SCRCPY_PORT` | `27183` | First local port used for video streams. |

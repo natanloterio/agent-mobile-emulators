@@ -2,6 +2,7 @@ import { tool } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { CONFIG } from '../src/config.js';
 import { openDb } from '../src/db/open.js';
 import { upsertIdentity } from '../src/db/identities.js';
 import { createOllamaSupervisor } from '../src/provider/ollama.js';
@@ -43,6 +44,7 @@ describe('testProvider', () => {
     const model = new MockLanguageModelV4({ doGenerate: [screenCall('{}')] as never });
     const t = await testProvider(db, LOCAL, row, {}, { connect, model, ollama: external() });
     expect(t.warning).toMatch(/contexto desconhecido/);
+    expect(t.warning).toContain(`OLLAMA_CONTEXT_LENGTH ≥ ${CONFIG.local.contextLength}`);
   });
   it('Ollama sem o modelo → error infra-local com instrução de pull, gravado', async () => {
     const db = openDb(':memory:'); upsertIdentity(db, row);

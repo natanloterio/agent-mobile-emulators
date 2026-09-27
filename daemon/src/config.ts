@@ -23,6 +23,13 @@ export function stepBudgetFrom(raw: string | undefined, fallback: number): numbe
   return n === 0 ? null : n;
 }
 
+/** Contexto dos modelos locais via `ENXAME_LOCAL_CONTEXT`: inteiro ≥ 8192 vale; ausente, lixo ou menor cai no padrão 65536 (mais contexto usa mais VRAM). */
+export function localContextFrom(raw: string | undefined, fallback = 65536): number {
+  if (!raw) return fallback;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 8192 ? n : fallback;
+}
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** Resolve um arquivo de `daemon/vendor` tanto a partir de `daemon/src` (vitest) quanto de `dist-daemon` (build). */
 function resolveVendor(file: string): string {
@@ -45,6 +52,8 @@ export const CONFIG = {
   worker: { stepBudget: stepBudgetFrom(process.env.ENXAME_STEP_BUDGET, 30), keepScreens: 2, qualityFloor: 3 },
   /** Missões (spec missões): orçamento de passos por subtarefa; a missão em si não tem teto. `0` desliga o da subtarefa. */
   mission: { subtaskStepBudget: stepBudgetFrom(process.env.ENXAME_MISSION_STEP_BUDGET, 60) },
+  /** Contexto dos modelos locais (Ollama, LM Studio) via `ENXAME_LOCAL_CONTEXT` (spec local: contexto configurável). */
+  local: { contextLength: localContextFrom(process.env.ENXAME_LOCAL_CONTEXT) },
   /** Enxame (spec §4.3 Pacing, inc. 5 §2): starts escalonados com jitter, atraso entre passos e teto de ações/hora por identidade. */
   swarm: { staggerMs: 8000, jitterMs: 3000, stepDelayMs: 1500, stepJitterMs: 1000, maxActionsPerHour: 120 },
   /** Ciclo de vida (spec inc. 5 §2): snapshot mais velho que isto exige confirmação humana para restaurar. */

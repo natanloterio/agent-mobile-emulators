@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickBaseAvd, stepBudgetFrom } from '../src/config.js';
+import { localContextFrom, pickBaseAvd, stepBudgetFrom } from '../src/config.js';
 
 describe('pickBaseAvd', () => {
   it('env vence; senão a dourada se existir; senão o AVD da conta1', () => {
@@ -18,5 +18,16 @@ describe('stepBudgetFrom (ENXAME_STEP_BUDGET / ENXAME_MISSION_STEP_BUDGET)', () 
     expect(stepBudgetFrom('-3', 60)).toBe(60);
     expect(stepBudgetFrom('2.5', 60)).toBe(60);
     expect(stepBudgetFrom('', 60)).toBe(60);
+  });
+});
+
+describe('localContextFrom (ENXAME_LOCAL_CONTEXT)', () => {
+  it('ausente, lixo ou pequeno demais (<8192) caem no padrão 65536; inteiro ≥8192 vale', () => {
+    expect(localContextFrom(undefined)).toBe(65536);
+    expect(localContextFrom('')).toBe(65536);
+    expect(localContextFrom('abc')).toBe(65536);
+    expect(localContextFrom('4096')).toBe(65536);
+    expect(localContextFrom('131072')).toBe(131072);
+    expect(localContextFrom('8192')).toBe(8192);
   });
 });

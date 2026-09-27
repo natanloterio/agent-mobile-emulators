@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CONFIG } from '../src/config.js';
 import { createLmStudio, parseLmsLs } from '../src/provider/runtimes/lmstudio.js';
 
 const LS = `Waking up LM Studio service...\n[{"type":"llm","modelKey":"google/gemma-4-12b-qat","displayName":"Gemma 4 12B Qat","sizeBytes":7151066820,"trainedForToolUse":true},
@@ -8,12 +9,20 @@ const V0 = (state: Record<string, string>) => ({ data: Object.entries(state).map
 
 function fakes(o: { running?: boolean; loaded?: string[]; lms?: boolean; ctx?: number } = {}) {
   let running = o.running ?? true; const loaded = new Set(o.loaded ?? []); const calls: string[] = [];
+  // Contexto relatado por `lms ps` de cada modelo carregado; um `load --context-length N` atualiza (simula recarregar de verdade).
+  const ctxByModel = new Map<string, number>((o.loaded ?? []).map((m) => [m, o.ctx ?? CONFIG.local.contextLength]));
   const exec = async (_f: string, args: readonly string[]) => {
     calls.push(args.join(' '));
     if (args[0] === 'ls') return { stdout: LS, stderr: '', code: 0 };
     if (args[0] === 'server' && args[1] === 'start') { running = true; return { stdout: '', stderr: '', code: 0 }; }
-    if (args[0] === 'load') { loaded.add(args[1]); return { stdout: '', stderr: '', code: 0 }; }
-    if (args[0] === 'ps') return { stdout: JSON.stringify([...loaded].map((k) => ({ modelKey: k, identifier: k, contextLength: o.ctx ?? 32768 }))), stderr: '', code: 0 };
+    if (args[0] === 'load') {
+      loaded.add(args[1]);
+      const flag = args.indexOf('--context-length');
+      ctxByModel.set(args[1], flag >= 0 ? Number(args[flag + 1]) : (o.ctx ?? CONFIG.local.contextLength));
+      return { stdout: '', stderr: '', code: 0 };
+    }
+    if (args[0] === 'unload') { loaded.delete(args[1]); return { stdout: '', stderr: '', code: 0 }; }
+    if (args[0] === 'ps') return { stdout: JSON.stringify([...loaded].map((k) => ({ modelKey: k, identifier: k, contextLength: ctxByModel.get(k) ?? (o.ctx ?? CONFIG.local.contextLength) }))), stderr: '', code: 0 };
     return { stdout: '', stderr: '', code: 0 };
   };
   const fetch = (async (u: string) => {
@@ -50,11 +59,11 @@ describe('LM Studio', () => {
     const r = await createLmStudio({ exec: f.exec, fetch: f.fetch, lmsPath: null, sleep: async () => {} }).list('http://127.0.0.1:1234/v1');
     expect(r).toMatchObject({ installed: false, models: [] });
   });
-  it('ensure: sobe o servidor na porta do endpoint e carrega o modelo com contexto de 32k', async () => {
+  it('ensure: sobe o servidor na porta do endpoint e carrega o modelo com o contexto configurado', async () => {
     const f = fakes({ running: false });
     const lm = createLmStudio({ exec: f.exec, fetch: f.fetch, lmsPath: f.lmsPath, sleep: async () => {} });
     const st = await lm.ensure('http://127.0.0.1:1234/v1', 'google/gemma-4-12b-qat');
-    expect(f.calls).toEqual(expect.arrayContaining(['server start --port 1234', 'load google/gemma-4-12b-qat --context-length 32768 -y']));
+    expect(f.calls).toEqual(expect.arrayContaining(['server start --port 1234', `load google/gemma-4-12b-qat --context-length ${CONFIG.local.contextLength} -y`]));
     expect(st).toMatchObject({ running: true, spawnedByUs: true });
   });
   it('ensure: modelo que não está baixado é erro claro; já carregado não recarrega', async () => {
@@ -72,11 +81,23 @@ describe('LM Studio', () => {
 });
 
 describe('contexto do modelo carregado (integrador)', () => {
-  it('32k ou mais: sem aviso; menos: aviso dizendo como recarregar', async () => {
+  it('contexto igual ou maior que o configurado: sem aviso, sem recarregar', async () => {
     const ok = fakes({ loaded: ['llama-3.2-3b-instruct'] });
-    expect((await createLmStudio({ exec: ok.exec, fetch: ok.fetch, lmsPath: ok.lmsPath, sleep: async () => {} }).ensure('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct')).contextWarning).toBeNull();
+    const st = await createLmStudio({ exec: ok.exec, fetch: ok.fetch, lmsPath: ok.lmsPath, sleep: async () => {} }).ensure('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct');
+    expect(st.contextWarning).toBeNull();
+    expect(ok.calls.some((c) => c.startsWith('load') || c.startsWith('unload'))).toBe(false);
+  });
+  it('contexto carregado menor que o configurado: recarrega com lms unload + lms load --context-length e o aviso some', async () => {
     const low = fakes({ loaded: ['llama-3.2-3b-instruct'], ctx: 4096 });
-    expect((await createLmStudio({ exec: low.exec, fetch: low.fetch, lmsPath: low.lmsPath, sleep: async () => {} }).ensure('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct')).contextWarning).toMatch(/4096.*--context-length 32768/);
+    const st = await createLmStudio({ exec: low.exec, fetch: low.fetch, lmsPath: low.lmsPath, sleep: async () => {} }).ensure('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct');
+    expect(low.calls).toEqual(expect.arrayContaining(['unload llama-3.2-3b-instruct', `load llama-3.2-3b-instruct --context-length ${CONFIG.local.contextLength} -y`]));
+    expect(st.contextWarning).toBeNull();
+  });
+  it('sem o CLI lms: aviso de contexto desconhecido, sem tentar recarregar', async () => {
+    const noCli = fakes({ loaded: ['llama-3.2-3b-instruct'], ctx: 4096 });
+    const st = await createLmStudio({ exec: noCli.exec, fetch: noCli.fetch, lmsPath: null, sleep: async () => {} }).ensure('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct');
+    expect(st.contextWarning).toMatch(/sem o CLI lms/);
+    expect(noCli.calls.some((c) => c.startsWith('load') || c.startsWith('unload'))).toBe(false);
   });
 });
 
