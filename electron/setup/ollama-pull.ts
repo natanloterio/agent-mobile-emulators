@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { z } from 'zod';
 import { SetupError, toSetupError } from './errors.js';
 
 const BASE = 'http://127.0.0.1:11434';
@@ -53,7 +54,14 @@ async function withServer<T>(bin: string, d: PullDeps, fn: () => Promise<T>): Pr
   }
 }
 
-interface PullLine { readonly status?: string; readonly digest?: string; readonly total?: number; readonly completed?: number; readonly error?: string }
+const PullLineSchema = z.object({
+  status: z.string().optional(),
+  digest: z.string().optional(),
+  total: z.number().optional(),
+  completed: z.number().optional(),
+  error: z.string().optional(),
+});
+type PullLine = z.infer<typeof PullLineSchema>;
 
 export async function pullModel(model: string, bin: string, d: PullDeps, progress: (doneMb: number, totalMb: number) => void): Promise<void> {
   await withServer(bin, d, async () => {
@@ -64,8 +72,11 @@ export async function pullModel(model: string, bin: string, d: PullDeps, progres
     if (!res.ok || !res.body) throw new SetupError('network', `o Ollama respondeu ${res.status} ao baixar ${model}`);
     let layers: ReadonlyMap<string, Layer> = new Map();
     for await (const line of ndjsonLines(res.body)) {
-      let msg: PullLine;
-      try { msg = JSON.parse(line) as PullLine; } catch { continue; }
+      let parsed: unknown;
+      try { parsed = JSON.parse(line); } catch { continue; }
+      const result = PullLineSchema.safeParse(parsed);
+      if (!result.success) continue;
+      const msg = result.data;
       if (msg.error) throw toSetupError(new Error(msg.error));
       if (msg.digest && typeof msg.total === 'number') {
         layers = new Map(layers).set(msg.digest, { total: msg.total, completed: msg.completed ?? 0 });

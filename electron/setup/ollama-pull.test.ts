@@ -69,4 +69,16 @@ describe('pullModel', () => {
     const d = deps({ alive: [true], pull: () => new Response(stream(['{"error":"pull model manifest: file does not exist"}\n'])) });
     await expect(pullModel('naoexiste:1b', 'ollama', d, () => {})).rejects.toMatchObject({ kind: 'process', message: expect.stringContaining('file does not exist') });
   });
+  it('linhas com tipos errados são ignoradas; continua processando linhas válidas', async () => {
+    const d = deps({ alive: [true], pull: () => new Response(stream([
+      '{"status":"pulling"}\n',
+      '{"digest":"sha256:abc","total":"lots"}\n',
+      '{"digest":"sha256:abc","total":1000000000,"completed":500000000}\n',
+      '{"status":"done"}\n',
+    ])) });
+    const seen: [number, number][] = [];
+    await pullModel('model:tag', 'ollama', d, (done, total) => seen.push([done, total]));
+    expect(d.logs).toEqual(['pulling', 'done']);
+    expect(seen).toEqual([[500, 1000]]);
+  });
 });
