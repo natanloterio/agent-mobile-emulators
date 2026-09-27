@@ -49,9 +49,10 @@ export async function readHardware(home: string, d: HardwareDeps, platform: Plat
   };
 }
 
-export function execOrNull(cmd: string, args: readonly string[]): Promise<string | null> {
+/** stdout+stderr, ou null se falhou; `timeoutMs` padrão 5 s. Sem janela de console no Windows. */
+export function execOrNull(cmd: string, args: readonly string[], timeoutMs = 5000): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile(cmd, [...args], { timeout: 5000 }, (err, stdout, stderr) => resolve(err ? null : `${stdout}\n${stderr}`));
+    execFile(cmd, [...args], { timeout: timeoutMs, windowsHide: true }, (err, stdout, stderr) => resolve(err ? null : `${stdout}\n${stderr}`));
   });
 }
 

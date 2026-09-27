@@ -56,7 +56,7 @@ export async function classifyGpu(apps: readonly GpuApp[], total: { usedMiB: num
 }
 
 const run = (file: string, args: readonly string[], timeout = 5000) => new Promise<string>((resolve, reject) => {
-  execFile(file, [...args], { timeout, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
+  execFile(file, [...args], { timeout, maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
 });
 
 /** Manifests do Ollama: blob da camada do modelo → `nome:tag` (mesma convenção de provider/runtimes/ollama-models). */

@@ -123,7 +123,7 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
   const closeLog = deps.closeLog ?? ((fd: unknown) => { try { closeSync(fd as number); } catch { /* já fechado */ } });
   const findProcesses = deps.findProcesses ?? defaultFindProcesses;
   const killFn = deps.kill ?? ((pid: number, sig: NodeJS.Signals) => { try { process.kill(pid, sig); } catch { /* já morreu */ } });
-  const spawnFn = deps.spawn ?? ((cmd, args, opts) => nodeSpawn(cmd, args, { env: opts.env, stdio: opts.stdio as never, detached: false }) as unknown as ChildLike);
+  const spawnFn = deps.spawn ?? ((cmd, args, opts) => nodeSpawn(cmd, args, { env: opts.env, stdio: opts.stdio as never, detached: false, windowsHide: true }) as unknown as ChildLike);
   const resolveBin = deps.resolveBin ?? (() => ollamaBinFrom(readSetupPaths(CONFIG.setupPath), process.env));
   const getParallel = deps.parallel ?? (() => 1);
   let child: ChildLike | null = null;

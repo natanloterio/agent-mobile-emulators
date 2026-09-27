@@ -52,4 +52,11 @@ describe('runProcess', () => {
     await runProcess('cmd', ['/d', '/s', '/c', 'x'], { verbatim: true });
     expect(spawnMock).toHaveBeenCalledWith('cmd', ['/d', '/s', '/c', 'x'], expect.objectContaining({ windowsVerbatimArguments: true }));
   });
+  it('spawn padrão esconde a janela de console no Windows', async () => {
+    const { child } = fakeChild(({ close }) => setTimeout(() => close(0), 5));
+    const spawnMock = vi.mocked(spawn);
+    spawnMock.mockReturnValue(child);
+    await runProcess('tar', ['-xf', 'a.tar']);
+    expect(spawnMock).toHaveBeenLastCalledWith('tar', ['-xf', 'a.tar'], expect.objectContaining({ windowsHide: true }));
+  });
 });

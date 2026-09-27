@@ -96,7 +96,7 @@ function gpuChanged(a: GpuBreakdown | null, b: GpuBreakdown | null): boolean {
 }
 
 const defaultNvidiaSmi = () => new Promise<string>((resolve, reject) => {
-  execFile('nvidia-smi', ['--query-gpu=memory.used,memory.total', '--format=csv,noheader,nounits'], { timeout: 3000 },
+  execFile('nvidia-smi', ['--query-gpu=memory.used,memory.total', '--format=csv,noheader,nounits'], { timeout: 3000, windowsHide: true },
     (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
 });
 

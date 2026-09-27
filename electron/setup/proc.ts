@@ -13,7 +13,7 @@ export interface ProcOpts {
 }
 
 const defaultSpawn: SpawnFn = (cmd, args, opts) =>
-  spawn(cmd, [...args], { env: opts.env, stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: opts.verbatim });
+  spawn(cmd, [...args], { env: opts.env, stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: opts.verbatim, windowsHide: true });
 
 /** Roda até o fim; cada linha (separada por \r ou \n) vai para `onLine`. Código ≠ 0 rejeita com as últimas 5 linhas. */
 export function runProcess(cmd: string, args: readonly string[], o: ProcOpts = {}, spawnFn: SpawnFn = defaultSpawn): Promise<void> {
