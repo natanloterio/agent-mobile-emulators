@@ -5,6 +5,7 @@ import { createInitialState, fleetReducer, type FleetState } from './fleetReduce
 import { createGoalActions, type GoalActions } from './goalActions';
 import { createIdentityActions, type IdentityActions } from './identityActions';
 import { createProviderActions } from './providerActions';
+import type { ProviderPatch } from '../live/types';
 import { useI18n } from '../i18n/I18nProvider';
 
 export { bridgeMessage } from './providerActions';
@@ -34,7 +35,7 @@ export interface FleetActions {
   readonly launch: (fleetSize: number) => void;
   readonly pickMode: (role: RoleKey, mode: ProviderMode) => void;
   readonly testConnection: (role: RoleKey) => void;
-  readonly setProviderField: (role: RoleKey, patch: { model?: string; endpoint?: string }) => void;
+  readonly setProviderField: (role: RoleKey, patch: Omit<ProviderPatch, 'mode'>) => void;
   readonly loadProviderModels: (role: RoleKey) => void;
   readonly provision: () => void;
   readonly extraAction: (index: number) => void;

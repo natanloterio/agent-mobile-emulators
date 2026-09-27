@@ -29,9 +29,14 @@ export interface OllamaDeps {
   readonly findProcesses?: () => readonly OllamaProcess[];
   readonly kill?: (pid: number, signal: NodeJS.Signals) => void;
 }
-export interface OllamaStatus { readonly running: boolean; readonly spawnedByUs: boolean; readonly adopted: boolean; readonly pid: number | null; readonly models: readonly string[] }
+export interface OllamaStatus {
+  readonly running: boolean; readonly spawnedByUs: boolean; readonly adopted: boolean; readonly pid: number | null; readonly models: readonly string[];
+  /** Aviso de contexto dado pelo runtime (LM Studio); ausente no Ollama, que usa a regra `spawnedByUs`. */
+  readonly contextWarning?: string | null;
+}
 export interface OllamaSupervisor {
-  ensure(endpoint: string, model: string): Promise<OllamaStatus>;
+  /** `runtime` é ignorado aqui; existe para o despacho de runtimes locais (provider/runtimes/local.ts). */
+  ensure(endpoint: string, model: string, runtime?: 'ollama' | 'lmstudio' | null): Promise<OllamaStatus>;
   unload(endpoint: string, model: string): Promise<void>;
   stop(): void;
   status(): OllamaStatus | null;

@@ -57,7 +57,7 @@ Enxame daemon (Node) ── SQLite (goals, tasks, steps, identities)
   - the target app installed (Instagram by default);
   - the **Android Remote Control MCP** app (`com.danielealbano.androidremotecontrolmcp.gms.debug`) installed, with its accessibility service enabled and auto-start on boot turned on;
   - Play Store auto-updates turned off. The readiness check refuses a device whose app version changed.
-- **Models:** an **Anthropic API key** for the cloud roles, **[Ollama](https://ollama.com)** for local ones, or both. The key is optional: with every role set to a local model on the **Provedores** screen, Enxame runs fully offline. The default local model is `gpt-oss:20b`.
+- **Models:** an **Anthropic API key** for the cloud roles, **[Ollama](https://ollama.com)** and/or **[LM Studio](https://lmstudio.ai)** for local ones, or any mix. The key is optional: with every role set to a local model on the **Provedores** screen, Enxame runs fully offline. The default local model is `gpt-oss:20b`.
 
 Plan for about 4.6 GB of RAM and 4 vCPUs per running emulator. On a 32-thread machine the practical ceiling is about **8 emulators at once**.
 
@@ -164,7 +164,14 @@ A device with a screen-lock PIN starts locked after every reboot, and nothing ca
 | Worker | `gpt-oss:20b` on Ollama | Runs on each device. |
 | Escalation | Claude Haiku 4.5 | Takes over when the worker keeps making invalid tool calls. |
 
-Local models need an OpenAI-compatible endpoint (default `http://127.0.0.1:11434/v1`). The daemon starts its own Ollama process if none is running.
+For a local role, the model picker lists every model **already downloaded** on this machine, grouped by runtime, with its size and whether it is loaded right now. It works even when the runtime is stopped: Ollama models are read from disk and LM Studio models from its `lms` CLI.
+
+| Runtime | Default endpoint | What Enxame does when you use it |
+|---|---|---|
+| Ollama | `http://127.0.0.1:11434/v1` | Starts `ollama serve` with a 32k context if nothing is running. |
+| LM Studio | `http://127.0.0.1:1234/v1` | Starts the server with `lms server start` and loads the model with `lms load … --context-length 32768`. |
+
+Picking a model from the other runtime switches the role's runtime and endpoint for you. Enxame only stops the servers it started itself.
 
 Cost is tracked per task and per goal: dollars for cloud models, GPU seconds for local ones.
 

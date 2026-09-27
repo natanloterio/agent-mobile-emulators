@@ -60,6 +60,6 @@ export function liveRoles(roles: readonly RoleVM[], live: FleetSnapshot | null, 
   const p = live?.providers; if (!p) return roles;
   return roles.map((r) => {
     const l = p[r.key]; if (!l) return r;
-    return { ...r, mode: l.mode, model: l.model, endpoint: l.endpoint, result: r.testing ? r.result : l.lastTest ? testRows(l.lastTest, i18n) : null };
+    return { ...r, mode: l.mode, model: l.model, endpoint: l.endpoint, runtime: l.runtime ?? null, result: r.testing ? r.result : l.lastTest ? testRows(l.lastTest, i18n) : null };
   });
 }

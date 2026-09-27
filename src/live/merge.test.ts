@@ -59,9 +59,9 @@ import { liveRoles } from './merge';
 import type { RoleVM } from '../state/selectors';
 
 const roles: readonly RoleVM[] = [
-  { key: 'lider', name: 'Líder', volume: 'v', tone: 'grey', mode: 'nuvem', model: 'Claude Sonnet', endpoint: 'api.anthropic.com', testLabel: 'Testar conexão', testing: false, result: null, models: [], error: null, putError: null },
-  { key: 'worker', name: 'Worker', volume: 'v', tone: 'green', mode: 'local', model: 'mock', endpoint: 'mock', testLabel: 'Testar conexão', testing: false, result: null, models: [], error: null, putError: null },
-  { key: 'esc', name: 'Esc', volume: 'v', tone: 'dark', mode: 'nuvem', model: 'mock', endpoint: 'mock', testLabel: 'Testar conexão', testing: false, result: null, models: [], error: null, putError: null },
+  { key: 'lider', name: 'Líder', volume: 'v', tone: 'grey', mode: 'nuvem', model: 'Claude Sonnet', endpoint: 'api.anthropic.com', testLabel: 'Testar conexão', testing: false, result: null, models: [], error: null, putError: null, runtime: null, catalog: null },
+  { key: 'worker', name: 'Worker', volume: 'v', tone: 'green', mode: 'local', model: 'mock', endpoint: 'mock', testLabel: 'Testar conexão', testing: false, result: null, models: [], error: null, putError: null, runtime: null, catalog: null },
+  { key: 'esc', name: 'Esc', volume: 'v', tone: 'dark', mode: 'nuvem', model: 'mock', endpoint: 'mock', testLabel: 'Testar conexão', testing: false, result: null, models: [], error: null, putError: null, runtime: null, catalog: null },
 ];
 const snap = { ...live, providers: {
   lider: { role: 'lider', mode: 'nuvem', model: 'claude-sonnet-5', endpoint: 'anthropic', lastTest: null },
@@ -78,6 +78,11 @@ describe('liveRoles', () => {
     expect(out[2].result?.[3]).toEqual({ label: 'Erro', value: 'auth: ANTHROPIC_API_KEY ausente' });
     expect(out[0].result).toBeNull();
     expect(roles[1].model).toBe('mock');
+  });
+  it('runtime do snapshot entra no papel; daemon antigo (sem runtime) fica null', () => {
+    const withRt = { ...snap, providers: { ...snap.providers, worker: { ...snap.providers.worker, runtime: 'lmstudio' } } };
+    expect(liveRoles(roles, withRt as never)[1].runtime).toBe('lmstudio');
+    expect(liveRoles(roles, snap as never)[1].runtime).toBeNull();
   });
   it('enquanto testing=true não sobrepõe o resultado antigo', () => {
     const out = liveRoles(roles.map((r) => ({ ...r, testing: true })), snap as never);
