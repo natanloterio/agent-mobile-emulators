@@ -6,7 +6,11 @@ import type { ScreenState } from './parse.js';
  * "insira o código" e "confirme sua conta" soltos NÃO entram — código enviado ao e-mail da própria missão o agente lê.
  */
 const HUMAN_PATTERNS: readonly RegExp[] = [
-  /captcha/i, /n[aã]o sou um rob[oô]/i, /i'?m not a robot/i, /no soy un robot/i,
+  // Texto de desafio, não a palavra "captcha" solta: o selo do reCAPTCHA v3 ("protected by reCAPTCHA") não é desafio.
+  /i'?m not a robot/i, /n[aã]o sou um rob[oô]/i, /no soy un robot/i,
+  /select all (the )?images/i, /selecione todas as imagens/i,
+  /verify (that )?you are (a )?human/i, /verifique se voc[eê] [ée] humano/i,
+  /hcaptcha/i, /solve (this|the) (puzzle|captcha)/i, /digite os caracteres/i, /type the characters/i,
   /confirme que [ée] voc[eê]/i, /confirm it'?s you/i, /help us confirm/i, /ajude-nos a confirmar/i,
   /suspicious login/i, /atividade incomum/i,
   /we suspended your account/i, /sua conta foi suspensa/i,
