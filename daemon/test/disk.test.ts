@@ -1,20 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, setIdentityFlags, upsertIdentity } from '../src/db/identities.js';
-import { collectDisk, createDiskUsage, parseDu, startDiskCollector } from '../src/fleet/disk.js';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { collectDisk, createDiskUsage, dirBytes, startDiskCollector } from '../src/fleet/disk.js';
 
 const row = (id: string, avdName: string) => ({ id, name: id, handle: '@a', avdName, serial: 'emulator-5554', consolePort: 5554, mcpHostPort: 8080, mcpToken: 't', deviceSlug: id, appPackage: 'p', appVersionName: 'v', state: 'idle' as const });
 
 describe('disco do AVD', () => {
-  it('parseDu lê bytes da 1ª coluna; lixo → null', () => {
-    expect(parseDu('3868131328\t/home/x/.android/avd/a.avd\n')).toBe(3868131328);
-    expect(parseDu('du: cannot access')).toBeNull();
+  it('dirBytes soma o tamanho aparente de todos os arquivos (como du -sb), sem seguir symlink', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'enxame-disk-'));
+    try {
+      mkdirSync(path.join(dir, 'a.avd', 'snapshots', 'enxame'), { recursive: true });
+      writeFileSync(path.join(dir, 'a.avd', 'config.ini'), 'x'.repeat(100));
+      writeFileSync(path.join(dir, 'a.avd', 'snapshots', 'enxame', 'ram.bin'), Buffer.alloc(5000));
+      const target = path.join(dir, 'a.avd', 'snapshots');
+      symlinkSync(target, path.join(dir, 'a.avd', 'link'));
+      // O link conta o próprio tamanho (o caminho do alvo), não os 5000 bytes para onde aponta.
+      expect(await dirBytes(path.join(dir, 'a.avd'))).toBe(5100 + Buffer.byteLength(target));
+      await expect(dirBytes(path.join(dir, 'sumiu.avd'))).rejects.toThrow(/ENOENT/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
-  it('du -sb com cache por diskCacheMs; invalidate força nova leitura', async () => {
-    const calls: string[][] = []; let t = 0; let bytes = 100;
-    const disk = createDiskUsage({ home: '/avd', cacheMs: 60_000, now: () => t, exec: async (f, a) => { calls.push([f, ...a]); return { stdout: `${bytes}\t${a[1]}\n`, stderr: '', code: 0 }; } });
+  it('get com cache por diskCacheMs; invalidate força nova leitura', async () => {
+    const calls: string[] = []; let t = 0; let bytes = 100;
+    const disk = createDiskUsage({ home: '/avd', cacheMs: 60_000, now: () => t, measure: async (p) => { calls.push(p); return bytes; } });
     expect(await disk.get('conta2')).toBe(100);
-    expect(calls[0]).toEqual(['du', '-sb', '/avd/conta2.avd']);
+    expect(calls[0]).toBe(path.join('/avd', 'conta2.avd'));
     bytes = 200; t = 59_000;
     expect(await disk.get('conta2')).toBe(100);
     t = 60_001;
@@ -23,9 +35,9 @@ describe('disco do AVD', () => {
     expect(await disk.get('conta2')).toBe(300);
     expect(calls).toHaveLength(3);
   });
-  it('du falhou → erro com a mensagem; nome inválido recusado', async () => {
-    const disk = createDiskUsage({ home: '/avd', exec: async () => ({ stdout: '', stderr: 'du: cannot access', code: 1 }) });
-    await expect(disk.get('x')).rejects.toThrow(/cannot access/);
+  it('medida falhou → erro com a mensagem; nome inválido recusado', async () => {
+    const disk = createDiskUsage({ home: '/avd', measure: async () => { throw new Error('ENOENT: no such file'); } });
+    await expect(disk.get('x')).rejects.toThrow(/x: ENOENT/);
     await expect(disk.get('../etc')).rejects.toThrow(/inválido/);
   });
   it('collectDisk grava disk_bytes das não descartadas e diz se mudou', async () => {

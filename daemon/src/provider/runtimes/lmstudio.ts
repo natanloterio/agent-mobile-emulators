@@ -27,11 +27,20 @@ const defaultExec: Exec = (file, args, { timeoutMs }) => new Promise((resolve) =
   });
 });
 
-function findLms(): string | null {
-  const home = path.join(os.homedir(), '.lmstudio', 'bin', 'lms');
-  if (existsSync(home)) return home;
-  const onPath = (process.env.PATH ?? '').split(path.delimiter).map((d) => path.join(d, 'lms')).find((p) => existsSync(p));
-  return onPath ?? null;
+export interface FindLmsDeps {
+  readonly platform?: NodeJS.Platform; readonly home?: string; readonly pathEnv?: string; readonly exists?: (p: string) => boolean;
+}
+
+/** CLI do LM Studio: `~/.lmstudio/bin/lms`, senão o PATH; no Windows é `lms.exe` e o PATH separa por `;`. */
+export function findLms(deps: FindLmsDeps = {}): string | null {
+  const platform = deps.platform ?? process.platform;
+  const exists = deps.exists ?? existsSync;
+  const p = platform === 'win32' ? path.win32 : path.posix;
+  const bin = platform === 'win32' ? 'lms.exe' : 'lms';
+  const home = p.join(deps.home ?? os.homedir(), '.lmstudio', 'bin', bin);
+  if (exists(home)) return home;
+  const dirs = (deps.pathEnv ?? process.env.PATH ?? '').split(p.delimiter).filter(Boolean);
+  return dirs.map((d) => p.join(d, bin)).find((f) => exists(f)) ?? null;
 }
 
 type LsItem = { type?: string; modelKey?: string; displayName?: string; sizeBytes?: number; trainedForToolUse?: boolean };

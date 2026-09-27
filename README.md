@@ -23,7 +23,7 @@ The interface speaks **English, Português, Español, Français, Deutsch and 中
 | **Identidades** (Identities) | Every identity with its lifecycle, app version, snapshot age, disk usage and ports. Provision new identities, boot them, log in, register a PIN, restore, re-baseline, or free the disk of a banned one. |
 | **Provedores** (Providers) | Which model plays each role (leader, worker, escalation), cloud or local, with a real **Testar conexão** (Test connection) that runs a tool call on a live device. |
 
-The sidebar shows the host's real RAM, CPU and GPU memory usage.
+The sidebar shows the host's real RAM and CPU usage, plus GPU memory when the host has an NVIDIA GPU (`nvidia-smi`). Each operating system has its own view and shows only what it can measure: macOS never shows VRAM, and on Apple Silicon a note explains that the GPU shares the RAM.
 
 ---
 
@@ -50,9 +50,10 @@ Enxame daemon (Node) ── SQLite (goals, tasks, steps, identities)
 
 ## Requirements
 
-- **Linux** with a desktop session. This build was developed on Ubuntu with an NVIDIA GPU.
+- **Linux, macOS or Windows** with a desktop session. This build was developed and tested on Ubuntu with an NVIDIA GPU; macOS and Windows support has not been tested on real machines yet.
 - **Node.js 24 or newer**. The daemon uses the built-in `node:sqlite`.
-- **Android SDK** with the emulator, platform-tools and an **Android 14 (API 34) Google Play x86_64** system image.
+- **Android SDK** with the emulator, platform-tools and an **Android 14 (API 34) Google Play** system image: **x86_64** on Linux, Windows and Intel Macs, **arm64-v8a** on Apple Silicon Macs (they cannot run x86_64 images). The daemon finds the SDK through `ANDROID_HOME` or `ANDROID_SDK_ROOT`, or else at Android Studio's default location: `~/Android/Sdk` (Linux), `~/Library/Android/sdk` (macOS), `%LOCALAPPDATA%\Android\Sdk` (Windows).
+- **Hardware acceleration** for the emulator: KVM on Linux, Hypervisor.framework on macOS (built in), WHPX or AEHD on Windows.
 - At least one **base AVD** with:
   - the target app installed (Instagram by default);
   - the **Android Remote Control MCP** app (`com.danielealbano.androidremotecontrolmcp.gms.debug`) installed, with its accessibility service enabled and auto-start on boot turned on;
@@ -62,7 +63,7 @@ Enxame daemon (Node) ── SQLite (goals, tasks, steps, identities)
 
 Plan for about 4.6 GB of RAM and 4 vCPUs per running emulator. On a 32-thread machine the practical ceiling is about **8 emulators at once**.
 
-> Some paths are still fixed in `daemon/src/config.ts`: the Android SDK at `~/Android/Sdk` (`adbPath`, `emulatorPath`) and the conta1 identity seed in `daemon/src/index.ts`. Edit them if your setup differs.
+> The conta1 identity seed is still fixed in `daemon/src/index.ts` (AVD `mcp_test_playstore`). Edit it if your setup differs.
 
 ---
 
@@ -77,7 +78,7 @@ cp .env.example .env          # optional: add ANTHROPIC_API_KEY=sk-ant-... for c
 
 npm run build                 # UI + Electron shell
 npm run daemon:build          # daemon
-npx electron --no-sandbox .   # starts the app; the app starts the daemon for you
+npx electron --no-sandbox .   # starts the app; the app starts the daemon for you (--no-sandbox is only needed on Linux)
 ```
 
 The app starts the daemon on its own if none is running. The daemon writes its address and access token to `~/.local/share/enxame/daemon.json`. It uses a private adb server on port **5038**, so it won't clash with Android Studio.

@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { findLms } from '../provider/runtimes/lmstudio.js';
 import type { GpuBreakdown, GpuSlice } from '../server/snapshot.js';
 
 /** Um processo na GPU (`nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader`). */
@@ -82,7 +83,6 @@ function readOllamaBlobs(): ReadonlyMap<string, string> {
   return out;
 }
 
-const LMS = path.join(os.homedir(), '.lmstudio', 'bin', 'lms');
 
 /** Implementação real das dependências (nvidia-smi, /proc, manifests do Ollama, `lms ps`). */
 export function createGpuSampler(): (total: { usedMiB: number; totalMiB: number }) => Promise<Omit<GpuBreakdown, 'at'> | null> {
@@ -91,7 +91,9 @@ export function createGpuSampler(): (total: { usedMiB: number; totalMiB: number 
     cmdline: (pid) => { try { return readFileSync(`/proc/${pid}/cmdline`, 'utf8').replace(/\0/g, ' '); } catch { return null; } },
     ollamaBlobs: () => { if (!blobs || Date.now() - blobs.at > 60_000) blobs = { at: Date.now(), map: readOllamaBlobs() }; return blobs.map; },
     lmsLoaded: async () => {
-      const out = await run(LMS, ['ps', '--json'], 10_000);
+      const lms = findLms();
+      if (!lms) throw new Error('CLI lms do LM Studio não encontrado');
+      const out = await run(lms, ['ps', '--json'], 10_000);
       return (JSON.parse(out.slice(Math.max(0, out.indexOf('[')))) as { identifier?: string; modelKey?: string }[]).map((m) => m.identifier ?? m.modelKey ?? '?');
     },
   };

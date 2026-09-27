@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config.js';
-import { createLmStudio, parseLmsLs } from '../src/provider/runtimes/lmstudio.js';
+import { createLmStudio, findLms, parseLmsLs } from '../src/provider/runtimes/lmstudio.js';
 
 const LS = `Waking up LM Studio service...\n[{"type":"llm","modelKey":"google/gemma-4-12b-qat","displayName":"Gemma 4 12B Qat","sizeBytes":7151066820,"trainedForToolUse":true},
 {"type":"embedding","modelKey":"text-embedding-nomic","displayName":"Nomic","sizeBytes":84000000},
@@ -108,5 +108,20 @@ describe('unload do LM Studio (integrador)', () => {
     await lm.unload('http://127.0.0.1:1234/v1', 'google/gemma-4-12b-qat');
     await lm.unload('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct');
     expect(f.calls.filter((c) => c.startsWith('unload'))).toEqual(['unload llama-3.2-3b-instruct']);
+  });
+});
+
+describe('findLms — CLI do LM Studio por SO', () => {
+  const has = (...files: string[]) => (p: string) => files.includes(p);
+  it('Linux/macOS: ~/.lmstudio/bin/lms primeiro, depois o PATH', () => {
+    expect(findLms({ platform: 'linux', home: '/home/u', pathEnv: '/usr/bin', exists: has('/home/u/.lmstudio/bin/lms', '/usr/bin/lms') })).toBe('/home/u/.lmstudio/bin/lms');
+    expect(findLms({ platform: 'darwin', home: '/Users/u', pathEnv: '/usr/bin:/opt/bin', exists: has('/opt/bin/lms') })).toBe('/opt/bin/lms');
+    expect(findLms({ platform: 'linux', home: '/home/u', pathEnv: '', exists: has() })).toBeNull();
+  });
+  it('Windows: lms.exe, PATH separado por ;', () => {
+    expect(findLms({ platform: 'win32', home: 'C:\\Users\\u', pathEnv: 'C:\\bin', exists: has('C:\\Users\\u\\.lmstudio\\bin\\lms.exe') }))
+      .toBe('C:\\Users\\u\\.lmstudio\\bin\\lms.exe');
+    expect(findLms({ platform: 'win32', home: 'C:\\Users\\u', pathEnv: 'C:\\a;D:\\tools', exists: has('D:\\tools\\lms.exe') })).toBe('D:\\tools\\lms.exe');
+    expect(findLms({ platform: 'win32', home: 'C:\\Users\\u', pathEnv: 'C:\\a', exists: has('C:\\Users\\u\\.lmstudio\\bin\\lms') })).toBeNull();
   });
 });

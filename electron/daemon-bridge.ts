@@ -15,11 +15,14 @@ function readInfo(): Info | null {
 }
 function alive(pid: number): boolean { try { process.kill(pid, 0); return true; } catch { return false; } }
 
-/** Sobe o daemon com o Node do sistema (o do Electron é 20.x, sem node:sqlite) se não houver um vivo. */
+/**
+ * Sobe o daemon com o Node do sistema (o do Electron é 20.x, sem node:sqlite) se não houver um vivo.
+ * `windowsHide`: no Windows, sem ele o daemon abre uma janela de console, herdada por adb/nvidia-smi a cada amostra.
+ */
 export function ensureDaemon(projectRoot: string): ChildProcess | null {
   const info = readInfo();
   if (info && alive(info.pid)) return null;
-  const child = spawn('node', ['--env-file-if-exists=.env', 'dist-daemon/index.js'], { cwd: projectRoot, stdio: 'inherit', env: process.env });
+  const child = spawn('node', ['--env-file-if-exists=.env', 'dist-daemon/index.js'], { cwd: projectRoot, stdio: 'inherit', env: process.env, windowsHide: true });
   return child;
 }
 

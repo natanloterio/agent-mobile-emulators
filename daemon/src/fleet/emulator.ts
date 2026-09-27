@@ -1,4 +1,4 @@
-import { spawn as nodeSpawn } from 'node:child_process';
+import { execFile, spawn as nodeSpawn } from 'node:child_process';
 import { closeSync, mkdirSync, openSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -16,7 +16,7 @@ export interface EmulatorSupervisorDeps {
   readonly spawn?: EmulatorSpawn;
   readonly emulatorPath?: string; readonly avdHome?: string; readonly adbServerPort?: number; readonly logDir?: string;
   readonly openLog?: (p: string) => unknown; readonly closeLog?: (fd: unknown) => void;
-  /** Mata o grupo do processo destacado (emulator + qemu). */
+  /** Mata a árvore do processo destacado (emulator + qemu); ver `killProcessTree`. */
   readonly killGroup?: (pid: number, sig: NodeJS.Signals) => void;
 }
 /** Só os emuladores que o daemon subiu: `stopAll` nunca toca em emulador aberto por outra pessoa (ex.: o da conta1). */
@@ -28,13 +28,30 @@ export interface EmulatorSupervisor {
   owned(): readonly string[];
 }
 
-const defaultKillGroup = (pid: number, sig: NodeJS.Signals) => {
-  try { process.kill(-pid, sig); } catch { try { process.kill(pid, sig); } catch { /* já morreu */ } }
-};
+export interface KillTreeDeps {
+  readonly platform?: NodeJS.Platform;
+  readonly kill?: (pid: number, sig: NodeJS.Signals) => void;
+  readonly run?: (file: string, args: readonly string[]) => void;
+}
+
+/**
+ * Mata o emulador e o qemu que ele criou. POSIX: sinal no grupo do processo destacado. Windows não tem grupo e o
+ * TerminateProcess mataria só o emulator.exe, deixando o qemu-system órfão com a RAM do device: `taskkill /T /F`.
+ */
+export function killProcessTree(pid: number, sig: NodeJS.Signals, deps: KillTreeDeps = {}): void {
+  const kill = deps.kill ?? ((p: number, s: NodeJS.Signals) => { process.kill(p, s); });
+  const run = deps.run ?? ((file: string, args: readonly string[]) => {
+    execFile(file, [...args], { windowsHide: true }, (err) => { if (err) console.error(`[emulador] taskkill ${pid}: ${err.message}`); });
+  });
+  if ((deps.platform ?? process.platform) === 'win32') { run('taskkill', ['/PID', String(pid), '/T', '/F']); return; }
+  try { kill(-pid, sig); } catch { try { kill(pid, sig); } catch { /* já morreu */ } }
+}
+
+const defaultKillGroup = (pid: number, sig: NodeJS.Signals) => killProcessTree(pid, sig);
 
 export function createEmulatorSupervisor(deps: EmulatorSupervisorDeps = {}): EmulatorSupervisor {
   const spawnFn: EmulatorSpawn = deps.spawn ?? ((file, args, opts) =>
-    nodeSpawn(file, [...args], { env: opts.env, detached: opts.detached, stdio: opts.stdio as never }) as unknown as ChildLike);
+    nodeSpawn(file, [...args], { env: opts.env, detached: opts.detached, stdio: opts.stdio as never, windowsHide: true }) as unknown as ChildLike);
   const logDir = deps.logDir ?? CONFIG.dataDir;
   const openLog = deps.openLog ?? ((p: string) => { mkdirSync(path.dirname(p), { recursive: true }); return openSync(p, 'a'); });
   const closeLog = deps.closeLog ?? ((fd: unknown) => { try { closeSync(fd as number); } catch { /* já fechado */ } });

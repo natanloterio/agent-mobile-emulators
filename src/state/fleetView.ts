@@ -1,4 +1,5 @@
 import { PT, type I18n } from '../i18n/translate';
+import { hostOs, isAppleSilicon, type HostOs } from '../lib/platformMeters';
 import { hostMeters, liveHostMeters, type Meter } from '../lib/resources';
 import { liveLogFor, mergeLive } from '../live/merge';
 import type { FleetSnapshot, GoalSummary, LiveFrame } from '../live/types';
@@ -21,6 +22,8 @@ export interface FleetView {
   /** Só no vivo: sem snapshot ainda ('connecting') ou sem identidades ('empty'). */
   readonly empty: 'connecting' | 'empty' | null;
   readonly meters: readonly Meter[];
+  /** Sistema do host: escolhe o componente de recursos (demo = Linux, a máquina do design). */
+  readonly host: { readonly os: HostOs; readonly appleSilicon: boolean };
   readonly goal: GoalSummary | null;
 }
 
@@ -32,7 +35,7 @@ export function buildFleetView(
     const tiles = selectTiles(s, DEMO_FLEET_SIZE, i18n);
     return {
       isLive, fleetSize: DEMO_FLEET_SIZE, tiles, killed: s.killed, needsCount: selectNeedsCount(tiles), empty: null,
-      meters: hostMeters(DEMO_FLEET_SIZE, i18n), goal: null,
+      meters: hostMeters(DEMO_FLEET_SIZE, i18n), host: { os: 'linux', appleSilicon: false }, goal: null,
     };
   }
   const ids = live ? mergeLive(s.ids, live, frames, i18n) : [];
@@ -41,7 +44,8 @@ export function buildFleetView(
   return {
     isLive, fleetSize: ids.length, tiles, killed, needsCount: selectNeedsCount(tiles),
     empty: !live ? 'connecting' : ids.length === 0 ? 'empty' : null,
-    meters: liveHostMeters(live?.host, i18n), goal: live?.goal ?? null,
+    meters: liveHostMeters(live?.host, i18n),
+    host: { os: hostOs(live?.host), appleSilicon: isAppleSilicon(live?.host) }, goal: live?.goal ?? null,
   };
 }
 

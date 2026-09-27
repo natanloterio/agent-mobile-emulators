@@ -5,6 +5,8 @@ import type { GpuBarView, GpuSegment } from '../lib/gpuBar';
 interface VramPanelProps {
   /** Ocupação medida da GPU (vivo); null cai no quadro estimado do design. */
   readonly gpu: GpuBarView | null;
+  /** Falso quando o host não mede VRAM (macOS ou sem NVIDIA): fica só o piso de qualidade, sem a estimativa do design. */
+  readonly showVram: boolean;
   readonly fleetSize: number;
   readonly kvLeft: string;
   readonly vramEmuShare: string;
@@ -18,9 +20,10 @@ const SLOT = '\u0000';
 const colorClass = (s: GpuSegment) => `vram__c--${s.kind}${s.kind === 'model' ? ` vram__c--tone${s.tone}` : ''}`;
 
 /** Quadro da VRAM em Provedores: real (fatias medidas + legenda) ou estimado; o piso de qualidade fica embaixo nos dois. */
-export function VramPanel({ gpu, fleetSize, kvLeft, vramEmuShare, vramTotal }: VramPanelProps) {
+export function VramPanel({ gpu, showVram, fleetSize, kvLeft, vramEmuShare, vramTotal }: VramPanelProps) {
   const { t } = useI18n();
   const floor = <span className="vram__floor">{t('providers.vram.floor')}</span>;
+  if (!showVram) return <div className="card card--grey vram">{floor}</div>;
   if (gpu) {
     const [freeBefore, freeAfter = ''] = t('providers.vram.liveFree', { gb: SLOT }).split(SLOT);
     return (

@@ -43,6 +43,8 @@ export interface GpuBreakdown { readonly totalMiB: number; readonly usedMiB: num
 export interface HostMetrics {
   readonly ramUsedGiB: number; readonly ramTotalGiB: number; readonly cpuPct: number; readonly threads: number;
   readonly vramUsedMiB: number | null; readonly vramTotalMiB: number | null; readonly at: string;
+  /** SO e arquitetura do host (`process.platform`/`process.arch`): a UI escolhe a visão de recursos por eles. */
+  readonly platform: NodeJS.Platform; readonly arch: string;
   /** Ocupação da GPU por consumidor (nvidia-smi por processo + runtimes locais); null sem GPU NVIDIA. */
   readonly gpu?: GpuBreakdown | null;
 }

@@ -10,8 +10,8 @@ describe('liveHostMeters — snapshot.host medido', () => {
       { label: 'VRAM', value: '20,0 / 32,0 GB', pct: '63%' },
     ]);
   });
-  it('sem nvidia-smi a VRAM vira —; sem host tudo vira —', () => {
-    expect(liveHostMeters(hostMetrics({ vramUsedMiB: null, vramTotalMiB: null }))[2]).toEqual({ label: 'VRAM', value: '—', pct: '0%' });
+  it('sem nvidia-smi a VRAM some; sem host tudo vira —', () => {
+    expect(liveHostMeters(hostMetrics({ vramUsedMiB: null, vramTotalMiB: null })).map((m) => m.label)).toEqual(['RAM', 'CPU']);
     expect(liveHostMeters(null).map((m) => m.value)).toEqual(['—', '—', '—']);
   });
   it('demo segue com as constantes do design', () => {
