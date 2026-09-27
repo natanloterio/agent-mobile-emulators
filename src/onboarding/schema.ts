@@ -13,7 +13,9 @@ export const HardwareSchema = z.object({
   ramGiB: z.number(), threads: z.number().int(), cpuModel: z.string(),
   gpu: z.object({ name: z.string(), totalGiB: z.number(), unified: z.boolean() }).nullable(), diskFreeGiB: z.number(),
 });
-export const SetupReportSchema = z.object({ deps: z.array(DepStatusSchema), hardware: HardwareSchema, localModels: z.array(z.string()) });
+export const SetupReportSchema = z.object({
+  deps: z.array(DepStatusSchema), hardware: HardwareSchema, localModels: z.array(z.string()), imageAbi: z.enum(['x86_64', 'arm64-v8a']),
+});
 export const JobEventSchema = z.object({
   id: z.enum(JOB_IDS), state: z.enum(['wait', 'run', 'done', 'err']), doneMb: z.number(), totalMb: z.number(),
   error: z.object({ kind: z.enum(ERROR_KINDS), message: z.string() }).nullable(),

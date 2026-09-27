@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { INITIAL_STATE, onboardingReducer } from './reducer';
 import type { SetupReport } from './schema';
 
-const report = (gpu: SetupReport['hardware']['gpu']): SetupReport => ({ deps: [], hardware: { ramGiB: 64, threads: 32, cpuModel: 'x', gpu, diskFreeGiB: 100 }, localModels: [] });
+const report = (gpu: SetupReport['hardware']['gpu']): SetupReport => ({ deps: [], hardware: { ramGiB: 64, threads: 32, cpuModel: 'x', gpu, diskFreeGiB: 100 }, localModels: [], imageAbi: 'x86_64' });
 
 describe('onboardingReducer', () => {
   it('check-done escolhe modo e modelo padrão pelo hardware, sem sobrescrever o que a pessoa escolheu', () => {

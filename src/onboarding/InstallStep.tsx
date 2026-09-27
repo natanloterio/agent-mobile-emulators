@@ -17,7 +17,7 @@ export function InstallStep({ state, onRetry, onOtherModel }: InstallStepProps) 
   const jobs = jobsToInstall(rows);
   const sizes = sizesOf(rows);
   const totals = installTotals(jobs, state.jobs, sizes);
-  const nameOf = (id: JobId) => t(`onboarding.dep.${id}` as MessageKey, { model: state.model });
+  const nameOf = (id: JobId) => t(`onboarding.dep.${id}` as MessageKey, { model: state.model, abi: state.report?.imageAbi ?? '' });
 
   return (
     <>

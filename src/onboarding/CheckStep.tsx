@@ -61,7 +61,7 @@ export function CheckStep({ state, onRecheck }: { readonly state: OnboardingStat
   const hw = state.report.hardware;
   const cap = emulatorCapacity(hw);
   const detail = (r: DepRow) => (r.state === 'ok' ? r.version ?? '' : r.sizeMb ? formatMb(r.sizeMb, i18n) : '');
-  const name = (r: DepRow) => t(`onboarding.dep.${r.id}` as MessageKey, { model: state.model });
+  const name = (r: DepRow) => t(`onboarding.dep.${r.id}` as MessageKey, { model: state.model, abi: state.report?.imageAbi ?? '' });
 
   return (
     <>
@@ -73,7 +73,7 @@ export function CheckStep({ state, onRecheck }: { readonly state: OnboardingStat
       </div>
       <div className="onb-deps">
         {rows.map((r) => (
-          <div className="onb-dep" data-s={r.state} key={r.id}>
+          <div className="onb-dep" data-s={r.state} data-dep={r.id} key={r.id}>
             <span className="onb-dep__ico" aria-hidden="true">{ICON[r.state]}</span>
             <div><h3>{name(r)}</h3><p>{t(`onboarding.dep.${r.id}.role` as MessageKey)}</p></div>
             <div className="onb-dep__meta"><span className={PILL[r.state]}>{t(`onboarding.state.${r.state}` as MessageKey)}</span><span className="onb-mono">{detail(r)}</span></div>

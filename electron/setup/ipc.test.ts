@@ -4,7 +4,7 @@ import { resolveSetupPaths } from './paths';
 import type { JobRunners } from './runners';
 
 const KEY = 'sk-ant-' + 'x'.repeat(30);
-const report = { deps: [], hardware: { ramGiB: 1, threads: 1, cpuModel: 'x', gpu: null, diskFreeGiB: 1 }, localModels: [] };
+const report = { deps: [], hardware: { ramGiB: 1, threads: 1, cpuModel: 'x', gpu: null, diskFreeGiB: 1 }, localModels: [], imageAbi: 'x86_64' as const };
 
 function mk(over: Partial<SetupIpcDeps> = {}) {
   const handlers = new Map<string, (...a: unknown[]) => unknown>();

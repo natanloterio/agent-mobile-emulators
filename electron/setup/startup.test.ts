@@ -9,7 +9,7 @@ const hw = { ramGiB: 64, threads: 32, cpuModel: 'x', gpu: null, diskFreeGiB: 100
 const dep = (id: DepStatus['id'], state: DepStatus['state']): DepStatus => ({ id, state, version: null, sizeMb: null, fix: null });
 const ids: DepStatus['id'][] = ['sdk', 'adb', 'emu', 'img', 'kvm', 'ollama', 'keyring'];
 const probeWith = (state: (id: DepStatus['id']) => DepStatus['state']) => async (): Promise<ProbeResult> =>
-  ({ report: { deps: ids.map((id) => dep(id, state(id))), hardware: hw, localModels: [] }, ollamaBin: 'ollama' });
+  ({ report: { deps: ids.map((id) => dep(id, state(id))), hardware: hw, localModels: [], imageAbi: 'x86_64' }, ollamaBin: 'ollama' });
 const now = () => '2026-09-27T12:00:00.000Z';
 
 describe('decideStartup', () => {

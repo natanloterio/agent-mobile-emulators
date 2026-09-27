@@ -23,6 +23,8 @@ export interface SetupReport {
   readonly hardware: Hardware;
   /** Modelos do Ollama já no disco, `nome:tag`. */
   readonly localModels: readonly string[];
+  /** Arquitetura da imagem do Android que o Enxame instala nesta máquina. */
+  readonly imageAbi: 'x86_64' | 'arm64-v8a';
 }
 export type JobId = 'sdk' | 'adb' | 'emu' | 'img' | 'ollama' | 'model';
 /** Ordem de instalação: o sdkmanager vem antes dos pacotes; o Ollama antes do modelo. */

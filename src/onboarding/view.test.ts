@@ -12,7 +12,7 @@ const rtx = { name: 'RTX 4090', totalGiB: 24, unified: false };
 const hw = { ramGiB: 64, threads: 32, cpuModel: 'Ryzen', gpu: rtx, diskFreeGiB: 412 };
 const partial: SetupReport = {
   deps: [dep('sdk', 'ok'), dep('adb', 'ok'), dep('emu', 'ok'), dep('img', 'todo', { sizeMb: 1600 }), dep('kvm', 'ok'), dep('ollama', 'ok'), dep('keyring', 'ok')],
-  hardware: hw, localModels: ['qwen3:14b'],
+  hardware: hw, localModels: ['qwen3:14b'], imageAbi: 'x86_64',
 };
 const model = (id: string) => LOCAL_MODELS.find((m) => m.id === id)!;
 const st = (over: Partial<OnboardingState>): OnboardingState => ({ ...INITIAL_STATE, report: partial, ...over });

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { sizesFor } from './artifacts.js';
 import { execOrNull, readHardware, type HardwareDeps } from './hardware.js';
 import type { SetupPaths } from './paths.js';
-import type { PlatformId } from './platform.js';
+import { imageAbi, type PlatformId } from './platform.js';
 import type { DepId, DepStatus, SetupReport, UserFix } from './types.js';
 
 export interface ProbeDeps {
@@ -122,7 +122,7 @@ export async function probeDeps(paths: SetupPaths, d: ProbeDeps): Promise<{ deps
 export async function probeSetup(paths: SetupPaths, d: ProbeDeps, hw: HardwareDeps): Promise<ProbeResult> {
   const home = path.dirname(path.dirname(paths.ollamaModels)) || '/';
   const [p, hardware] = await Promise.all([probeDeps(paths, d), readHardware(home, hw, paths.platform)]);
-  return { report: { deps: p.deps, hardware, localModels: p.localModels }, ollamaBin: p.ollamaBin };
+  return { report: { deps: p.deps, hardware, localModels: p.localModels, imageAbi: imageAbi(paths.platform) }, ollamaBin: p.ollamaBin };
 }
 
 /** Mesma entrada que o cofre do daemon usa (daemon/src/vault/keyring.ts), com outra conta: só testa se o Secret Service responde. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveSetupPaths } from './paths.js';
-import { javaMajor, listLocalModels, parseOllamaVersion, parseSourceProperties, probeDeps, WHPX_QUERY, type ProbeDeps } from './probe.js';
+import type { HardwareDeps } from './hardware.js';
+import { javaMajor, listLocalModels, parseOllamaVersion, parseSourceProperties, probeDeps, probeSetup, WHPX_QUERY, type ProbeDeps } from './probe.js';
 
 const paths = resolveSetupPaths({}, '/home/u', null, 'linux-x64');
 const SDK = paths.sdkRoot;
@@ -163,5 +164,16 @@ describe('tamanhos por sistema', () => {
     const r = await probeDeps(win, fake({}));
     expect(r.deps.find((d) => d.id === 'sdk')).toMatchObject({ state: 'todo', sizeMb: 199 });
     expect(r.deps.find((d) => d.id === 'ollama')).toMatchObject({ state: 'todo', sizeMb: 1461 });
+  });
+});
+
+describe('probeSetup: arquitetura da imagem', () => {
+  const hw: HardwareDeps = { totalMemBytes: () => 2 ** 34, cpus: () => [], exec: async () => null, freeDiskBytes: async () => 0 };
+  it('x86_64 no Linux/Windows/Mac Intel; arm64-v8a no Apple Silicon', async () => {
+    expect((await probeSetup(paths, fake({}), hw)).report.imageAbi).toBe('x86_64');
+    const win = resolveSetupPaths({ LOCALAPPDATA: 'C:\\L' }, 'C:\\Users\\u', null, 'win32-x64');
+    expect((await probeSetup(win, fake({}), hw)).report.imageAbi).toBe('x86_64');
+    const mac = resolveSetupPaths({}, '/Users/u', null, 'darwin-arm64');
+    expect((await probeSetup(mac, fake({}), hw)).report.imageAbi).toBe('arm64-v8a');
   });
 });

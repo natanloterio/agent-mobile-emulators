@@ -96,6 +96,13 @@ async function onboardingAppears() {
     const rows = await win.locator('.onb-dep').count();
     if (rows < 6) throw new Error(`onboarding com ${rows} itens (esperado ≥ 6)`);
     console.log(`[smoke] onboarding ok com ${rows} itens`);
+    // Imagem certa para o runner: arm64-v8a só no Apple Silicon (spec lançamento §5).
+    const abi = process.platform === 'darwin' && process.arch === 'arm64' ? 'arm64-v8a' : 'x86_64';
+    const img = (await win.locator('[data-dep="img"]').first().textContent({ timeout: 10_000 })) ?? '';
+    if (!img.includes(abi)) throw new Error(`linha da imagem sem ${abi}: "${img.trim()}"`);
+    console.log(`[smoke] image-abi ok (${abi})`);
+    if ((await win.locator('[data-dep="kvm"]').count()) !== 1) throw new Error('linha de aceleração (kvm) ausente');
+    console.log('[smoke] kvm ok');
   } finally {
     if (app) {
       // Numa máquina onde toda dependência já está ok, o onboarding é pulado e o daemon sobe mesmo assim
