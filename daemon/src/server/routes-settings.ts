@@ -15,7 +15,7 @@ export function settingsRoutes(): Route {
     if (ctx.method === 'GET') { ctx.send(200, readStepBudgets(ctx.db)); return true; }
     if (ctx.method !== 'PUT') return false;
     const parsed = BudgetsPatch.safeParse(await ctx.body());
-    if (!parsed.success) { ctx.send(400, { error: parsed.error.issues.map((i) => i.message).join('; ') }); return true; }
+    if (!parsed.success) { ctx.send(400, { error: parsed.error.issues.map((i) => i.message) }); return true; }
     const next = writeStepBudgets(ctx.db, parsed.data);
     ctx.send(200, next);
     ctx.broadcast();

@@ -51,8 +51,6 @@ export const providers = defineMessages({
   'budgets.unlimited': 'Sem limite',
   'budgets.save': 'Salvar',
   'budgets.note': 'Vale a partir da próxima tarefa/subtarefa; a que está rodando termina com o limite atual.',
-  'budgets.aria.goal': 'Passos por tarefa de objetivo',
-  'budgets.aria.mission': 'Passos por subtarefa de missão',
 }, {
   en: {
     'title': 'Providers',
@@ -104,8 +102,6 @@ export const providers = defineMessages({
     'budgets.unlimited': 'No limit',
     'budgets.save': 'Save',
     'budgets.note': 'Applies from the next task/subtask on; the one running now finishes with the current limit.',
-    'budgets.aria.goal': 'Steps per goal task',
-    'budgets.aria.mission': 'Steps per mission subtask',
   },
   es: {
     'title': 'Proveedores',
@@ -157,8 +153,6 @@ export const providers = defineMessages({
     'budgets.unlimited': 'Sin límite',
     'budgets.save': 'Guardar',
     'budgets.note': 'Vale desde la próxima tarea/subtarea; la que está corriendo termina con el límite actual.',
-    'budgets.aria.goal': 'Pasos por tarea de objetivo',
-    'budgets.aria.mission': 'Pasos por subtarea de misión',
   },
   fr: {
     'title': 'Fournisseurs',
@@ -210,8 +204,6 @@ export const providers = defineMessages({
     'budgets.unlimited': 'Sans limite',
     'budgets.save': 'Enregistrer',
     'budgets.note': 'Vaut à partir de la prochaine tâche/sous-tâche ; celle en cours termine avec la limite actuelle.',
-    'budgets.aria.goal': 'Pas par tâche d’objectif',
-    'budgets.aria.mission': 'Pas par sous-tâche de mission',
   },
   de: {
     'title': 'Anbieter',
@@ -263,8 +255,6 @@ export const providers = defineMessages({
     'budgets.unlimited': 'Kein Limit',
     'budgets.save': 'Speichern',
     'budgets.note': 'Gilt ab der nächsten Aufgabe/Teilaufgabe; die laufende endet mit dem aktuellen Limit.',
-    'budgets.aria.goal': 'Schritte pro Zielaufgabe',
-    'budgets.aria.mission': 'Schritte pro Missions-Teilaufgabe',
   },
   zh: {
     'title': '模型提供方',
@@ -316,7 +306,5 @@ export const providers = defineMessages({
     'budgets.unlimited': '无限制',
     'budgets.save': '保存',
     'budgets.note': '从下一个任务/子任务开始生效；正在运行的会以当前限制结束。',
-    'budgets.aria.goal': '每个目标任务的步数',
-    'budgets.aria.mission': '每个任务子任务的步数',
   },
 });

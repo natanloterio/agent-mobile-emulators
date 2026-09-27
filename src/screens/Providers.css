@@ -62,6 +62,7 @@
 .budgets__row { gap: 10px; }
 .budgets__controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .budgets__input { width: 110px; flex: none; }
+.budgets__input:disabled { opacity: 0.5; cursor: not-allowed; }
 .budgets__unlimited { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .budgets__unlimited input { width: 18px; height: 18px; }
 .budgets__note { font-size: 14px; opacity: 0.85; }

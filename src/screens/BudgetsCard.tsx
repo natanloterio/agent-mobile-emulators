@@ -14,7 +14,10 @@ export interface BudgetsCardProps {
   readonly onSave: (patch: { goal?: number | null; mission?: number | null }) => void;
 }
 
-const DEFAULT_VISIBLE = 30; // número mostrado no campo quando o valor atual é "sem limite" (nada mais sensato para editar a partir daí)
+// Número mostrado no campo quando o valor atual é "sem limite" (nada mais sensato para editar a partir daí);
+// mesmos defaults de CONFIG.worker.stepBudget / CONFIG.mission.subtaskStepBudget.
+const DEFAULT_GOAL_VISIBLE = 30;
+const DEFAULT_MISSION_VISIBLE = 60;
 
 /** Uma linha: rótulo, input numérico (1–1000) e a caixa "Sem limite". */
 function BudgetRow({ label, field, onChange, ariaLabel, unlimitedLabel }: {
@@ -48,25 +51,25 @@ function BudgetRow({ label, field, onChange, ariaLabel, unlimitedLabel }: {
 /** Cartão "Limites dos agentes" em Provedores (spec limites §UI): limites de passos que valem sem reiniciar. */
 export function BudgetsCard({ goal, mission, busy, error, onSave }: BudgetsCardProps) {
   const { t } = useI18n();
-  const [goalField, setGoalField] = useState<BudgetField>(() => budgetFieldFrom(goal, DEFAULT_VISIBLE));
-  const [missionField, setMissionField] = useState<BudgetField>(() => budgetFieldFrom(mission, DEFAULT_VISIBLE));
+  const [goalField, setGoalField] = useState<BudgetField>(() => budgetFieldFrom(goal, DEFAULT_GOAL_VISIBLE));
+  const [missionField, setMissionField] = useState<BudgetField>(() => budgetFieldFrom(mission, DEFAULT_MISSION_VISIBLE));
 
   // Snapshot novo (outra aba salvou, ou o daemon subiu com outro default): a tela segue o valor do banco.
-  useEffect(() => setGoalField(budgetFieldFrom(goal, DEFAULT_VISIBLE)), [goal]);
-  useEffect(() => setMissionField(budgetFieldFrom(mission, DEFAULT_VISIBLE)), [mission]);
+  useEffect(() => setGoalField(budgetFieldFrom(goal, DEFAULT_GOAL_VISIBLE)), [goal]);
+  useEffect(() => setMissionField(budgetFieldFrom(mission, DEFAULT_MISSION_VISIBLE)), [mission]);
 
   const save = () => onSave({ goal: budgetFieldToPatchValue(goalField), mission: budgetFieldToPatchValue(missionField) });
 
   return (
     <div className="card card--grey card--shadow budgets">
-      <Heading size="h4" variant="black">{t('providers.budgets.title')}</Heading>
+      <div className="budgets__head"><Heading size="h4" variant="black">{t('providers.budgets.title')}</Heading></div>
       <BudgetRow
         label={t('providers.budgets.goal')} field={goalField} onChange={setGoalField}
-        ariaLabel={t('providers.budgets.aria.goal')} unlimitedLabel={t('providers.budgets.unlimited')}
+        ariaLabel={t('providers.budgets.goal')} unlimitedLabel={t('providers.budgets.unlimited')}
       />
       <BudgetRow
         label={t('providers.budgets.mission')} field={missionField} onChange={setMissionField}
-        ariaLabel={t('providers.budgets.aria.mission')} unlimitedLabel={t('providers.budgets.unlimited')}
+        ariaLabel={t('providers.budgets.mission')} unlimitedLabel={t('providers.budgets.unlimited')}
       />
       {error && <div className="role__error" role="alert">{error}</div>}
       <button type="button" className="btn btn--primary" onClick={save} disabled={busy}>{t('providers.budgets.save')}</button>

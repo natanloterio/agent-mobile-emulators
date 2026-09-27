@@ -187,9 +187,9 @@ export function App() {
             onTest={actions.testConnection}
             onSetField={actions.setProviderField}
             onLoadModels={actions.loadProviderModels}
-            budgets={isLive ? {
-              goal: live?.stepBudgets?.goal ?? null,
-              mission: live?.stepBudgets?.mission ?? null,
+            budgets={live?.stepBudgets ? {
+              goal: live.stepBudgets.goal,
+              mission: live.stepBudgets.mission,
               busy: budgetsReq.busy,
               error: budgetsReq.error,
               onSave: (patch) => void settings.saveBudgets(patch),
