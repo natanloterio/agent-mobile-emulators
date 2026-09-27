@@ -104,6 +104,7 @@ export function NewGoal({ goalText, planStage, plan, planReq, launchReq, isMobil
           <div className="card card--grey card--shadow newgoal__composer">
             <textarea
               className="newgoal__textarea"
+              autoFocus
               value={shownText}
               onChange={(e) => onSetGoal(e.target.value)}
               rows={3}

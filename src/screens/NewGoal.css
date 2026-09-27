@@ -5,6 +5,9 @@
   border-radius: var(--radius-control); border: 1px solid var(--color-black); background: var(--color-white); outline: none;
 }
 .newgoal__textarea::placeholder { color: var(--color-placeholder); }
+/* Foco visível: em Wayland + NVIDIA o Electron às vezes não desenha o caret; o anel mostra onde se digita. */
+.newgoal__textarea { caret-color: var(--color-black); }
+.newgoal__textarea:focus { box-shadow: 0 0 0 4px var(--color-green); }
 .newgoal__examples { display: flex; gap: 8px; flex-wrap: wrap; }
 .plan { display: flex; flex-direction: column; gap: 24px; }
 .plan__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 24px; }

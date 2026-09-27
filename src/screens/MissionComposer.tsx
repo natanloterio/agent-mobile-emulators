@@ -17,7 +17,7 @@ export function MissionComposer({ options, req, onStart }: { readonly options: r
   return (
     <div className="card card--grey card--shadow newgoal__composer">
       <p className="screen__lede">{t('mission.lede')}</p>
-      <textarea className="newgoal__textarea" rows={3} value={text} placeholder={t('mission.placeholder')} onChange={(e) => setText(e.target.value)} />
+      <textarea className="newgoal__textarea" autoFocus rows={3} value={text} placeholder={t('mission.placeholder')} onChange={(e) => setText(e.target.value)} />
       <div className="mission__compose-ids" role="radiogroup" aria-label={t('mission.pickIdentity')}>
         {options.length === 0 && <span className="muted-14">{t('mission.noIdentities')}</span>}
         {options.map((o) => (
