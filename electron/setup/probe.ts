@@ -11,8 +11,8 @@ export interface ProbeDeps {
   readonly exists: (p: string) => Promise<boolean>;
   readonly canReadWrite: (p: string) => Promise<boolean>;
   readonly readText: (p: string) => Promise<string | null>;
-  /** stdout+stderr, ou null se o comando não existe ou falhou. */
-  readonly exec: (cmd: string, args: readonly string[]) => Promise<string | null>;
+  /** stdout+stderr, ou null se o comando não existe, falhou ou estourou `timeoutMs` (padrão 5 s). */
+  readonly exec: (cmd: string, args: readonly string[], timeoutMs?: number) => Promise<string | null>;
   readonly listDir: (p: string) => Promise<readonly string[]>;
   readonly keyringOk: () => Promise<boolean>;
 }
@@ -45,18 +45,23 @@ async function sdkPackage(id: 'sdk' | 'adb' | 'emu' | 'img', bin: string, dir: s
   return ok(id, parseSourceProperties((await d.readText(p.join(dir, 'source.properties'))) ?? '') ?? '?');
 }
 
-/** sdkmanager presente não basta: ele precisa do JRE do Enxame ou de um Java ≥ 17 no PATH. */
+/**
+ * sdkmanager presente não basta: ele precisa do JRE do Enxame ou de um Java ≥ 17 no PATH.
+ * No macOS só vale o JRE do Enxame: o /usr/bin/java de lá é um stub que pode abrir o diálogo de instalação.
+ */
 async function probeSdkTools(paths: SetupPaths, d: ProbeDeps): Promise<DepStatus> {
   const p = pathFor(paths.platform);
   const dir = p.dirname(p.dirname(paths.sdkmanager));
   const s = await sdkPackage('sdk', paths.sdkmanager, dir, paths, d);
   if (s.state !== 'ok' || (await d.exists(paths.javaBin))) return s;
-  const major = javaMajor(await d.exec('java', ['-version']));
+  const major = paths.platform.startsWith('darwin') ? null : javaMajor(await d.exec('java', ['-version']));
   return major !== null && major >= MIN_JAVA ? s : { ...todo('sdk', paths), sizeMb: sizesFor(paths.platform).jreOnly };
 }
 
 /** Consulta sem admin: 1 = recurso ligado. */
 export const WHPX_QUERY = "(Get-CimInstance Win32_OptionalFeature -Filter \"Name='HypervisorPlatform'\").InstallState";
+/** O PowerShell frio pode demorar bem mais que os 5 s padrão. */
+export const WHPX_TIMEOUT_MS = 30_000;
 
 /** Aceleração do emulador pelo próprio sistema (o emulador pode ainda não estar instalado). */
 async function probeAccel(platform: PlatformId, d: ProbeDeps): Promise<DepStatus> {
@@ -64,15 +69,22 @@ async function probeAccel(platform: PlatformId, d: ProbeDeps): Promise<DepStatus
     return (await d.exec('sysctl', ['-n', 'kern.hv_support']))?.trim() === '1' ? ok('kvm', 'Hypervisor.framework') : user('kvm', 'hvf-off');
   }
   if (platform === 'win32-x64') {
-    return (await d.exec('powershell', ['-NoProfile', '-Command', WHPX_QUERY]))?.trim() === '1' ? ok('kvm', 'WHPX') : user('kvm', 'whpx-off');
+    const out = (await d.exec('powershell', ['-NoProfile', '-Command', WHPX_QUERY], WHPX_TIMEOUT_MS))?.trim() ?? '';
+    // Sem número (timeout, PowerShell bloqueado): não dá para verificar; o emulador avisa depois.
+    if (!/^\d+$/.test(out)) return ok('kvm', null);
+    return out === '1' ? ok('kvm', 'WHPX') : user('kvm', 'whpx-off');
   }
   if (!(await d.exists('/dev/kvm'))) return user('kvm', 'kvm-bios');
   return (await d.canReadWrite('/dev/kvm')) ? ok('kvm', '/dev/kvm') : user('kvm', 'kvm-group');
 }
 
-/** O Ollama instalado pelo Enxame vem primeiro; senão o do PATH. */
+/** macOS: app do Electron não herda o PATH do shell; Homebrew e o app oficial ficam fora dele. */
+const MAC_OLLAMA_BINS: readonly string[] = ['/opt/homebrew/bin/ollama', '/usr/local/bin/ollama', '/Applications/Ollama.app/Contents/Resources/ollama'];
+
+/** O Ollama instalado pelo Enxame vem primeiro; no macOS os locais conhecidos; por fim o do PATH. */
 async function findOllama(paths: SetupPaths, d: ProbeDeps): Promise<{ bin: string; version: string } | null> {
-  for (const bin of [paths.ollamaBin, 'ollama']) {
+  const extra = paths.platform.startsWith('darwin') ? MAC_OLLAMA_BINS : [];
+  for (const bin of [paths.ollamaBin, ...extra, 'ollama']) {
     const version = parseOllamaVersion(await d.exec(bin, ['--version']));
     if (version) return { bin, version };
   }

@@ -5,13 +5,13 @@ import { javaMajor, listLocalModels, parseOllamaVersion, parseSourceProperties, 
 const paths = resolveSetupPaths({}, '/home/u', null, 'linux-x64');
 const SDK = paths.sdkRoot;
 
-function fake(o: { files?: string[]; rw?: string[]; texts?: Record<string, string>; exec?: Record<string, string>; dirs?: Record<string, string[]>; keyring?: boolean }): ProbeDeps {
+function fake(o: { files?: string[]; rw?: string[]; texts?: Record<string, string>; exec?: Record<string, string>; dirs?: Record<string, string[]>; keyring?: boolean; calls?: { cmd: string; timeoutMs?: number }[] }): ProbeDeps {
   const files = new Set(o.files ?? []);
   return {
     exists: async (p) => files.has(p),
     canReadWrite: async (p) => (o.rw ?? []).includes(p),
     readText: async (p) => o.texts?.[p] ?? null,
-    exec: async (cmd, args) => o.exec?.[`${cmd} ${args.join(' ')}`] ?? null,
+    exec: async (cmd, args, timeoutMs) => { o.calls?.push({ cmd: `${cmd} ${args.join(' ')}`, timeoutMs }); return o.exec?.[`${cmd} ${args.join(' ')}`] ?? null; },
     listDir: async (p) => o.dirs?.[p] ?? [],
     keyringOk: async () => o.keyring ?? true,
   };
@@ -114,9 +114,46 @@ describe('aceleração por sistema', () => {
     const off = await probeDeps(win, fake({ exec: { [cmd]: '2\r\n' } }));
     expect(off.deps.find((d) => d.id === 'kvm')).toMatchObject({ state: 'user', fix: 'whpx-off' });
   });
+  it('Windows: consulta do WHPX com timeout próprio de 30 s', async () => {
+    const win = resolveSetupPaths({ LOCALAPPDATA: 'C:\\L' }, 'C:\\Users\\u', null, 'win32-x64');
+    const calls: { cmd: string; timeoutMs?: number }[] = [];
+    await probeDeps(win, fake({ calls }));
+    expect(calls.find((c) => c.cmd.startsWith('powershell'))?.timeoutMs).toBe(30_000);
+  });
+  it('Windows: sonda sem número (timeout, PowerShell bloqueado, lixo) não bloqueia: ok sem versão', async () => {
+    const win = resolveSetupPaths({ LOCALAPPDATA: 'C:\\L' }, 'C:\\Users\\u', null, 'win32-x64');
+    const cmd = `powershell -NoProfile -Command ${WHPX_QUERY}`;
+    for (const out of [undefined, '', '  \r\n', 'Get-CimInstance : Access denied']) {
+      const r = await probeDeps(win, fake({ exec: out === undefined ? {} : { [cmd]: out } }));
+      expect(r.deps.find((d) => d.id === 'kvm')).toMatchObject({ state: 'ok', version: null, fix: null });
+    }
+  });
   it('Linux continua com /dev/kvm', async () => {
     const lin = resolveSetupPaths({}, '/home/u', null, 'linux-x64');
     expect((await probeDeps(lin, fake({}))).deps.find((d) => d.id === 'kvm')).toMatchObject({ fix: 'kvm-bios' });
+  });
+});
+
+describe('macOS: Ollama e Java', () => {
+  const mac = resolveSetupPaths({}, '/Users/u', null, 'darwin-arm64');
+  it('procura o Ollama do Homebrew e do app depois do Enxame e antes do PATH', async () => {
+    const calls: { cmd: string }[] = [];
+    await probeDeps(mac, fake({ calls }));
+    const bins = calls.filter((c) => c.cmd.endsWith(' --version')).map((c) => c.cmd.replace(/ --version$/, ''));
+    expect(bins).toEqual([mac.ollamaBin, '/opt/homebrew/bin/ollama', '/usr/local/bin/ollama', '/Applications/Ollama.app/Contents/Resources/ollama', 'ollama']);
+    const r = await probeDeps(mac, fake({ exec: { '/opt/homebrew/bin/ollama --version': 'ollama version is 0.12.3' } }));
+    expect(r.ollamaBin).toBe('/opt/homebrew/bin/ollama');
+  });
+  it('não roda java -version (o stub do macOS abre diálogo): sem o JRE do Enxame, sdk fica para instalar', async () => {
+    const calls: { cmd: string }[] = [];
+    const r = await probeDeps(mac, fake({ files: [mac.sdkmanager], exec: { 'java -version': 'openjdk version "21.0.4"' }, calls }));
+    expect(calls.some((c) => c.cmd.startsWith('java'))).toBe(false);
+    expect(r.deps.find((d) => d.id === 'sdk')).toMatchObject({ state: 'todo' });
+  });
+  it('Linux continua procurando só no Enxame e no PATH', async () => {
+    const calls: { cmd: string }[] = [];
+    await probeDeps(paths, fake({ calls }));
+    expect(calls.filter((c) => c.cmd.endsWith(' --version')).map((c) => c.cmd)).toEqual([`${paths.ollamaBin} --version`, 'ollama --version']);
   });
 });
 
