@@ -19,7 +19,7 @@ const NOTE_CURSOR_RE = /call get_screen_state with cursor "([^"]+)"/;
 
 function parseNodeLine(line: string): ScreenNode | null {
   const c = line.split('\t');
-  if (c.length < 7 || !c[0].startsWith('node_')) return null;
+  if (c.length < 7 || !c[0].startsWith('node_') || c[0] === 'node_id') return null; // Rejeita cabeçalho de coluna
   const [l, t, r, b] = c[5].split(',').map(Number);
   return {
     id: c[0], cls: c[1], text: c[2] === '-' ? '' : c[2], desc: c[3] === '-' ? '' : c[3], resId: c[4] === '-' ? '' : c[4],
