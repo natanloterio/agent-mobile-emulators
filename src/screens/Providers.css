@@ -56,3 +56,15 @@
 .role__runtime > span:first-child { opacity: 0.8; }
 .role__runtime--current > span:first-child { opacity: 1; font-weight: var(--weight-medium); }
 .role__runtime-error { background: var(--color-white); color: var(--color-danger); border: 1px solid var(--color-dark); border-radius: var(--radius-control); padding: 6px 10px; font-size: 13px; font-weight: var(--weight-medium); }
+
+/* Cartão "Limites dos agentes" (spec limites §UI): duas linhas número + "sem limite", botão Salvar e uma nota curta. */
+.budgets { gap: 18px; }
+.budgets__row { gap: 10px; }
+.budgets__controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.budgets__input { width: 110px; flex: none; }
+.budgets__unlimited { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.budgets__unlimited input { width: 18px; height: 18px; }
+.budgets__note { font-size: 14px; opacity: 0.85; }
+@media (max-width: 759px) {
+  .budgets__input { width: 90px; }
+}

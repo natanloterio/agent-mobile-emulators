@@ -38,7 +38,7 @@ const SHOW_COST = true;
 const DEMO_PAST = PAST_GOALS.map((g) => ({ ...g, key: g.text }));
 
 export function App() {
-  const { state, actions, bridged, goal, identity, credentials, mission } = useFleet();
+  const { state, actions, bridged, goal, identity, credentials, mission, settings } = useFleet();
   const isMobile = useIsMobile();
   const { snap: live, frames, bus } = useLiveFleet();
   const i18n = useI18n();
@@ -173,6 +173,7 @@ export function App() {
         );
       case 'prov': {
         const vram = isLive ? liveVram(live?.host, fleetSize, i18n) : null;
+        const budgetsReq = requestOf(state, 'budgets');
         return (
           <Providers
             roles={liveRoles(selectRoles(state, i18n), live, i18n)}
@@ -186,6 +187,13 @@ export function App() {
             onTest={actions.testConnection}
             onSetField={actions.setProviderField}
             onLoadModels={actions.loadProviderModels}
+            budgets={isLive ? {
+              goal: live?.stepBudgets?.goal ?? null,
+              mission: live?.stepBudgets?.mission ?? null,
+              busy: budgetsReq.busy,
+              error: budgetsReq.error,
+              onSave: (patch) => void settings.saveBudgets(patch),
+            } : null}
           />
         );
       }
