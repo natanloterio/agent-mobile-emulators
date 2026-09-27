@@ -25,6 +25,23 @@ export function createSecretMask(initial: readonly string[] = []): SecretMask {
   };
 }
 
+/**
+ * Aplica a máscara de segredos no texto que volta ao modelo (e que o recordStep grava) de um resultado MCP (`run.ts`
+ * usa isto para toda tool de missão). Partes que não são texto nem imagem (ex.: `resource`) são descartadas em vez
+ * de mascaradas: não dá para garantir que todo texto aninhado nelas foi coberto, e um JSON cru vazando pro modelo é
+ * pior que perder uma parte rara do resultado de uma tool.
+ */
+export function maskOut(out: unknown, mask: (s: string) => string): unknown {
+  if (typeof out === 'string') return mask(out);
+  if (out && typeof out === 'object' && Array.isArray((out as { content?: unknown }).content)) {
+    const content = (out as { content: { type: string; text?: unknown }[] }).content
+      .map((c) => (c.type === 'text' && typeof c.text === 'string' ? { ...c, text: mask(c.text) } : c))
+      .filter((c) => c.type === 'text' || c.type === 'image');
+    return { ...(out as object), content };
+  }
+  return out;
+}
+
 const LOWER = 'abcdefghijkmnopqrstuvwxyz';
 const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const DIGIT = '23456789';
