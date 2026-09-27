@@ -8,6 +8,7 @@ import type { Adb } from '../device/adb.js';
 import type { ProbeResult } from '../device/probe.js';
 import { killEmulator, loadSnapshot, saveSnapshot } from '../fleet/emulator.js';
 import type { Route, RouteCtx } from './api.js';
+import { CredsBody, issues } from './routes-credentials.js';
 import { buildSnapshot, isRestoreUnsafe } from './snapshot.js';
 
 /** Rotas do ciclo de vida da identidade (spec inc. 5 §3.2, Frente B). `/control` e `/input` ficam para outra rota. */
@@ -58,8 +59,6 @@ export const normalizeHandle = (h: string): string | null => (HANDLE.test(h) ? `
 const PinSchema = z.string().regex(/^\d{4,16}$/, 'PIN: só dígitos, 4 a 16');
 const CreateBody = z.object({ name: z.string().regex(NAME, 'nome: [A-Za-z0-9_], até 32').optional(), handle: z.string().optional(), pin: PinSchema.optional() });
 const PinBody = z.object({ pin: PinSchema });
-// Mensagens de validação nunca repetem o valor recebido (a senha).
-const CredsBody = z.object({ username: z.string().trim().min(1, 'usuário obrigatório').max(100, 'usuário longo demais'), password: z.string().min(1, 'senha obrigatória').max(200, 'senha longa demais') });
 const BootBody = z.object({ window: z.boolean().optional() });
 const LoginBody = z.object({ handle: z.string() });
 const PauseBody = z.object({ paused: z.boolean() });
@@ -67,7 +66,6 @@ const BanBody = z.object({ reason: z.string().trim().min(1, 'motivo obrigatório
 const RestoreBody = z.object({ confirm: z.boolean().optional() });
 
 const errMsg = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 300);
-const issues = (e: z.ZodError) => e.issues.map((i) => i.message).join('; ');
 
 type Action = (ctx: RouteCtx, id: IdentityRow) => Promise<void>;
 
