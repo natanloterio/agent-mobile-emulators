@@ -308,3 +308,35 @@ describe('runTask — incremento 3', () => {
     expect(getIdentity(db, 'conta1')?.state).toBe('idle'); expect(getIdentity(db, 'conta1')?.lastError).toMatch(/ANTHROPIC_API_KEY/);
   });
 });
+
+describe('click_node em nó não clicável (integrador)', () => {
+  const clickTool = (fail: string | null) => tool({ description: 'click', inputSchema: z.object({ node_id: z.string() }), execute: async () => { if (fail) throw new Error(`Error executing tool android_conta1_click_node: ${fail}`); return 'Click performed'; } });
+  it('"is not clickable" cai para tap_node no mesmo nó e o modelo recebe o toque', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row); const tapped: unknown[] = [];
+    const tap = tool({ description: 'tap', inputSchema: z.object({ node_id: z.string() }), execute: async (i) => { tapped.push(i); return 'Tap executed at (5, 5) within node \'node_ok\''; } });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }),
+      calls({ id: 'c2', name: 'android_conta1_click_node', input: { node_id: 'node_ok' } }),
+      text('fim'),
+    ] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => SCREEN), android_conta1_click_node: clickTool("Node 'node_ok' is not clickable"), android_conta1_tap_node: tap }), model });
+    expect(r.outcome).toBe('done');
+    expect(tapped).toEqual([{ node_id: 'node_ok' }]);
+    const click = stepsOf(db, r.taskId).find((s) => s.tool === 'android_conta1_click_node');
+    expect(click?.error).toBeNull();
+    expect(click?.result_excerpt).toMatch(/Tap executed/);
+    expect(JSON.stringify(model.doGenerateCalls[2].prompt)).toMatch(/não é clicável.*tap_node/);
+  });
+  it('outros erros de click_node seguem para o modelo como antes (sem toque)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row); let taps = 0;
+    const tap = tool({ description: 'tap', inputSchema: z.object({ node_id: z.string() }), execute: async () => { taps += 1; return 'Tap'; } });
+    const model = new MockLanguageModelV4({ doGenerate: [
+      calls({ id: 'c1', name: 'android_conta1_get_screen_state', input: {} }),
+      calls({ id: 'c2', name: 'android_conta1_click_node', input: { node_id: 'node_ok' } }),
+      text('fim'),
+    ] as never });
+    const r = await runTask(opts(db), { connect: mkMcp({ android_conta1_get_screen_state: screenTool(() => SCREEN), android_conta1_click_node: clickTool("Node 'node_ok' not found in accessibility tree"), android_conta1_tap_node: tap }), model });
+    expect(taps).toBe(0);
+    expect(stepsOf(db, r.taskId).find((s) => s.tool === 'android_conta1_click_node')?.error).toMatch(/not found/);
+  });
+});
