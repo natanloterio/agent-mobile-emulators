@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { connectSnapshots, ensureDaemon, post, request, waitForInfo, type DaemonInfo } from './daemon-bridge.js';
 import { createDaemonGate } from './daemon-gate.js';
 import { assertId, createCredentialVault } from './credentials.js';
-import { migrateLegacyCredentials } from './credentials-migrate.js';
+import { migrateLegacyCredentials, parseCredentialsResponse } from './credentials-migrate.js';
 import { createGopBuffer } from './gop-buffer.js';
 import { loginViaDaemon } from './login.js';
 import { apiRoute } from './api-route.js';
@@ -80,12 +80,13 @@ app.whenReady().then(() => {
   const legacyFile = path.join(app.getPath('userData'), 'credentials.json');
   const legacy = createCredentialVault({ safeStorage, file: legacyFile });
   const daemon = (method: 'GET' | 'PUT' | 'POST' | 'DELETE', p: string, body?: unknown) => gate.use((info) => request(info, method, p, body));
-  void migrateLegacyCredentials({
+  // Roda só depois do gate.set (abaixo): antes disso o daemon ainda não respondeu e a migração falharia sem nova tentativa.
+  const migrateCredentials = () => migrateLegacyCredentials({
     legacy, post: (p, body) => daemon('POST', p, body),
     exists: () => access(legacyFile).then(() => true, () => false), remove: () => unlink(legacyFile),
   }).then((r) => { if (r.migrated) console.log(`[enxame] ${r.migrated} credencial(is) migrada(s) para o cofre do daemon`); })
     .catch((e: unknown) => console.error('[enxame] migração de credenciais falhou; o arquivo antigo foi mantido:', (e as Error).message));
-  const credentials = () => daemon('GET', '/credentials') as Promise<{ available: { ok: boolean; reason: string | null }; entries: Record<string, { username: string }> }>;
+  const credentials = async () => parseCredentialsResponse(await daemon('GET', '/credentials'));
   ipcMain.handle('enxame:credentials:available', async () => (await credentials()).available);
   ipcMain.handle('enxame:credentials:status', async () => (await credentials()).entries);
   ipcMain.handle('enxame:credentials:set', (_e, id: string, username: string, password: string) => { assertId(id); return daemon('PUT', `/identities/${id}/credentials`, { username, password }); });
@@ -97,6 +98,7 @@ app.whenReady().then(() => {
   ensureDaemon(projectRoot);
   waitForInfo().then((info) => {
     gate.set(info);
+    void migrateCredentials();
     const broadcast = (ch: string, d: unknown) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send(ch, d); };
     connectSnapshots(info, {
       onSnapshot: (data) => { lastSnapshot = data; broadcast('enxame:snapshot', data); },
