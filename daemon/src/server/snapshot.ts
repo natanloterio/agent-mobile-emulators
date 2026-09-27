@@ -30,9 +30,18 @@ export interface GoalSummary {
   readonly tasksTotal: number; readonly tasksDone: number; readonly tasksFailed: number; readonly tasksNeeds: number;
   readonly tasksRunning: number; readonly itemsHandled: number;
 }
+/** Uma fatia da VRAM medida: cada modelo carregado, os emuladores e o resto do sistema. */
+export interface GpuSlice {
+  readonly kind: 'model' | 'emulators' | 'other';
+  readonly label: string; readonly usedMiB: number;
+  readonly runtime?: 'ollama' | 'lmstudio';
+}
+export interface GpuBreakdown { readonly totalMiB: number; readonly usedMiB: number; readonly slices: readonly GpuSlice[]; readonly at: string }
 export interface HostMetrics {
   readonly ramUsedGiB: number; readonly ramTotalGiB: number; readonly cpuPct: number; readonly threads: number;
   readonly vramUsedMiB: number | null; readonly vramTotalMiB: number | null; readonly at: string;
+  /** Ocupação da GPU por consumidor (nvidia-smi por processo + runtimes locais); null sem GPU NVIDIA. */
+  readonly gpu?: GpuBreakdown | null;
 }
 export interface FleetSnapshot {
   readonly identities: readonly IdentitySnapshot[]; readonly providers: Readonly<Record<RoleKey, ProviderSnapshot>>;
