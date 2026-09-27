@@ -18,7 +18,7 @@ const GOAL = 'Levantar comentÃ¡rios recentes sem resposta e propor rascunhos (nÃ
 const MODELS = (process.env.BENCH_MODELS ?? 'qwen3.5:27b,gpt-oss:20b,gemma4:12b,qwen2.5-coder:14b').split(',').map((s) => s.trim()).filter(Boolean);
 const RUNS = 3;
 const exec = promisify(execFile);
-const nvidia = async () => (await exec('nvidia-smi', ['--query-gpu=memory.used', '--format=csv,noheader,nounits'])).stdout;
+const nvidia = async () => (await exec('nvidia-smi', ['--query-gpu=memory.used', '--format=csv,noheader,nounits'], { windowsHide: true })).stdout;
 
 const env = loadEnv();
 const living = daemonAlive(CONFIG.daemonInfoPath);

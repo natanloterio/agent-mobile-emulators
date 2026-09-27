@@ -25,7 +25,9 @@ export async function cloneAvd(base: string, newName: string, deps: AvdDeps = {}
   const home = deps.home ?? CONFIG.avd.home;
   assertName(base); assertName(newName);
   const src = avdDir(home, base); const dst = avdDir(home, newName); const dstIni = iniPath(home, newName);
-  if (!(await exists(src))) throw new Error(`AVD-base ${base} não encontrado em ${home}`);
+  if (!(await exists(src))) {
+    throw new Error(`AVD-base ${base} não encontrado em ${home}. Crie no Android Studio um AVD Android 14 com Google Play chamado enxame_golden, com o app alvo e o app MCP instalados, ou aponte ENXAME_AVD_BASE para o seu`);
+  }
   if ((await exists(dst)) || (await exists(dstIni))) throw new Error(`AVD ${newName} já existe em ${home}`);
   try {
     const baseIni = await readFile(iniPath(home, base), 'utf8');

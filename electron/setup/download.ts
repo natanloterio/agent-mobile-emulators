@@ -38,6 +38,12 @@ export async function downloadResumable(o: DownloadOpts): Promise<void> {
   const fetchFn = o.fetch ?? fetch;
   const part = `${o.dest}.part`;
   await mkdir(path.dirname(o.dest), { recursive: true });
+  // Destino inteiro de uma tentativa anterior (ex.: extração falhou): com o checksum batendo, reaproveita.
+  const kept = o.checksum ? await sizeOf(o.dest) : 0;
+  if (o.checksum && kept > 0 && (await hashFile(o.dest, o.checksum.algo)) === o.checksum.hex.toLowerCase()) {
+    o.onProgress?.(kept, kept);
+    return;
+  }
   const have = await sizeOf(part);
   let res: Response;
   try {

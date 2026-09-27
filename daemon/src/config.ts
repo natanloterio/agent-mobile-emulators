@@ -61,10 +61,16 @@ export function localContextFrom(raw: string | undefined, fallback = 65536): num
 }
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/** Processos externos (adb push) não leem dentro do app.asar; o electron-builder deixa o vendor em app.asar.unpacked. */
+export function unpackedPath(p: string): string {
+  return p.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+}
+
 /** Resolve um arquivo de `daemon/vendor` tanto a partir de `daemon/src` (vitest) quanto de `dist-daemon` (build). */
 function resolveVendor(file: string): string {
   const candidates = [path.resolve(HERE, '..', 'daemon', 'vendor', file), path.resolve(HERE, '..', '..', 'daemon', 'vendor', file)];
-  return candidates.find((p) => existsSync(p)) ?? candidates[0];
+  return unpackedPath(candidates.find((p) => existsSync(p)) ?? candidates[0]);
 }
 
 export const CONFIG = {

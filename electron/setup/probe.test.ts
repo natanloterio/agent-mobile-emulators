@@ -1,42 +1,45 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveSetupPaths } from './paths.js';
-import { javaMajor, listLocalModels, nodeMajor, parseOllamaVersion, parseSourceProperties, probeDeps, type ProbeDeps } from './probe.js';
+import type { HardwareDeps } from './hardware.js';
+import { javaMajor, listLocalModels, parseOllamaVersion, parseSourceProperties, probeDeps, probeSetup, WHPX_QUERY, type ProbeDeps } from './probe.js';
 
-const paths = resolveSetupPaths({}, '/home/u');
+const paths = resolveSetupPaths({}, '/home/u', null, 'linux-x64');
 const SDK = paths.sdkRoot;
-const IMG = `${SDK}/system-images/android-34/google_apis_playstore/x86_64`;
 
-function fake(o: { files?: string[]; rw?: string[]; texts?: Record<string, string>; exec?: Record<string, string>; dirs?: Record<string, string[]>; keyring?: boolean }): ProbeDeps {
+function fake(o: { files?: string[]; rw?: string[]; texts?: Record<string, string>; exec?: Record<string, string>; dirs?: Record<string, string[]>; keyring?: boolean; calls?: { cmd: string; timeoutMs?: number }[] }): ProbeDeps {
   const files = new Set(o.files ?? []);
   return {
     exists: async (p) => files.has(p),
     canReadWrite: async (p) => (o.rw ?? []).includes(p),
     readText: async (p) => o.texts?.[p] ?? null,
-    exec: async (cmd, args) => o.exec?.[`${cmd} ${args.join(' ')}`] ?? null,
+    exec: async (cmd, args, timeoutMs) => { o.calls?.push({ cmd: `${cmd} ${args.join(' ')}`, timeoutMs }); return o.exec?.[`${cmd} ${args.join(' ')}`] ?? null; },
     listDir: async (p) => o.dirs?.[p] ?? [],
     keyringOk: async () => o.keyring ?? true,
   };
 }
 
 const allInstalled = fake({
-  files: [`${SDK}/cmdline-tools/latest/bin/sdkmanager`, `${SDK}/platform-tools/adb`, `${SDK}/emulator/emulator`, `${IMG}/system.img`, '/dev/kvm'],
+  files: [paths.sdkmanager, paths.adbBin, paths.emulatorBin, `${paths.imageDir}/system.img`, '/dev/kvm'],
   rw: ['/dev/kvm'],
   texts: {
     [`${SDK}/cmdline-tools/latest/source.properties`]: 'Pkg.Revision=19.0\n',
     [`${SDK}/platform-tools/source.properties`]: 'Pkg.UserSrc=false\nPkg.Revision=37.0.0\n',
     [`${SDK}/emulator/source.properties`]: 'Pkg.Revision=35.3.11\n',
-    [`${IMG}/source.properties`]: 'Pkg.Revision=14\n',
+    [`${paths.imageDir}/source.properties`]: 'Pkg.Revision=14\n',
   },
-  exec: { 'node --version': 'v26.0.0\n', 'java -version': 'openjdk version "21.0.4" 2024-07-16\nOpenJDK Runtime Environment\n', 'ollama --version': 'Warning: could not connect to a running Ollama instance\nWarning: client version is 0.12.3\n' },
-  dirs: { '/home/u/.ollama/models/manifests/registry.ollama.ai/library': ['gpt-oss'], '/home/u/.ollama/models/manifests/registry.ollama.ai/library/gpt-oss': ['20b'] },
+  exec: { 'java -version': 'openjdk version "21.0.4" 2024-07-16\nOpenJDK Runtime Environment\n', 'ollama --version': 'Warning: could not connect to a running Ollama instance\nWarning: client version is 0.12.3\n' },
+  // listLocalModels usa o `path` do host (não o `p` por plataforma de paths.ts), então as chaves têm de casar com ele.
+  dirs: {
+    [path.join(paths.ollamaModels, 'manifests', 'registry.ollama.ai', 'library')]: ['gpt-oss'],
+    [path.join(paths.ollamaModels, 'manifests', 'registry.ollama.ai', 'library', 'gpt-oss')]: ['20b'],
+  },
 });
 
 describe('parsers', () => {
-  it('source.properties, node e ollama', () => {
+  it('source.properties e ollama', () => {
     expect(parseSourceProperties('Pkg.UserSrc=false\nPkg.Revision=37.0.0\n')).toBe('37.0.0');
     expect(parseSourceProperties('nada')).toBeNull();
-    expect(nodeMajor('v26.0.0\n')).toBe(26);
-    expect(nodeMajor(null)).toBeNull();
     expect(parseOllamaVersion('ollama version is 0.34.4')).toBe('0.34.4');
     expect(parseOllamaVersion(null)).toBeNull();
   });
@@ -53,16 +56,15 @@ describe('probeDeps', () => {
   it('máquina já usada: tudo ok, com versões, e o Ollama do PATH', async () => {
     const r = await probeDeps(paths, allInstalled);
     expect(r.deps.map((d) => [d.id, d.state, d.version])).toEqual([
-      ['node', 'ok', '26.0.0'], ['sdk', 'ok', '19.0'], ['adb', 'ok', '37.0.0'], ['emu', 'ok', '35.3.11'],
+      ['sdk', 'ok', '19.0'], ['adb', 'ok', '37.0.0'], ['emu', 'ok', '35.3.11'],
       ['img', 'ok', '14'], ['kvm', 'ok', '/dev/kvm'], ['ollama', 'ok', '0.12.3'], ['keyring', 'ok', null],
     ]);
     expect(r.ollamaBin).toBe('ollama');
     expect(r.localModels).toEqual(['gpt-oss:20b']);
   });
-  it('máquina limpa: SDK e Ollama para instalar com tamanho; Node velho, KVM sem grupo e chaveiro trancado pedem a pessoa', async () => {
-    const r = await probeDeps(paths, fake({ files: ['/dev/kvm'], exec: { 'node --version': 'v20.18.0' }, keyring: false }));
+  it('máquina limpa: SDK e Ollama para instalar com tamanho; KVM sem grupo e chaveiro trancado pedem a pessoa', async () => {
+    const r = await probeDeps(paths, fake({ files: ['/dev/kvm'], keyring: false }));
     const by = Object.fromEntries(r.deps.map((d) => [d.id, d]));
-    expect(by.node).toMatchObject({ state: 'user', fix: 'node-missing' });
     expect(by.sdk).toMatchObject({ state: 'todo', sizeMb: 228 });
     expect(by.img).toMatchObject({ state: 'todo', sizeMb: 1600 });
     expect(by.kvm).toMatchObject({ state: 'user', fix: 'kvm-group' });
@@ -82,23 +84,101 @@ describe('probeDeps', () => {
 });
 
 describe('probeDeps: Java do sdkmanager', () => {
-  const SM = `${SDK}/cmdline-tools/latest/bin/sdkmanager`;
   const sdkOf = async (d: ProbeDeps) => (await probeDeps(paths, d)).deps.find((x) => x.id === 'sdk');
   it('sdkmanager sem JRE do Enxame e sem Java ≥ 17: sdk fica para instalar (só o JRE)', async () => {
-    expect(await sdkOf(fake({ files: [SM] }))).toMatchObject({ state: 'todo', sizeMb: 47 });
-    expect(await sdkOf(fake({ files: [SM], exec: { 'java -version': 'java version "1.8.0_392"' } }))).toMatchObject({ state: 'todo' });
+    expect(await sdkOf(fake({ files: [paths.sdkmanager] }))).toMatchObject({ state: 'todo', sizeMb: 47 });
+    expect(await sdkOf(fake({ files: [paths.sdkmanager], exec: { 'java -version': 'java version "1.8.0_392"' } }))).toMatchObject({ state: 'todo' });
   });
   it('sdkmanager com Java ≥ 17 no PATH ou com o JRE do Enxame: ok', async () => {
-    expect(await sdkOf(fake({ files: [SM], exec: { 'java -version': 'openjdk version "17.0.12"' } }))).toMatchObject({ state: 'ok' });
-    expect(await sdkOf(fake({ files: [SM, `${paths.jreDir}/bin/java`] }))).toMatchObject({ state: 'ok' });
+    expect(await sdkOf(fake({ files: [paths.sdkmanager], exec: { 'java -version': 'openjdk version "17.0.12"' } }))).toMatchObject({ state: 'ok' });
+    expect(await sdkOf(fake({ files: [paths.sdkmanager, paths.javaBin] }))).toMatchObject({ state: 'ok' });
   });
 });
 
 describe('listLocalModels', () => {
   it('nome:tag de cada manifesto, ordenado; diretório ausente = nenhum', async () => {
-    const lib = '/m/manifests/registry.ollama.ai/library';
-    const d = fake({ dirs: { [lib]: ['qwen3', 'gpt-oss'], [`${lib}/qwen3`]: ['14b', '32b'], [`${lib}/gpt-oss`]: ['20b'] } });
+    const lib = path.join('/m', 'manifests', 'registry.ollama.ai', 'library');
+    const d = fake({ dirs: { [lib]: ['qwen3', 'gpt-oss'], [path.join(lib, 'qwen3')]: ['14b', '32b'], [path.join(lib, 'gpt-oss')]: ['20b'] } });
     expect(await listLocalModels('/m', d)).toEqual(['gpt-oss:20b', 'qwen3:14b', 'qwen3:32b']);
     expect(await listLocalModels('/vazio', d)).toEqual([]);
+  });
+});
+
+describe('aceleração por sistema', () => {
+  it('macOS: kern.hv_support=1 → ok; 0 → hvf-off', async () => {
+    const mac = resolveSetupPaths({}, '/Users/u', null, 'darwin-arm64');
+    const on = await probeDeps(mac, fake({ exec: { 'sysctl -n kern.hv_support': '1\n' } }));
+    expect(on.deps.find((d) => d.id === 'kvm')).toMatchObject({ state: 'ok', version: 'Hypervisor.framework' });
+    const off = await probeDeps(mac, fake({ exec: { 'sysctl -n kern.hv_support': '0\n' } }));
+    expect(off.deps.find((d) => d.id === 'kvm')).toMatchObject({ state: 'user', fix: 'hvf-off' });
+  });
+  it('Windows: HypervisorPlatform InstallState 1 → ok; outro → whpx-off', async () => {
+    const win = resolveSetupPaths({ LOCALAPPDATA: 'C:\\L' }, 'C:\\Users\\u', null, 'win32-x64');
+    const cmd = `powershell -NoProfile -Command ${WHPX_QUERY}`;
+    const on = await probeDeps(win, fake({ exec: { [cmd]: '1\r\n' } }));
+    expect(on.deps.find((d) => d.id === 'kvm')).toMatchObject({ state: 'ok', version: 'WHPX' });
+    const off = await probeDeps(win, fake({ exec: { [cmd]: '2\r\n' } }));
+    expect(off.deps.find((d) => d.id === 'kvm')).toMatchObject({ state: 'user', fix: 'whpx-off' });
+  });
+  it('Windows: consulta do WHPX com timeout próprio de 30 s', async () => {
+    const win = resolveSetupPaths({ LOCALAPPDATA: 'C:\\L' }, 'C:\\Users\\u', null, 'win32-x64');
+    const calls: { cmd: string; timeoutMs?: number }[] = [];
+    await probeDeps(win, fake({ calls }));
+    expect(calls.find((c) => c.cmd.startsWith('powershell'))?.timeoutMs).toBe(30_000);
+  });
+  it('Windows: sonda sem número (timeout, PowerShell bloqueado, lixo) não bloqueia: ok sem versão', async () => {
+    const win = resolveSetupPaths({ LOCALAPPDATA: 'C:\\L' }, 'C:\\Users\\u', null, 'win32-x64');
+    const cmd = `powershell -NoProfile -Command ${WHPX_QUERY}`;
+    for (const out of [undefined, '', '  \r\n', 'Get-CimInstance : Access denied']) {
+      const r = await probeDeps(win, fake({ exec: out === undefined ? {} : { [cmd]: out } }));
+      expect(r.deps.find((d) => d.id === 'kvm')).toMatchObject({ state: 'ok', version: null, fix: null });
+    }
+  });
+  it('Linux continua com /dev/kvm', async () => {
+    const lin = resolveSetupPaths({}, '/home/u', null, 'linux-x64');
+    expect((await probeDeps(lin, fake({}))).deps.find((d) => d.id === 'kvm')).toMatchObject({ fix: 'kvm-bios' });
+  });
+});
+
+describe('macOS: Ollama e Java', () => {
+  const mac = resolveSetupPaths({}, '/Users/u', null, 'darwin-arm64');
+  it('procura o Ollama do Homebrew e do app depois do Enxame e antes do PATH', async () => {
+    const calls: { cmd: string }[] = [];
+    await probeDeps(mac, fake({ calls }));
+    const bins = calls.filter((c) => c.cmd.endsWith(' --version')).map((c) => c.cmd.replace(/ --version$/, ''));
+    expect(bins).toEqual([mac.ollamaBin, '/opt/homebrew/bin/ollama', '/usr/local/bin/ollama', '/Applications/Ollama.app/Contents/Resources/ollama', 'ollama']);
+    const r = await probeDeps(mac, fake({ exec: { '/opt/homebrew/bin/ollama --version': 'ollama version is 0.12.3' } }));
+    expect(r.ollamaBin).toBe('/opt/homebrew/bin/ollama');
+  });
+  it('não roda java -version (o stub do macOS abre diálogo): sem o JRE do Enxame, sdk fica para instalar', async () => {
+    const calls: { cmd: string }[] = [];
+    const r = await probeDeps(mac, fake({ files: [mac.sdkmanager], exec: { 'java -version': 'openjdk version "21.0.4"' }, calls }));
+    expect(calls.some((c) => c.cmd.startsWith('java'))).toBe(false);
+    expect(r.deps.find((d) => d.id === 'sdk')).toMatchObject({ state: 'todo' });
+  });
+  it('Linux continua procurando só no Enxame e no PATH', async () => {
+    const calls: { cmd: string }[] = [];
+    await probeDeps(paths, fake({ calls }));
+    expect(calls.filter((c) => c.cmd.endsWith(' --version')).map((c) => c.cmd)).toEqual([`${paths.ollamaBin} --version`, 'ollama --version']);
+  });
+});
+
+describe('tamanhos por sistema', () => {
+  it('Windows: sdk e ollama pelo pacote do Windows', async () => {
+    const win = resolveSetupPaths({ LOCALAPPDATA: 'C:\\L' }, 'C:\\Users\\u', null, 'win32-x64');
+    const r = await probeDeps(win, fake({}));
+    expect(r.deps.find((d) => d.id === 'sdk')).toMatchObject({ state: 'todo', sizeMb: 199 });
+    expect(r.deps.find((d) => d.id === 'ollama')).toMatchObject({ state: 'todo', sizeMb: 1461 });
+  });
+});
+
+describe('probeSetup: arquitetura da imagem', () => {
+  const hw: HardwareDeps = { totalMemBytes: () => 2 ** 34, cpus: () => [], exec: async () => null, freeDiskBytes: async () => 0 };
+  it('x86_64 no Linux/Windows/Mac Intel; arm64-v8a no Apple Silicon', async () => {
+    expect((await probeSetup(paths, fake({}), hw)).report.imageAbi).toBe('x86_64');
+    const win = resolveSetupPaths({ LOCALAPPDATA: 'C:\\L' }, 'C:\\Users\\u', null, 'win32-x64');
+    expect((await probeSetup(win, fake({}), hw)).report.imageAbi).toBe('x86_64');
+    const mac = resolveSetupPaths({}, '/Users/u', null, 'darwin-arm64');
+    expect((await probeSetup(mac, fake({}), hw)).report.imageAbi).toBe('arm64-v8a');
   });
 });

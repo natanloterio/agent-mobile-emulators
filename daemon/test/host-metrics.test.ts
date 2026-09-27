@@ -64,7 +64,7 @@ describe('createHostMetrics', () => {
     let broken = false;
     const m = createHostMetrics({
       readFile: (p) => { if (broken) throw new Error('EACCES'); return p === '/proc/meminfo' ? MEMINFO : stat(1, 1); },
-      nvidiaSmi: async () => '', threads: () => 4,
+      nvidiaSmi: async () => '', threads: () => 4, platform: 'linux',
     });
     const first = await m.sample();
     broken = true;
@@ -75,7 +75,7 @@ describe('createHostMetrics', () => {
     const ticks: (() => void)[] = []; let cleared = 0;
     let statText = stat(100, 900); let changes = 0;
     const m = createHostMetrics({
-      readFile: (p) => (p === '/proc/meminfo' ? MEMINFO : statText), nvidiaSmi: async () => '', threads: () => 8,
+      readFile: (p) => (p === '/proc/meminfo' ? MEMINFO : statText), nvidiaSmi: async () => '', threads: () => 8, platform: 'linux',
       setInterval: (fn) => { ticks.push(fn); return 1 as unknown as NodeJS.Timeout; }, clearInterval: () => { cleared += 1; },
     });
     m.start(() => { changes += 1; });

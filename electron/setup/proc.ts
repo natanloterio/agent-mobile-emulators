@@ -2,15 +2,18 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { toSetupError } from './errors.js';
 
-export type SpawnFn = (cmd: string, args: readonly string[], opts: { env: NodeJS.ProcessEnv }) => ChildProcess;
+export type SpawnFn = (cmd: string, args: readonly string[], opts: { env: NodeJS.ProcessEnv; verbatim?: boolean }) => ChildProcess;
 export interface ProcOpts {
   readonly env?: NodeJS.ProcessEnv;
   /** Escrito no stdin e fechado (ex.: `y` para as licenças do sdkmanager). */
   readonly stdin?: string;
   readonly onLine?: (line: string) => void;
+  /** Windows: não deixa o libuv re-aspar os argumentos (precisa quando quem chama já monta a linha de comando). */
+  readonly verbatim?: boolean;
 }
 
-const defaultSpawn: SpawnFn = (cmd, args, opts) => spawn(cmd, [...args], { env: opts.env, stdio: ['pipe', 'pipe', 'pipe'] });
+const defaultSpawn: SpawnFn = (cmd, args, opts) =>
+  spawn(cmd, [...args], { env: opts.env, stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: opts.verbatim, windowsHide: true });
 
 /** Roda até o fim; cada linha (separada por \r ou \n) vai para `onLine`. Código ≠ 0 rejeita com as últimas 5 linhas. */
 export function runProcess(cmd: string, args: readonly string[], o: ProcOpts = {}, spawnFn: SpawnFn = defaultSpawn): Promise<void> {
@@ -24,7 +27,7 @@ export function runProcess(cmd: string, args: readonly string[], o: ProcOpts = {
       }
     };
     let child: ChildProcess;
-    try { child = spawnFn(cmd, args, { env: o.env ?? process.env }); } catch (e) { settle(reject, toSetupError(e)); return; }
+    try { child = spawnFn(cmd, args, { env: o.env ?? process.env, verbatim: o.verbatim }); } catch (e) { settle(reject, toSetupError(e)); return; }
     const onChunk = (buf: Buffer | string) => {
       for (const raw of String(buf).split(/[\r\n]+/)) {
         const line = raw.trim();

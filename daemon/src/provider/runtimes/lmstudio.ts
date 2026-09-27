@@ -23,7 +23,7 @@ export interface LmStudioDeps {
 }
 
 const defaultExec: Exec = (file, args, { timeoutMs }) => new Promise((resolve) => {
-  execFile(file, [...args], { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
+  execFile(file, [...args], { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
     const code = err ? (typeof (err as { code?: unknown }).code === 'number' ? Number((err as { code?: number }).code) : 1) : 0;
     resolve({ stdout: String(stdout), stderr: String(stderr), code });
   });

@@ -18,6 +18,19 @@ describe('createI18n', () => {
     expect(createI18n('en').t('shell.meters.ceiling', { cpu: 8, adb: 16 })).toBe('Ceiling: 8 by CPU · 16 by adb');
     expect(createI18n('zh').t('shell.nav.ids')).toBe('身份');
   });
+  it('imagem do sistema mostra a arquitetura em todos os idiomas', () => {
+    for (const l of LOCALES) expect(createI18n(l).t('onboarding.dep.img', { abi: 'arm64-v8a' }), l).toContain('(arm64-v8a)');
+  });
+  it('aceleração sem citar KVM e chaveiro sem supor Linux (vale para macOS e Windows)', () => {
+    expect(PT.t('onboarding.dep.kvm')).toBe('Aceleração de hardware');
+    expect(createI18n('en').t('onboarding.dep.kvm')).toBe('Hardware acceleration');
+    expect(PT.t('onboarding.fix.keyring-locked')).toBe('O chaveiro do sistema está trancado ou indisponível. Desbloqueie-o (no Linux, pelo app Senhas e Chaves, chaveiro "Login") e verifique de novo.');
+    for (const l of LOCALES) {
+      const i = createI18n(l);
+      expect(i.t('onboarding.dep.kvm'), l).not.toContain('KVM');
+      expect(i.t('onboarding.fix.keyring-locked'), l).toContain('Linux');
+    }
+  });
   it('dólar e decimal no formato de cada idioma', () => {
     expect(PT.fmt.usd(0.41)).toBe('US$ 0,41');
     expect(createI18n('en').fmt.usd(0.41)).toBe('$0.41');

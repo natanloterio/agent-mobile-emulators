@@ -22,6 +22,27 @@ describe('downloadResumable', () => {
     expect(seen.at(-1)).toBe(20);
     await expect(stat(`${dest}.part`)).rejects.toThrow();
   });
+  it('destino já baixado com o checksum certo: não baixa de novo (nova tentativa depois de falha)', async () => {
+    const dir = await tmp(); const dest = path.join(dir, 'f.bin');
+    await writeFile(dest, BODY);
+    const seen: [number, number | null][] = [];
+    await downloadResumable({
+      url: 'https://x.test/f', dest, checksum: { algo: 'sha256', hex: sha256(BODY) },
+      fetch: (async () => { throw new Error('não devia baixar'); }) as unknown as typeof fetch,
+      onProgress: (done, total) => seen.push([done, total]),
+    });
+    expect(seen).toEqual([[20, 20]]);
+    expect(await readFile(dest)).toEqual(BODY);
+  });
+  it('destino antigo com checksum diferente: baixa e substitui', async () => {
+    const dir = await tmp(); const dest = path.join(dir, 'f.bin');
+    await writeFile(dest, Buffer.from('velho'));
+    await downloadResumable({
+      url: 'https://x.test/f', dest, checksum: { algo: 'sha256', hex: sha256(BODY) },
+      fetch: (async () => new Response(BODY, { status: 200, headers: { 'content-length': '20' } })) as unknown as typeof fetch,
+    });
+    expect(await readFile(dest)).toEqual(BODY);
+  });
   it('retoma do .part com Range e soma ao que já tinha', async () => {
     const dir = await tmp(); const dest = path.join(dir, 'f.bin');
     await writeFile(`${dest}.part`, BODY.subarray(0, 8));

@@ -8,6 +8,7 @@ import type { UserFix } from './schema';
 import { depRows, emulatorCapacity, formatMb, summarize, type DepRow } from './view';
 
 const KVM_CMD = 'sudo usermod -aG kvm $USER';
+const WHPX_CMD = 'Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform';
 const ICON: Readonly<Record<DepRow['state'], string>> = { ok: '✓', todo: '↓', user: '!' };
 const PILL: Readonly<Record<DepRow['state'], string>> = { ok: 'pill pill--green', todo: 'pill pill--white', user: 'pill pill--dark' };
 
@@ -29,6 +30,7 @@ function Fix({ fix, onRecheck }: { readonly fix: UserFix; readonly onRecheck: ()
     <div className="onb-fix">
       <span>{t(`onboarding.fix.${fix}` as MessageKey)}</span>
       {fix === 'kvm-group' && <CopyCommand cmd={KVM_CMD} />}
+      {fix === 'whpx-off' && <CopyCommand cmd={WHPX_CMD} />}
       <div><button type="button" className="btn btn--secondary btn--sm" onClick={onRecheck}>{t('onboarding.check.retry')}</button></div>
     </div>
   );
@@ -59,7 +61,7 @@ export function CheckStep({ state, onRecheck }: { readonly state: OnboardingStat
   const hw = state.report.hardware;
   const cap = emulatorCapacity(hw);
   const detail = (r: DepRow) => (r.state === 'ok' ? r.version ?? '' : r.sizeMb ? formatMb(r.sizeMb, i18n) : '');
-  const name = (r: DepRow) => t(`onboarding.dep.${r.id}` as MessageKey, { model: state.model });
+  const name = (r: DepRow) => t(`onboarding.dep.${r.id}` as MessageKey, { model: state.model, abi: state.report?.imageAbi ?? '' });
 
   return (
     <>
@@ -71,7 +73,7 @@ export function CheckStep({ state, onRecheck }: { readonly state: OnboardingStat
       </div>
       <div className="onb-deps">
         {rows.map((r) => (
-          <div className="onb-dep" data-s={r.state} key={r.id}>
+          <div className="onb-dep" data-s={r.state} data-dep={r.id} key={r.id}>
             <span className="onb-dep__ico" aria-hidden="true">{ICON[r.state]}</span>
             <div><h3>{name(r)}</h3><p>{t(`onboarding.dep.${r.id}.role` as MessageKey)}</p></div>
             <div className="onb-dep__meta"><span className={PILL[r.state]}>{t(`onboarding.state.${r.state}` as MessageKey)}</span><span className="onb-mono">{detail(r)}</span></div>
@@ -85,7 +87,7 @@ export function CheckStep({ state, onRecheck }: { readonly state: OnboardingStat
           <dl>
             <dt>{t('onboarding.hw.ram')}</dt><dd>{`${i18n.fmt.decimal(hw.ramGiB, 0)} GB`}</dd>
             <dt>{t('onboarding.hw.cpu')}</dt><dd>{t('onboarding.hw.cpuValue', { threads: hw.threads, model: hw.cpuModel })}</dd>
-            <dt>{t('onboarding.hw.gpu')}</dt><dd>{hw.gpu ? `${hw.gpu.name} · ${i18n.fmt.decimal(hw.gpu.totalGiB, 0)} GB` : t('onboarding.hw.gpuNone')}</dd>
+            <dt>{t('onboarding.hw.gpu')}</dt><dd>{hw.gpu ? (hw.gpu.unified ? `${hw.gpu.name} · ${t('onboarding.hw.unified')}` : `${hw.gpu.name} · ${i18n.fmt.decimal(hw.gpu.totalGiB, 0)} GB`) : t('onboarding.hw.gpuNone')}</dd>
             <dt>{t('onboarding.hw.disk')}</dt><dd>{`${i18n.fmt.decimal(hw.diskFreeGiB, 0)} GB`}</dd>
           </dl>
         </div>

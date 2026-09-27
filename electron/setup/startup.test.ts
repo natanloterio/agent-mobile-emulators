@@ -7,9 +7,9 @@ import type { DepStatus } from './types';
 const paths = resolveSetupPaths({}, '/home/u');
 const hw = { ramGiB: 64, threads: 32, cpuModel: 'x', gpu: null, diskFreeGiB: 100 };
 const dep = (id: DepStatus['id'], state: DepStatus['state']): DepStatus => ({ id, state, version: null, sizeMb: null, fix: null });
-const ids: DepStatus['id'][] = ['node', 'sdk', 'adb', 'emu', 'img', 'kvm', 'ollama', 'keyring'];
+const ids: DepStatus['id'][] = ['sdk', 'adb', 'emu', 'img', 'kvm', 'ollama', 'keyring'];
 const probeWith = (state: (id: DepStatus['id']) => DepStatus['state']) => async (): Promise<ProbeResult> =>
-  ({ report: { deps: ids.map((id) => dep(id, state(id))), hardware: hw, localModels: [] }, ollamaBin: 'ollama' });
+  ({ report: { deps: ids.map((id) => dep(id, state(id))), hardware: hw, localModels: [], imageAbi: 'x86_64' }, ollamaBin: 'ollama' });
 const now = () => '2026-09-27T12:00:00.000Z';
 
 describe('decideStartup', () => {
@@ -35,5 +35,9 @@ describe('decideStartup', () => {
     const probe = async (): Promise<ProbeResult> => ({ ...(await probeWith((id) => (id === 'ollama' ? 'todo' : 'ok'))()), ollamaBin: null });
     const r = await decideStartup({ supported: true, saved: null, paths, probe, now });
     expect(r).toEqual({ completed: true, write: { version: 1, completedAt: now(), paths: { sdkRoot: paths.sdkRoot, ollamaBin: null } } });
+  });
+  it('setup.json antigo (Linux, sem plataforma gravada) continua concluído', async () => {
+    const saved = { version: 1 as const, completedAt: '2026-09-27T12:00:00.000Z', paths: { sdkRoot: '/home/u/Android/Sdk', ollamaBin: 'ollama' } };
+    expect(await decideStartup({ supported: true, saved, paths, probe: async () => { throw new Error('não sonda'); }, now })).toEqual({ completed: true, write: null });
   });
 });

@@ -103,7 +103,7 @@ export async function pullModel(model: string, bin: string, d: PullDeps, progres
 export function nodePullDeps(log: (line: string) => void): PullDeps {
   return {
     fetch,
-    spawn: (cmd, args, opts) => spawn(cmd, [...args], { env: opts.env, stdio: 'ignore' }),
+    spawn: (cmd, args, opts) => spawn(cmd, [...args], { env: opts.env, stdio: 'ignore', windowsHide: true }),
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
     log,
   };

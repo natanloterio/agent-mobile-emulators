@@ -2,18 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { INITIAL_STATE, onboardingReducer } from './reducer';
 import type { SetupReport } from './schema';
 
-const report = (gpu: SetupReport['hardware']['gpu']): SetupReport => ({ deps: [], hardware: { ramGiB: 64, threads: 32, cpuModel: 'x', gpu, diskFreeGiB: 100 }, localModels: [] });
+const report = (gpu: SetupReport['hardware']['gpu']): SetupReport => ({ deps: [], hardware: { ramGiB: 64, threads: 32, cpuModel: 'x', gpu, diskFreeGiB: 100 }, localModels: [], imageAbi: 'x86_64' });
 
 describe('onboardingReducer', () => {
   it('check-done escolhe modo e modelo padrão pelo hardware, sem sobrescrever o que a pessoa escolheu', () => {
     const s1 = onboardingReducer(INITIAL_STATE, { type: 'check-done', report: report(null) });
     expect([s1.mode, s1.model, s1.checking]).toEqual(['nuvem', 'gpt-oss:20b', false]);
     const touched = onboardingReducer(onboardingReducer(INITIAL_STATE, { type: 'pick-mode', mode: 'local' }), { type: 'pick-model', model: 'qwen3:14b' });
-    const s2 = onboardingReducer(touched, { type: 'check-done', report: report({ name: 'x', totalGiB: 24 }) });
+    const s2 = onboardingReducer(touched, { type: 'check-done', report: report({ name: 'x', totalGiB: 24, unified: false }) });
     expect([s2.mode, s2.model]).toEqual(['local', 'qwen3:14b']);
   });
   it('pick-model ignora modelo que não cabe na placa', () => {
-    const s = onboardingReducer(INITIAL_STATE, { type: 'check-done', report: report({ name: 'x', totalGiB: 24 }) });
+    const s = onboardingReducer(INITIAL_STATE, { type: 'check-done', report: report({ name: 'x', totalGiB: 24, unified: false }) });
     expect(onboardingReducer(s, { type: 'pick-model', model: 'gpt-oss:120b' }).model).toBe('gpt-oss:20b');
   });
   it('trocar a chave zera o teste', () => {

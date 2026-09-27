@@ -86,4 +86,9 @@ describe('cloneAvd/deleteAvd em diretório temporário', () => {
     await expect(deleteAvd('../base', { home, base: 'base' })).rejects.toThrow(/inválido/);
     expect(existsSync(path.join(home, 'base.avd'))).toBe(true);
   });
+
+  it('base ausente: diz como criar a enxame_golden', async () => {
+    home = mkdtempSync(path.join(os.tmpdir(), 'enxame-avd-'));
+    await expect(cloneAvd('enxame_golden', 'enxame_conta2', { home })).rejects.toThrow(/enxame_golden.*Android Studio|ENXAME_AVD_BASE/);
+  });
 });

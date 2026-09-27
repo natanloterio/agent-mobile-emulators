@@ -13,7 +13,7 @@ export class AdbError extends Error {
 
 const defaultExec: Exec = (file, args, env) =>
   new Promise((resolve) => {
-    execFile(file, [...args], { env, maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile(file, [...args], { env, maxBuffer: 8 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
       const code = err && typeof (err as NodeJS.ErrnoException & { code?: number }).code === 'number' ? Number((err as { code?: number }).code) : err ? 1 : 0;
       resolve({ stdout: String(stdout), stderr: String(stderr), code });
     });
@@ -23,7 +23,7 @@ const defaultExecBuffer: ExecBuffer = (file, args, env) =>
   new Promise((resolve) => {
     // timeout: 5000 and killSignal: 'SIGKILL' ensure a hung adb becomes a failed capture (non-zero code → AdbError),
     // never a hung loop.
-    execFile(file, [...args], { env, encoding: 'buffer', maxBuffer: 16 * 1024 * 1024, timeout: 5000, killSignal: 'SIGKILL' }, (err, stdout, stderr) => {
+    execFile(file, [...args], { env, encoding: 'buffer', maxBuffer: 16 * 1024 * 1024, timeout: 5000, killSignal: 'SIGKILL', windowsHide: true }, (err, stdout, stderr) => {
       const code = err && typeof (err as NodeJS.ErrnoException & { code?: number }).code === 'number' ? Number((err as { code?: number }).code) : err ? 1 : 0;
       resolve({ stdout: Buffer.from(stdout), stderr: String(stderr), code });
     });
@@ -62,7 +62,7 @@ export interface Adb {
 export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: Spawn; adbPath?: string; serverPort?: number } = {}): Adb {
   const exec = deps.exec ?? defaultExec;
   const execBuffer = deps.execBuffer ?? defaultExecBuffer;
-  const spawnFn = deps.spawn ?? ((file, args, opts) => nodeSpawn(file, [...args], { env: opts.env, stdio: ['ignore', 'pipe', 'pipe'] }) as unknown as ChildLike);
+  const spawnFn = deps.spawn ?? ((file, args, opts) => nodeSpawn(file, [...args], { env: opts.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }) as unknown as ChildLike);
   const adbPath = deps.adbPath ?? CONFIG.adbPath;
   const env = { ...process.env, ANDROID_ADB_SERVER_PORT: String(deps.serverPort ?? CONFIG.adbServerPort) };
 

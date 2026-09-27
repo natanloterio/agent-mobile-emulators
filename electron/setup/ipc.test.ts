@@ -4,7 +4,7 @@ import { resolveSetupPaths } from './paths';
 import type { JobRunners } from './runners';
 
 const KEY = 'sk-ant-' + 'x'.repeat(30);
-const report = { deps: [], hardware: { ramGiB: 1, threads: 1, cpuModel: 'x', gpu: null, diskFreeGiB: 1 }, localModels: [] };
+const report = { deps: [], hardware: { ramGiB: 1, threads: 1, cpuModel: 'x', gpu: null, diskFreeGiB: 1 }, localModels: [], imageAbi: 'x86_64' as const };
 
 function mk(over: Partial<SetupIpcDeps> = {}) {
   const handlers = new Map<string, (...a: unknown[]) => unknown>();
@@ -15,7 +15,7 @@ function mk(over: Partial<SetupIpcDeps> = {}) {
   const deps: SetupIpcDeps = {
     handle: (ch, fn) => handlers.set(ch, fn),
     send: (ch, d) => sent.push([ch, d]),
-    paths: resolveSetupPaths({}, '/home/u'),
+    paths: resolveSetupPaths({}, '/home/u', null, 'linux-x64'),
     status: async () => ({ completed: false, supported: true }),
     probe: async () => ({ report, ollamaBin: 'ollama' }),
     runners: () => runners,

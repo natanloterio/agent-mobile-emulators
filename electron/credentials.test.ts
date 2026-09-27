@@ -114,7 +114,8 @@ describe('fs real', () => {
     await writeFile(file, '{lixo', { mode: 0o644 });
     const vault = createCredentialVault({ safeStorage: fakeSafe(), file });
     await vault.set('c1', 'u', 'p');
-    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    // Windows não tem modos POSIX (0600); a checagem de permissão só vale em Linux/macOS.
+    if (process.platform !== 'win32') expect((await stat(file)).mode & 0o777).toBe(0o600);
     expect(JSON.parse(await readFile(file, 'utf8')).entries.c1.username).toBe('u');
     expect(await readdir(dir)).toEqual(['credentials.json']);
   });

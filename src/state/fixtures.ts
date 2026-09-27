@@ -2,7 +2,7 @@ import type { GoalPlan, GoalSummary, HostMetrics, LiveIdentity } from '../live/t
 
 // Fixtures do contrato do incremento 5 (spec §3) para os testes do renderer.
 export const liveId = (over: Partial<LiveIdentity> = {}): LiveIdentity => ({
-  id: 'conta1', name: 'conta1', handle: '@p1t41a', state: 'running', task: 'Levantar comentários', steps: 7, budget: 30,
+  id: 'conta1', name: 'conta1', handle: '@conta.demo', state: 'running', task: 'Levantar comentários', steps: 7, budget: 30,
   costUsd: 0.12, error: '', lastTools: [], video: 'streaming',
   lifecycle: 'running', paused: false, controlled: false, ledgerCount: 4, lastStepTokens: 1432,
   appPackage: 'com.instagram.android', appVersionName: '448.0.0.52.84', consolePort: 5554, mcpHostPort: 8080,

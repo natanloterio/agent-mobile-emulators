@@ -1,9 +1,10 @@
 import { app, BrowserWindow, ipcMain, Menu, safeStorage } from 'electron';
+import { existsSync, readFileSync } from 'node:fs';
 import { access, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { connectSnapshots, ensureDaemon, post, request, waitForInfo, type DaemonInfo } from './daemon-bridge.js';
+import { connectSnapshots, daemonSpawnSpec, ensureDaemon, post, request, waitForInfo, type DaemonInfo } from './daemon-bridge.js';
 import { createDaemonGate } from './daemon-gate.js';
 import { assertId, createCredentialVault } from './credentials.js';
 import { migrateLegacyCredentials, parseCredentialsResponse } from './credentials-migrate.js';
@@ -17,6 +18,7 @@ import { nodeHardwareDeps } from './setup/hardware.js';
 import { registerSetupIpc } from './setup/ipc.js';
 import { stopTemporaryOllama } from './setup/ollama-pull.js';
 import { resolveSetupPaths } from './setup/paths.js';
+import { platformId } from './setup/platform.js';
 import { nodeProbeDeps, probeSetup } from './setup/probe.js';
 import { createRunners, nodeRunnerDeps } from './setup/runners.js';
 import { readSetupFile, readSetupFileSync, writeSetupFile } from './setup/setup-file.js';
@@ -112,7 +114,11 @@ app.whenReady().then(() => {
   let daemonStart: Promise<void> | null = null;
   const startDaemon = (): Promise<void> => {
     daemonStart ??= (async () => {
-      ensureDaemon(projectRoot);
+      const dotenvPath = path.join(projectRoot, '.env');
+      ensureDaemon(daemonSpawnSpec({
+        isPackaged: app.isPackaged, appPath: app.getAppPath(), resourcesPath: process.resourcesPath, execPath: process.execPath,
+        env: process.env, dotenv: !app.isPackaged && existsSync(dotenvPath) ? readFileSync(dotenvPath, 'utf8') : null,
+      }));
       const info = await waitForInfo();
       gate.set(info);
       void migrateCredentials();
@@ -126,9 +132,10 @@ app.whenReady().then(() => {
   };
 
   // Onboarding (spec onboarding): leitura síncrona do setup.json para os canais existirem antes de a janela pedir.
-  const supported = process.platform === 'linux' && os.arch() === 'x64';
-  const saved = readSetupFileSync(resolveSetupPaths().setupFile);
-  const paths = resolveSetupPaths(process.env, os.homedir(), saved?.paths.sdkRoot ?? null);
+  const platform = platformId();
+  const supported = platform !== null;
+  const saved = readSetupFileSync(resolveSetupPaths(process.env, os.homedir(), null, platform ?? undefined).setupFile);
+  const paths = resolveSetupPaths(process.env, os.homedir(), saved?.paths.sdkRoot ?? null, platform ?? undefined);
   const probe = () => probeSetup(paths, nodeProbeDeps(), nodeHardwareDeps());
   const startupP = decideStartup({ supported, saved, paths, probe, now: () => new Date().toISOString() }).then(async (s) => {
     if (s.write) await writeSetupFile(paths.setupFile, s.write).catch((e: Error) => console.error('[enxame] setup.json:', e.message));

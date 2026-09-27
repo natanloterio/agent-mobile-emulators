@@ -21,7 +21,8 @@ describe('cofre do daemon', () => {
     expect(await v.list('cred:')).toEqual([{ id: 'cred:conta2', meta: 'u' }]);
     const raw = readFileSync(file, 'utf8');
     expect(raw).not.toContain('S3gr3d0'); expect(raw).not.toContain('Outra$enha');
-    expect(statSync(file).mode & 0o777).toBe(0o600);
+    // Windows não tem modos POSIX (0600); a checagem de permissão só vale em Linux/macOS.
+    if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600);
     expect(keys.stored?.length).toBe(32);
     await v.remove('cred:conta2');
     expect(await v.get('cred:conta2')).toBeNull();

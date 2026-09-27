@@ -7,3 +7,4 @@ dist-electron/
 .superpowers/
 .env
 dist-daemon/
+release/
