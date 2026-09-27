@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '../components/Button';
 import { Heading } from '../components/Heading';
 import { Notice } from '../components/Notice';
@@ -7,6 +7,7 @@ import { useI18n } from '../i18n/I18nProvider';
 import type { RequestStatus } from '../state/fleetReducer';
 import { localizePlanVM, type PlanTaskVM, type PlanVM } from '../state/planView';
 import type { PlanStage } from '../types/fleet';
+import { MissionComposer, type MissionIdentityOption } from './MissionComposer';
 import './NewGoal.css';
 
 interface NewGoalProps {
@@ -21,6 +22,8 @@ interface NewGoalProps {
   readonly onDecompose: () => void;
   readonly onReset: () => void;
   readonly onLaunch: () => void;
+  /** Só no vivo: alterna Objetivo | Missão (spec missões §Interface). */
+  readonly mission?: { readonly options: readonly MissionIdentityOption[]; readonly req: RequestStatus; readonly onStart: (identityId: string, text: string) => void };
 }
 
 function TaskRow({ t }: { readonly t: PlanTaskVM }) {
@@ -75,9 +78,10 @@ function PlanView({ plan, launchReq, onReset, onLaunch }: { readonly plan: PlanV
   );
 }
 
-export function NewGoal({ goalText, planStage, plan, planReq, launchReq, isMobile, onSetGoal, onDecompose, onReset, onLaunch }: NewGoalProps) {
+export function NewGoal({ goalText, planStage, plan, planReq, launchReq, isMobile, onSetGoal, onDecompose, onReset, onLaunch, mission }: NewGoalProps) {
   const i18n = useI18n();
   const { t } = i18n;
+  const [mode, setMode] = useState<'goal' | 'mission'>('goal');
   const decomposing = planStage === 1 || planReq.busy;
   const shownPlan = useMemo(() => (plan ? localizePlanVM(plan, i18n) : null), [plan, i18n]);
   // O objetivo padrão chega em português quando o composer estava vazio: mostra no idioma da tela.
@@ -89,26 +93,36 @@ export function NewGoal({ goalText, planStage, plan, planReq, launchReq, isMobil
         <p className="screen__lede">{t('goal.lede')}</p>
       </header>
 
-      <div className="card card--grey card--shadow newgoal__composer">
-        <textarea
-          className="newgoal__textarea"
-          value={shownText}
-          onChange={(e) => onSetGoal(e.target.value)}
-          rows={3}
-          placeholder={t('goal.placeholder')}
-        />
-        <div className="row-between" style={{ gap: 16 }}>
-          <div className="newgoal__examples">
-            {goalExamples(i18n).map((ex) => (
-              <Button key={ex.label} variant="ghost" size="sm" onClick={() => onSetGoal(ex.text)}>{ex.label}</Button>
-            ))}
-          </div>
-          <Button size="lg" disabled={decomposing} onClick={onDecompose}>{decomposing ? t('goal.decomposing') : t('goal.decompose')}</Button>
+      {mission && (
+        <div className="newgoal__modes" role="tablist">
+          <Button variant={mode === 'goal' ? 'primary' : 'ghost'} size="sm" onClick={() => setMode('goal')}>{t('mission.mode.goal')}</Button>
+          <Button variant={mode === 'mission' ? 'primary' : 'ghost'} size="sm" onClick={() => setMode('mission')}>{t('mission.mode.mission')}</Button>
         </div>
-        {planReq.error && <Notice>{t('goal.decomposeFailed', { error: planReq.error })}</Notice>}
-      </div>
+      )}
+      {mission && mode === 'mission' ? <MissionComposer {...mission} /> : (
+        <>
+          <div className="card card--grey card--shadow newgoal__composer">
+            <textarea
+              className="newgoal__textarea"
+              value={shownText}
+              onChange={(e) => onSetGoal(e.target.value)}
+              rows={3}
+              placeholder={t('goal.placeholder')}
+            />
+            <div className="row-between" style={{ gap: 16 }}>
+              <div className="newgoal__examples">
+                {goalExamples(i18n).map((ex) => (
+                  <Button key={ex.label} variant="ghost" size="sm" onClick={() => onSetGoal(ex.text)}>{ex.label}</Button>
+                ))}
+              </div>
+              <Button size="lg" disabled={decomposing} onClick={onDecompose}>{decomposing ? t('goal.decomposing') : t('goal.decompose')}</Button>
+            </div>
+            {planReq.error && <Notice>{t('goal.decomposeFailed', { error: planReq.error })}</Notice>}
+          </div>
 
-      {planStage === 2 && shownPlan && <PlanView plan={shownPlan} launchReq={launchReq} onReset={onReset} onLaunch={onLaunch} />}
+          {planStage === 2 && shownPlan && <PlanView plan={shownPlan} launchReq={launchReq} onReset={onReset} onLaunch={onLaunch} />}
+        </>
+      )}
     </div>
   );
 }

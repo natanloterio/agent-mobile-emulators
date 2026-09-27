@@ -4,10 +4,13 @@ import { Notice } from '../components/Notice';
 import { PhoneMock } from '../components/PhoneMock';
 import { Pill } from '../components/Pill';
 import { useI18n } from '../i18n/I18nProvider';
-import type { InputGesture } from '../live/types';
+import type { InputGesture, MissionView } from '../live/types';
 import type { VideoBus } from '../live/videoBus';
+import type { MissionAction } from '../state/missionActions';
+import { isOpenMission } from '../state/missionView';
 import type { LogRow, Stat, TileVM } from '../state/selectors';
 import './Device.css';
+import { MissionPanel } from './MissionPanel';
 
 interface DeviceProps {
   readonly sel: TileVM;
@@ -30,6 +33,12 @@ interface DeviceProps {
   /** Só no vivo e com controle: gesto na tela → POST /input. */
   readonly onInput?: (g: InputGesture) => void;
   readonly bus?: VideoBus | null;
+  /** Missão aberta ou concluída mais recente da identidade (spec missões §Interface); demo mostra `DEMO_MISSION`. */
+  readonly mission?: MissionView | null;
+  readonly missionBusy?: boolean;
+  readonly missionError?: string | null;
+  readonly now?: number;
+  readonly onMission?: (a: MissionAction) => void;
 }
 
 function NeedsCard({ error, busy, onResolve, onBan }: { readonly error: string; readonly busy: boolean; readonly onResolve: () => void; readonly onBan?: () => void }) {
@@ -110,7 +119,10 @@ export function Device(p: DeviceProps) {
         </div>
 
         <div className="device__right">
-          {sel.needs && <NeedsCard error={sel.error} busy={busy} onResolve={p.onResolve} onBan={p.onBan} />}
+          {sel.needs && !(p.mission && isOpenMission(p.mission)) && <NeedsCard error={sel.error} busy={busy} onResolve={p.onResolve} onBan={p.onBan} />}
+          {p.mission && (
+            <MissionPanel mission={p.mission} busy={!!p.missionBusy} error={p.missionError ?? null} now={p.now ?? Date.now()} onAction={(a) => p.onMission?.(a)} />
+          )}
 
           <div className="stats">
             {p.stats.map((s) => (

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { KillBanner } from './components/KillBanner';
 import { MobileBottomNav, MobileTopbar } from './components/MobileChrome';
 import { Sidebar } from './components/Sidebar';
+import { DEMO_MISSION } from './data/missions';
 import { currentGoalText, DEFAULT_GOAL_TEXT, PAST_GOALS } from './data/goals';
 import { useI18n } from './i18n/I18nProvider';
 import { gpuBar } from './lib/gpuBar';
@@ -12,6 +13,7 @@ import { useLiveFleet } from './live/useLiveFleet';
 import { Cockpit } from './screens/Cockpit';
 import { Device } from './screens/Device';
 import { Identities, type CredentialHandlers } from './screens/Identities';
+import type { MissionIdentityOption } from './screens/MissionComposer';
 import { NewGoal } from './screens/NewGoal';
 import { Providers } from './screens/Providers';
 import { Report } from './screens/Report';
@@ -21,6 +23,8 @@ import { selectLiveIdRows, type IdRow, type RowAction } from './state/idRows';
 import {
   selectGoalHeader, selectLiveGoalPct, selectLiveGoalStats, selectLiveReportCards, selectPastGoalRows,
 } from './state/liveSelectors';
+import { isOpenMission, missionForIdentity } from './state/missionView';
+import { missionKey, MISSION_START_KEY } from './state/missionActions';
 import { selectDemoPlanVM, selectPlanVM } from './state/planView';
 import {
   selectCostRows, selectGoalPct, selectGoalStats, selectIdRows, selectNeedsList, selectReportCards, selectRoles, selectSelected,
@@ -34,7 +38,7 @@ const SHOW_COST = true;
 const DEMO_PAST = PAST_GOALS.map((g) => ({ ...g, key: g.text }));
 
 export function App() {
-  const { state, actions, bridged, goal, identity, credentials } = useFleet();
+  const { state, actions, bridged, goal, identity, credentials, mission } = useFleet();
   const isMobile = useIsMobile();
   const { snap: live, frames, bus } = useLiveFleet();
   const i18n = useI18n();
@@ -92,6 +96,8 @@ export function App() {
         if (!sel) return cockpit();
         const d = buildDeviceView(state, view, live, sel, i18n);
         const id = sel.id ?? '';
+        const m = isLive ? missionForIdentity(live, sel.id) : state.sel === 0 ? DEMO_MISSION : null;
+        const mReq = m ? requestOf(state, missionKey(m.id)) : null;
         return (
           <Device
             sel={sel}
@@ -104,10 +110,22 @@ export function App() {
             onResolve={() => (isLive ? void identity.resolve(id) : actions.resolveSelected())}
             onBan={isLive ? () => void identity.ban(id, sel.name, sel.error) : undefined}
             onInput={isLive ? (g) => void identity.input(id, g) : undefined}
+            mission={m}
+            missionBusy={mReq?.busy}
+            missionError={mReq?.error ?? null}
+            onMission={isLive && m ? (a) => void mission.act(m.id, a, m.text) : undefined}
           />
         );
       }
-      case 'new':
+      case 'new': {
+        const options: readonly MissionIdentityOption[] = (live?.identities ?? [])
+          .filter((i) => !i.discardedAt && i.state !== 'banned')
+          .map((i) => {
+            const busyMission = (live?.missions ?? []).some((m) => m.identityId === i.id && isOpenMission(m));
+            const disabled = busyMission || !!i.controlled || !!i.paused || i.state === 'running';
+            const note = busyMission ? t('mission.state.running') : i.controlled ? t('device.control.release') : i.paused ? t('device.resume') : i.state;
+            return { id: i.id, name: i.name, handle: i.handle, disabled, note };
+          });
         return (
           <NewGoal
             goalText={state.goalText}
@@ -120,8 +138,10 @@ export function App() {
             onDecompose={() => (isLive ? void goal.decompose(state.goalText || DEFAULT_GOAL_TEXT) : actions.decompose())}
             onReset={actions.resetPlan}
             onLaunch={() => (isLive ? state.plan && void goal.launch(state.plan) : actions.launch(fleetSize))}
+            mission={isLive ? { options, req: requestOf(state, MISSION_START_KEY), onStart: (id, text) => void mission.start(id, text).then((ok) => { if (ok) actions.go('cockpit'); }) } : undefined}
           />
         );
+      }
       case 'report':
         return (
           <Report
