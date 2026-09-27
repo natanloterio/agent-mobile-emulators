@@ -39,7 +39,8 @@ export function ollamaBinFrom(setup: SetupPaths, env: NodeJS.ProcessEnv): string
   return env.ENXAME_OLLAMA_BIN || setup.ollamaBin || 'ollama';
 }
 
-const SETUP = readSetupPaths(path.join(DATA_DIR, 'setup.json'));
+const SETUP_PATH = path.join(DATA_DIR, 'setup.json');
+const SETUP = readSetupPaths(SETUP_PATH);
 const SDK_ROOT = sdkRootFrom(SETUP, process.env, os.homedir());
 /** adb e emulator do Android SDK (setup.json, `ANDROID_HOME`/`ANDROID_SDK_ROOT` ou o local padrão do SO; `.exe` no Windows). */
 const SDK = sdkPaths(process.env, process.platform, os.homedir(), SETUP.sdkRoot);
@@ -74,7 +75,8 @@ export const CONFIG = {
   vaultPath: path.join(DATA_DIR, 'vault.json'),
   sdkRoot: SDK_ROOT,
   adbPath: SDK.adb,
-  ollamaBin: ollamaBinFrom(SETUP, process.env),
+  /** setup.json do onboarding; o supervisor do Ollama relê a cada spawn (o binário pode mudar com o daemon no ar). */
+  setupPath: SETUP_PATH,
   adbServerPort: 5038,
   mcpAppPackage: 'com.danielealbano.androidremotecontrolmcp.gms.debug',
   targetApp: { package: 'com.instagram.android', versionName: '448.0.0.52.84' },

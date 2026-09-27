@@ -53,6 +53,22 @@ describe('supervisor do Ollama', () => {
     await sup.ensure('http://127.0.0.1:11434/v1', 'gpt-oss:20b');
     expect(spawned).toEqual(['/opt/enxame/ollama/bin/ollama']);
   });
+  it('sem deps.bin, resolve o binário a cada spawn (Ollama instalado por um onboarding reaberto vale sem reiniciar o daemon)', async () => {
+    const spawned: string[] = [];
+    let installed = 'ollama';
+    let up = false;
+    const sup = createOllamaSupervisor({
+      resolveBin: () => installed,
+      fetch: (async () => { if (!up) throw new Error('fetch failed: ECONNREFUSED'); return tags('gpt-oss:20b'); }) as unknown as typeof fetch,
+      sleep: async () => {}, timeoutMs: 20_000, logPath: '/dev/null', openLog: () => 'ignore', findProcesses: () => [],
+      spawn: (cmd) => { spawned.push(cmd); up = true; return { pid: 1, kill: () => true, on: () => undefined }; },
+    });
+    await sup.ensure('http://127.0.0.1:11434/v1', 'gpt-oss:20b');
+    sup.stop(); up = false;
+    installed = '/home/u/.local/share/enxame/tools/ollama/bin/ollama';
+    await sup.ensure('http://127.0.0.1:11434/v1', 'gpt-oss:20b');
+    expect(spawned).toEqual(['ollama', '/home/u/.local/share/enxame/tools/ollama/bin/ollama']);
+  });
   it('não sobe dentro do timeout → mata o filho e lança infra-local', async () => {
     const killed: string[] = [];
     const sup = createOllamaSupervisor({ fetch: (async () => refused()) as never, sleep: async () => {}, timeoutMs: 1, logPath: '/dev/null', openLog: () => 'x', spawn: () => ({ pid: 1, kill: (s?: string) => { killed.push(String(s)); return true; }, on: () => undefined }) });
