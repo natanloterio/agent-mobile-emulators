@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { Heading } from '../components/Heading';
 import { Notice } from '../components/Notice';
@@ -18,6 +18,18 @@ interface IdentitiesProps {
   readonly onAction: (row: IdRow, action: RowAction) => void;
   readonly onLoginDone: (id: string, handle: string) => void;
   readonly onRegisterPin: (id: string, pin: string) => void;
+  /** Credenciais e login pelo daemon (só modo vivo; ausentes no demo). */
+  readonly creds?: CredentialHandlers;
+}
+
+export interface CredentialHandlers {
+  /** Recarrega os usernames salvos (ao abrir a tela). */
+  readonly load: () => void;
+  /** true = chaveiro ok, pode abrir o formulário; false = o motivo já aparece na linha. */
+  readonly open: (id: string) => Promise<boolean>;
+  readonly save: (id: string, username: string, password: string) => void;
+  readonly forget: (id: string, name: string) => void;
+  readonly login: (id: string) => void;
 }
 
 function DiskBar({ pct }: { readonly pct: number }) {
@@ -28,7 +40,26 @@ function DiskBar({ pct }: { readonly pct: number }) {
   );
 }
 
-type InlineKind = 'login' | 'pin';
+type InlineKind = 'login' | 'pin' | 'creds';
+
+/** Usuário + senha; a senha só vive neste campo e é limpa ao salvar/cancelar. */
+function CredForm({ onSubmit, onCancel }: { readonly onSubmit: (username: string, password: string) => void; readonly onCancel: () => void }) {
+  const { t } = useI18n();
+  const [user, setUser] = useState('');
+  const [pass, setPass] = useState('');
+  return (
+    <form className="idrow__login" autoComplete="off" onSubmit={(e) => { e.preventDefault(); const p = pass; setPass(''); onSubmit(user, p); }}>
+      <input className="idrow__input" value={user} onChange={(e) => setUser(e.target.value)} placeholder={t('identities.creds.userPlaceholder')}
+        aria-label={t('identities.creds.userAria')} autoComplete="off" autoCapitalize="none" spellCheck={false} autoFocus />
+      <input className="idrow__input" value={pass} onChange={(e) => setPass(e.target.value)} placeholder={t('identities.creds.passPlaceholder')}
+        aria-label={t('identities.creds.passAria')} type="password" autoComplete="off" />
+      <div className="idrow__login-btns">
+        <Button size="sm" type="submit">{t('identities.creds.save')}</Button>
+        <Button size="sm" variant="ghost" onClick={() => { setPass(''); onCancel(); }}>{t('identities.inline.cancel')}</Button>
+      </div>
+    </form>
+  );
+}
 
 function InlineForm({ kind, onSubmit, onCancel }: { readonly kind: InlineKind; readonly onSubmit: (value: string) => void; readonly onCancel: () => void }) {
   const { t } = useI18n();
@@ -49,35 +80,54 @@ function InlineForm({ kind, onSubmit, onCancel }: { readonly kind: InlineKind; r
 interface RowActionsProps {
   readonly row: IdRow; readonly logging: InlineKind | null; readonly mobile: boolean;
   readonly onPick: (a: RowAction) => void; readonly onLogin: (handle: string) => void; readonly onCancel: () => void;
+  readonly onSaveCreds: (username: string, password: string) => void;
 }
 
-function RowActions({ row, logging, mobile, onPick, onLogin, onCancel }: RowActionsProps) {
+function RowActions({ row, logging, mobile, onPick, onLogin, onCancel, onSaveCreds }: RowActionsProps) {
+  const { t } = useI18n();
+  if (logging === 'creds') return <CredForm onSubmit={onSaveCreds} onCancel={onCancel} />;
   if (logging) return <InlineForm kind={logging} onSubmit={onLogin} onCancel={onCancel} />;
   if (row.actions.length === 0) return <span />;
   return (
     <div className="idrow__actions">
       {row.actions.map((a) => (
         <Button key={a.kind} variant="ghost" size="sm" className={mobile ? 'idcard__action' : undefined} disabled={row.busy} onClick={() => onPick(a)}>
-          {row.busy ? '…' : a.label}
+          {!row.busy ? a.label : a.kind === 'autologin' && row.loginBusy ? t('identities.login.busy') : '…'}
         </Button>
       ))}
     </div>
   );
 }
 
-export function Identities({ rows, isMobile, provisionReq, onProvision, onAction, onLoginDone, onRegisterPin }: IdentitiesProps) {
+export function Identities({ rows, isMobile, provisionReq, onProvision, onAction, onLoginDone, onRegisterPin, creds }: IdentitiesProps) {
   const { t } = useI18n();
   const [inline, setInline] = useState<{ key: string; kind: InlineKind } | null>(null);
   const [newPin, setNewPin] = useState('');
-  const pick = (r: IdRow, a: RowAction) => (a.kind === 'login' || a.kind === 'pin' ? setInline({ key: r.key, kind: a.kind }) : onAction(r, a));
+  // Status das credenciais ao abrir a tela (set/clear recarregam pelas ações).
+  const loadCreds = creds?.load;
+  useEffect(() => { loadCreds?.(); }, [loadCreds]);
+  const pick = (r: IdRow, a: RowAction) => {
+    if (a.kind === 'login' || a.kind === 'pin') { setInline({ key: r.key, kind: a.kind }); return; }
+    if (creds && r.id && (a.kind === 'creds' || a.kind === 'autologin' || a.kind === 'forget')) {
+      const id = r.id;
+      if (a.kind === 'creds') void creds.open(id).then((ok) => { if (ok) setInline({ key: r.key, kind: 'creds' }); });
+      else if (a.kind === 'autologin') creds.login(id);
+      else creds.forget(id, r.name);
+      return;
+    }
+    onAction(r, a);
+  };
   const submit = (r: IdRow, kind: InlineKind, value: string) => {
     if (r.id) (kind === 'pin' ? onRegisterPin : onLoginDone)(r.id, value);
     setInline(null);
   };
   const actionsOf = (r: IdRow) => {
     const kind = inline?.key === r.key ? inline.kind : null;
-    return <RowActions row={r} logging={kind} mobile={isMobile} onPick={(a) => pick(r, a)} onLogin={(v) => kind && submit(r, kind, v)} onCancel={() => setInline(null)} />;
+    const saveCreds = (u: string, p: string) => { if (r.id) creds?.save(r.id, u, p); setInline(null); };
+    return <RowActions row={r} logging={kind} mobile={isMobile} onPick={(a) => pick(r, a)} onLogin={(v) => kind && submit(r, kind, v)} onCancel={() => setInline(null)} onSaveCreds={saveCreds} />;
   };
+  const credLine = (r: IdRow) => r.credUser && <span className="idrow__cred">{t('identities.creds.saved', { username: r.credUser })}</span>;
+  const loginNote = (r: IdRow) => r.loginNote && <Notice tone={r.loginNote.tone === 'ok' ? 'warn' : 'error'}>{r.loginNote.text}</Notice>;
 
   return (
     <div className="screen">
@@ -108,7 +158,7 @@ export function Identities({ rows, isMobile, provisionReq, onProvision, onAction
           {rows.map((r) => (
             <div className={`idcard${r.dimmed ? ' idcard--dimmed' : ''}`} key={r.key}>
               <div className="idcard__head">
-                <div className="idrow__id"><span className="idcard__name">{r.name}</span><span className="idrow__handle">{r.handle}</span></div>
+                <div className="idrow__id"><span className="idcard__name">{r.name}</span><span className="idrow__handle">{r.handle}</span>{credLine(r)}</div>
                 <Pill tone={lifecycleTone(r.lc)}>{r.lc}</Pill>
               </div>
               <div className="idcard__grid">
@@ -118,6 +168,7 @@ export function Identities({ rows, isMobile, provisionReq, onProvision, onAction
                 <div className="idcard__cell"><span className="idcard__cell-label">{t('identities.col.ports')}</span><span className="idrow__ports">{r.ports}</span></div>
               </div>
               {actionsOf(r)}
+              {loginNote(r)}
               {r.error && <Notice>{r.error}</Notice>}
             </div>
           ))}
@@ -130,13 +181,14 @@ export function Identities({ rows, isMobile, provisionReq, onProvision, onAction
           </div>
           {rows.map((r) => (
             <div className={`idrow idrow--body${r.dimmed ? ' idrow--dimmed' : ''}`} key={r.key}>
-              <div className="idrow__id"><span className="idrow__name">{r.name}</span><span className="idrow__handle">{r.handle}</span></div>
+              <div className="idrow__id"><span className="idrow__name">{r.name}</span><span className="idrow__handle">{r.handle}</span>{credLine(r)}</div>
               <Pill tone={lifecycleTone(r.lc)}>{r.lc}</Pill>
               <span>{r.app} <span className="idrow__version">{r.version}</span></span>
               <span>{r.snap}</span>
               <div className="idrow__disk"><span className="idrow__disk-label">{r.disk}</span><DiskBar pct={r.diskPct} /></div>
               <span className="idrow__ports">{r.ports}</span>
               {actionsOf(r)}
+              {r.loginNote && <div className="idrow__error">{loginNote(r)}</div>}
               {r.error && <div className="idrow__error"><Notice>{r.error}</Notice></div>}
             </div>
           ))}

@@ -306,3 +306,35 @@ describe('PIN por identidade (integrador)', () => {
     expect(getIdentity(h.db, 'conta1')?.lockPin).toBe('1234');
   });
 });
+
+describe('POST /identities/:id/login (integrador)', () => {
+  const SECRET = 'segredo-XYZ-123';
+  it('sucesso: logged-in, handle a partir do username, snapshot salvo; a senha não aparece na resposta', async () => {
+    const seen: string[] = [];
+    const h = harness({ login: async (_id, c) => { seen.push(c.password); return { outcome: 'logged-in', detail: 'ok' }; } });
+    const s = await serve(h.db, h.ops);
+    await s.post('/identities', { name: 'conta2' }); await s.settle();
+    h.devices.push('emulator-5556');
+    const r = await s.post('/identities/conta2/login', { username: 'papaia.me', password: SECRET });
+    expect(r).toMatchObject({ status: 200, body: { outcome: 'logged-in' } });
+    expect(JSON.stringify(r.body)).not.toContain(SECRET);
+    expect(seen).toEqual([SECRET]);
+    expect(getIdentity(h.db, 'conta2')).toMatchObject({ state: 'logged-in', handle: '@papaia.me' });
+    expect(getIdentity(h.db, 'conta2')?.snapshotTakenAt).toBeTruthy();
+  });
+  it('desafio → needs-human com o motivo; erro de infra devolve 502 sem a senha e restaura o estado', async () => {
+    const h = harness({ login: async () => ({ outcome: 'needs-human', detail: 'Instagram pediu verificação: código' }) }); const s = await serve(h.db, h.ops);
+    await s.post('/identities/conta1/login', { username: 'u', password: SECRET });
+    expect(getIdentity(h.db, 'conta1')).toMatchObject({ state: 'needs-human', lastError: expect.stringMatching(/verificação/) });
+    const h2 = harness({ login: async () => { throw new Error(`falhou digitando ${SECRET}`); } }); const s2 = await serve(h2.db, h2.ops);
+    const r = await s2.post('/identities/conta1/login', { username: 'u', password: SECRET });
+    expect(r.status).toBe(502); expect(JSON.stringify(r.body)).not.toContain(SECRET);
+    expect(getIdentity(h2.db, 'conta1')?.state).toBe('idle');
+  });
+  it('guardas: corpo inválido 400 sem ecoar; running/controlada/fora do adb 409', async () => {
+    const h = harness({ login: async () => ({ outcome: 'logged-in', detail: '' }) }, []); const s = await serve(h.db, h.ops);
+    const bad = await s.post('/identities/conta1/login', { username: '', password: SECRET });
+    expect(bad.status).toBe(400); expect(JSON.stringify(bad.body)).not.toContain(SECRET);
+    expect((await s.post('/identities/conta1/login', { username: 'u', password: 'p' })).status).toBe(409);
+  });
+});

@@ -50,4 +50,12 @@ contextBridge.exposeInMainWorld('enxame', {
   setProvider: (role: string, patch: unknown) => ipcRenderer.invoke('enxame:setProvider', role, patch),
   testProvider: (role: string) => ipcRenderer.invoke('enxame:testProvider', role),
   getProviderModels: (role: string) => ipcRenderer.invoke('enxame:getProviderModels', role),
+  // Credenciais do login pelo daemon: o status nunca traz a senha.
+  credentials: {
+    available: () => ipcRenderer.invoke('enxame:credentials:available'),
+    status: () => ipcRenderer.invoke('enxame:credentials:status'),
+    set: (id: string, username: string, password: string) => ipcRenderer.invoke('enxame:credentials:set', id, username, password),
+    clear: (id: string) => ipcRenderer.invoke('enxame:credentials:clear', id),
+  },
+  login: (id: string) => ipcRenderer.invoke('enxame:login', id),
 });

@@ -15,4 +15,7 @@ describe('apiRoute', () => {
     expect(() => apiRoute('POST', '/identities/conta1/rm')).toThrow();
     expect(() => apiRoute('GET', '/goals/plan')).toThrow();
   });
+  it('login pelo daemon não passa pelo canal genérico (só o main manda a senha)', () => {
+    expect(() => apiRoute('POST', '/identities/conta1/login')).toThrow();
+  });
 });

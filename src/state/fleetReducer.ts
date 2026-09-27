@@ -1,6 +1,6 @@
 import { EXTRA_IDENTITIES, IDENTITIES } from '../data/identities';
 import { DEFAULT_MODES } from '../data/providers';
-import type { GoalPlan, GoalSummary, ModelEntry, RuntimeInfo } from '../live/types';
+import type { CredentialsStatus, GoalPlan, GoalSummary, LoginResult, ModelEntry, RuntimeInfo } from '../live/types';
 import type {
   ExtraIdentity, Identity, PlanStage, ProviderMode, RoleKey, Screen, TestStage,
 } from '../types/fleet';
@@ -37,6 +37,10 @@ export interface FleetState {
   readonly plan: GoalPlan | null;
   /** `GET /goals` (modo vivo); null = ainda não carregado. */
   readonly pastGoals: readonly GoalSummary[] | null;
+  /** Usernames com credencial salva no cofre do main (nunca a senha); null = não carregado / sem cofre. */
+  readonly credentials: CredentialsStatus | null;
+  /** Resultado do último "Fazer login" por identidade. */
+  readonly loginResults: Readonly<Record<string, LoginResult>>;
 }
 
 export type FleetAction =
@@ -66,7 +70,9 @@ export type FleetAction =
   | { type: 'planReady'; plan: GoalPlan }
   | { type: 'planFailed' }
   | { type: 'launched' }
-  | { type: 'goalsLoaded'; goals: readonly GoalSummary[] };
+  | { type: 'goalsLoaded'; goals: readonly GoalSummary[] }
+  | { type: 'credentialsLoaded'; status: CredentialsStatus }
+  | { type: 'loginResult'; id: string; result: LoginResult | null };
 
 export function createInitialState(screen: Screen = 'cockpit'): FleetState {
   return {
@@ -88,6 +94,8 @@ export function createInitialState(screen: Screen = 'cockpit'): FleetState {
   requests: {},
   plan: null,
   pastGoals: null,
+  credentials: null,
+  loginResults: {},
   };
 }
 
@@ -219,5 +227,11 @@ export function fleetReducer(s: FleetState, a: FleetAction): FleetState {
       return { ...s, screen: 'cockpit', planStage: 0, plan: null, goalText: '' };
     case 'goalsLoaded':
       return { ...s, pastGoals: a.goals };
+    case 'credentialsLoaded':
+      return { ...s, credentials: a.status };
+    case 'loginResult': {
+      const { [a.id]: _old, ...rest } = s.loginResults;
+      return { ...s, loginResults: a.result ? { ...rest, [a.id]: a.result } : rest };
+    }
   }
 }

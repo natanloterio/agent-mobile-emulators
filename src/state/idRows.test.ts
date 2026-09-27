@@ -80,3 +80,33 @@ describe('Registrar PIN (integrador)', () => {
     expect(r({ lifecycle: 'banned', hasPin: false })).toEqual(['discard']);
   });
 });
+
+describe('credenciais e login pelo daemon', () => {
+  const one = (o: Parameters<typeof liveId>[0], creds: Parameters<typeof selectLiveIdRows>[4], requests = {}) =>
+    selectLiveIdRows([liveId({ id: 'c0', name: 'c0', ...o })], requests, now, undefined, creds)[0];
+  const saved = { status: { c0: { username: 'loja.sul' } }, results: {} };
+  it('sem status carregado (sem cofre) não oferece nada novo', () => {
+    expect(kinds(one({ lifecycle: 'blank' }, undefined).actions)).toEqual(['boot-window', 'login']);
+  });
+  it('sem credencial: só "Credenciais"; com: nome na linha, "Fazer login" nos estados certos e "Esquecer"', () => {
+    expect(kinds(one({ lifecycle: 'idle' }, { status: {}, results: {} }).actions)).toEqual(['creds']);
+    for (const lc of ['blank', 'provisioned', 'needs-human', 'offline', 'idle', 'logged-in']) expect(kinds(one({ lifecycle: lc }, saved).actions)).toContain('autologin');
+    expect(kinds(one({ lifecycle: 'running' }, saved).actions)).not.toContain('autologin');
+    expect(kinds(one({ lifecycle: 'idle', controlled: true }, saved).actions)).not.toContain('autologin');
+    const idle = one({ lifecycle: 'idle' }, saved);
+    expect(kinds(idle.actions)).toEqual(['autologin', 'creds', 'forget']);
+    expect(idle.credUser).toBe('loja.sul');
+    expect(kinds(one({ lifecycle: 'banned' }, saved).actions)).toEqual(['discard']);
+    expect(one({ lifecycle: 'running', discardedAt: 'x' }, saved).actions).toEqual([]);
+  });
+  it('resultado do login: sucesso em tom ok; needs-human com o detalhe do daemon; ocupado e erro das chaves novas', () => {
+    const r = (result: { outcome: 'logged-in' | 'already-logged-in' | 'needs-human'; detail: string }) =>
+      one({ lifecycle: 'blank' }, { ...saved, results: { c0: result } }).loginNote;
+    expect(r({ outcome: 'logged-in', detail: '' })).toEqual({ tone: 'ok', text: 'Login feito pelo daemon.' });
+    expect(r({ outcome: 'already-logged-in', detail: '' })).toEqual({ tone: 'ok', text: 'A conta já estava logada.' });
+    expect(r({ outcome: 'needs-human', detail: 'código por SMS' })).toEqual({ tone: 'human', text: 'Precisa de humano: código por SMS' });
+    expect(one({ lifecycle: 'blank' }, saved, { 'login:c0': { busy: true, error: null } })).toMatchObject({ busy: true, loginBusy: true });
+    expect(one({ lifecycle: 'blank' }, saved, { 'cred:c0': { busy: false, error: 'sem chaveiro' } }).error).toBe('sem chaveiro');
+    expect(one({ lifecycle: 'blank' }, saved, { 'login:c0': { busy: false, error: 'sem credenciais' } }).error).toBe('sem credenciais');
+  });
+});
