@@ -26,3 +26,9 @@
 .role__input { font-family: var(--font-mono); font-size: 15px; }
 /* Texto vermelho (spec §4.5) numa caixa branca com borda escura: lê igual nos cards cinza, verde e escuro. */
 .role__error { background: var(--color-white); color: var(--color-danger); border: 2px solid var(--color-dark); border-radius: var(--radius-control); padding: 10px 14px; font-size: 14px; font-weight: var(--weight-medium); }
+/* Status dos runtimes locais sob o seletor: uma linha por runtime; o do papel em destaque. */
+.role__runtimes { list-style: none; margin: -6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.role__runtime { display: flex; flex-direction: column; gap: 2px; }
+.role__runtime > span:first-child { opacity: 0.8; }
+.role__runtime--current > span:first-child { opacity: 1; font-weight: var(--weight-medium); }
+.role__runtime-error { background: var(--color-white); color: var(--color-danger); border: 1px solid var(--color-dark); border-radius: var(--radius-control); padding: 6px 10px; font-size: 13px; font-weight: var(--weight-medium); }

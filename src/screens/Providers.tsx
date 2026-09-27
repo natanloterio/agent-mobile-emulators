@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { Heading } from '../components/Heading';
 import { useI18n } from '../i18n/I18nProvider';
+import type { ProviderPatch } from '../live/types';
 import type { RoleVM } from '../state/selectors';
 import type { ProviderMode, RoleKey } from '../types/fleet';
 import { shouldSubmitEndpoint } from './endpointSubmit';
+import { cardError, localSelect, modelChoice, roleRuntime, runtimeLines } from './localModels';
 import './Providers.css';
 
 interface ProvidersProps {
@@ -16,7 +18,7 @@ interface ProvidersProps {
   readonly isMobile: boolean;
   readonly onPickMode: (role: RoleKey, mode: ProviderMode) => void;
   readonly onTest: (role: RoleKey) => void;
-  readonly onSetField: (role: RoleKey, patch: { model?: string; endpoint?: string }) => void;
+  readonly onSetField: (role: RoleKey, patch: Omit<ProviderPatch, 'mode'>) => void;
   readonly onLoadModels: (role: RoleKey) => void;
 }
 
@@ -57,13 +59,15 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, i
                 </button>
               ))}
             </div>
-            <label className="role__field"><span>{t('providers.field.model')}</span>
-              <select className="role__select" value={r.model} onChange={(e) => onSetField(r.key, { model: e.target.value })} aria-label={t('providers.model.aria', { role: r.name })}>
-                {(r.models.includes(r.model) ? r.models : [r.model, ...r.models]).map((m) => (
-                  <option key={m} value={m}>{m === r.model && !r.models.includes(m) ? t('providers.model.current', { model: m }) : m}</option>
-                ))}
-              </select>
-            </label>
+            {r.mode === 'local' && r.catalog ? <LocalModelField role={r} onSetField={onSetField} /> : (
+              <label className="role__field"><span>{t('providers.field.model')}</span>
+                <select className="role__select" value={r.model} onChange={(e) => onSetField(r.key, { model: e.target.value })} aria-label={t('providers.model.aria', { role: r.name })}>
+                  {(r.models.includes(r.model) ? r.models : [r.model, ...r.models]).map((m) => (
+                    <option key={m} value={m}>{m === r.model && !r.models.includes(m) ? t('providers.model.current', { model: m }) : m}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             {r.mode === 'local' ? (
               <label className="role__field"><span>{t('providers.field.endpoint')}</span>
                 <input className="role__input" defaultValue={r.endpoint} key={r.endpoint} aria-label={t('providers.endpoint.aria', { role: r.name })}
@@ -73,7 +77,11 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, i
             ) : (
               <div className="role__field"><span>{t('providers.field.endpoint')}</span><div className="role__box role__box--mono">{r.endpoint}</div></div>
             )}
-            {r.error && <div className="role__error" role="alert">{r.error}</div>}
+            {(() => {
+              // Com catálogo, o erro de um runtime já aparece na linha dele: o card não o repete.
+              const error = r.mode === 'local' && r.catalog ? cardError(r.error, r.putError, r.catalog.runtimes) : r.error;
+              return error && <div className="role__error" role="alert">{error}</div>;
+            })()}
             <button
               type="button"
               className={`role__test${r.key === 'esc' ? ' role__test--green' : ''}`}
@@ -108,5 +116,40 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, i
         </span>
       </div>
     </div>
+  );
+}
+
+/** Seletor do papel local com o catálogo do daemon: modelos baixados por runtime e uma linha de status por runtime. */
+function LocalModelField({ role: r, onSetField }: { readonly role: RoleVM; readonly onSetField: ProvidersProps['onSetField'] }) {
+  const i18n = useI18n();
+  const { t } = i18n;
+  if (!r.catalog) return null;
+  const runtime = roleRuntime(r.runtime, r.endpoint);
+  const vm = localSelect(r.catalog, runtime, r.model, i18n);
+  const lines = runtimeLines(r.catalog.runtimes, i18n);
+  return (
+    <>
+      <label className="role__field"><span>{t('providers.field.model')}</span>
+        <select className="role__select" value={vm.value} aria-label={t('providers.model.aria', { role: r.name })}
+          onChange={(e) => { if (e.target.value !== vm.value) onSetField(r.key, modelChoice(e.target.value, runtime)); }}>
+          {vm.orphan && <option value={vm.orphan.value}>{vm.orphan.label}</option>}
+          {vm.groups.map((g) => (
+            <optgroup key={g.runtime} label={g.label}>
+              {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      {lines.length > 0 && (
+        <ul className="role__runtimes" aria-label={t('providers.runtime.aria')}>
+          {lines.map((l) => (
+            <li key={l.kind} className={`role__runtime${l.kind === runtime ? ' role__runtime--current' : ''}`}>
+              <span>{l.text}</span>
+              {l.error && <span className="role__runtime-error">{l.error}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
