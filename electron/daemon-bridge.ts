@@ -17,7 +17,7 @@ function readInfo(): Info | null {
 }
 function alive(pid: number): boolean { try { process.kill(pid, 0); return true; } catch { return false; } }
 
-export interface DaemonSpawn { readonly cmd: string; readonly args: string[]; readonly cwd: string; readonly env: NodeJS.ProcessEnv }
+export interface DaemonSpawn { readonly cmd: string; readonly args: string[]; readonly cwd: string; readonly env: NodeJS.ProcessEnv; readonly isPackaged: boolean }
 
 /**
  * O daemon roda no próprio binário do Electron (ELECTRON_RUN_AS_NODE; Electron 44 = Node 24, com node:sqlite).
@@ -34,25 +34,36 @@ export function daemonSpawnSpec(o: {
     args: [path.join(o.appPath, 'dist-daemon', 'index.js')],
     cwd: o.isPackaged ? o.resourcesPath : o.appPath,
     env: { ...fromFile, ...o.env, ELECTRON_RUN_AS_NODE: '1' },
+    isPackaged: o.isPackaged,
   };
 }
 
 /**
  * Sobe o daemon se não houver um vivo. `windowsHide`: no Windows, sem ele o daemon abre uma janela de console.
- * stdio vai para `daemon.log` (não `inherit`): o daemon é feito para sobreviver ao app (fica rodando entre
- * reaberturas), então não faz sentido ele ficar preso ao stdout/stderr do processo Electron que o subiu — mesma
- * convenção usada para o `ollama serve` e o emulador (daemon/src/provider/ollama.ts, daemon/src/fleet/emulator.ts).
+ * Empacotado, stdio vai para `daemon.log` (não `inherit`): o daemon é feito para sobreviver ao app (fica
+ * rodando entre reaberturas), então não faz sentido ele ficar preso ao stdout/stderr do processo Electron que
+ * o subiu — mesma convenção usada para o `ollama serve` e o emulador (daemon/src/provider/ollama.ts,
+ * daemon/src/fleet/emulator.ts). Em desenvolvimento mantém `inherit`: `DATA_DIR` sem `ENXAME_DATA_DIR` cai no
+ * `~/.local/share/enxame` de verdade, e cada `npm start` não pode ficar escrevendo log ali.
  */
 export function ensureDaemon(spec: DaemonSpawn): ChildProcess | null {
   const info = readInfo();
   if (info && alive(info.pid)) return null;
+  if (!spec.isPackaged) {
+    const child = spawn(spec.cmd, spec.args, { cwd: spec.cwd, stdio: 'inherit', env: spec.env, windowsHide: true });
+    // Sem este ouvinte um erro de spawn derrubaria o main; o waitForInfo expira e a tela mostra o erro.
+    child.on('error', (e) => console.error('[enxame] não deu para subir o daemon:', e.message));
+    return child;
+  }
   mkdirSync(DATA_DIR, { recursive: true });
   const log = openSync(path.join(DATA_DIR, 'daemon.log'), 'a');
-  const child = spawn(spec.cmd, spec.args, { cwd: spec.cwd, stdio: ['ignore', log, log], env: spec.env, windowsHide: true });
-  closeSync(log);
-  // Sem este ouvinte um erro de spawn derrubaria o main; o waitForInfo expira e a tela mostra o erro.
-  child.on('error', (e) => console.error('[enxame] não deu para subir o daemon:', e.message));
-  return child;
+  try {
+    const child = spawn(spec.cmd, spec.args, { cwd: spec.cwd, stdio: ['ignore', log, log], env: spec.env, windowsHide: true });
+    child.on('error', (e) => console.error('[enxame] não deu para subir o daemon:', e.message));
+    return child;
+  } finally {
+    closeSync(log);
+  }
 }
 
 export async function waitForInfo(timeoutMs = 15000): Promise<Info> {

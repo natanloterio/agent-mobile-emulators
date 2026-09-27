@@ -16,6 +16,23 @@ async function launch(dataDir) {
   return electron.launch({ executablePath: exe, args, env: { ...process.env, ENXAME_DATA_DIR: dataDir, ENXAME_PORT: port, ELECTRON_ENABLE_LOGGING: '1' }, timeout: 60_000 });
 }
 
+/** PID do `daemon.json` do dataDir, se existir. */
+async function daemonPid(dataDir) {
+  try { return JSON.parse(await readFile(path.join(dataDir, 'daemon.json'), 'utf8')).pid ?? null; } catch { return null; }
+}
+
+function killPid(pid) { if (pid) { try { process.kill(pid); } catch { /* já saiu */ } } }
+
+/**
+ * Fecha a app com prazo: o daemon empacotado sobrevive à app e, se ainda estiver vivo, herda pipes extras
+ * do Playwright (fds sem CLOEXEC) — o `app.close()` nunca resolve enquanto ele estiver de pé. Quem chama
+ * já deve ter matado o daemon antes; ainda assim, com limite de 15s, e SIGKILL no processo se não bastar.
+ */
+async function closeApp(app) {
+  const closed = await Promise.race([app.close().then(() => true), sleep(15_000).then(() => false)]);
+  if (!closed) { try { app.process().kill('SIGKILL'); } catch { /* já saiu */ } }
+}
+
 async function onboardingAppears() {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-'));
   const app = await launch(dataDir);
@@ -26,7 +43,13 @@ async function onboardingAppears() {
     const rows = await win.locator('.onb-dep').count();
     if (rows < 6) throw new Error(`onboarding com ${rows} itens (esperado ≥ 6)`);
     console.log(`[smoke] onboarding ok com ${rows} itens`);
-  } finally { await app.close(); await rm(dataDir, { recursive: true, force: true }); }
+  } finally {
+    // Numa máquina onde toda dependência já está ok, o onboarding é pulado e o daemon sobe mesmo assim
+    // (o `.onb` acima já teria falhado); mata-lo aqui evita travar o close() e o teste falha limpo.
+    killPid(await daemonPid(dataDir));
+    await closeApp(app);
+    await rm(dataDir, { recursive: true, force: true });
+  }
 }
 
 async function daemonStarts() {
@@ -46,8 +69,9 @@ async function daemonStarts() {
     if (r.status !== 200) throw new Error(`GET /state respondeu ${r.status}`);
     console.log('[smoke] daemon ok');
   } finally {
-    await app.close();
-    if (pid) { try { process.kill(pid); } catch { /* já saiu */ } }
+    // Mata o daemon ANTES do close(): vivo, ele herda pipes do Playwright e o close() nunca resolve.
+    killPid(pid);
+    await closeApp(app);
     await rm(dataDir, { recursive: true, force: true });
   }
 }
