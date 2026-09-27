@@ -58,4 +58,22 @@ contextBridge.exposeInMainWorld('enxame', {
     clear: (id: string) => ipcRenderer.invoke('enxame:credentials:clear', id),
   },
   login: (id: string) => ipcRenderer.invoke('enxame:login', id),
+  // Onboarding (spec onboarding): verificação, instalação com eventos e fim; nada aqui recebe senha além da chave, que vai direto ao main.
+  setup: {
+    status: () => ipcRenderer.invoke('enxame:setup:status'),
+    check: () => ipcRenderer.invoke('enxame:setup:check'),
+    install: (req: unknown) => ipcRenderer.invoke('enxame:setup:install', req),
+    onJob: (cb: (e: unknown) => void) => {
+      const listener = (_e: unknown, data: unknown) => cb(data);
+      ipcRenderer.on('enxame:setup:job', listener);
+      return () => ipcRenderer.removeListener('enxame:setup:job', listener);
+    },
+    onLog: (cb: (line: string) => void) => {
+      const listener = (_e: unknown, line: unknown) => cb(String(line));
+      ipcRenderer.on('enxame:setup:log', listener);
+      return () => ipcRenderer.removeListener('enxame:setup:log', listener);
+    },
+    testKey: (key: string) => ipcRenderer.invoke('enxame:setup:testKey', key),
+    finish: (req: unknown) => ipcRenderer.invoke('enxame:setup:finish', req),
+  },
 });

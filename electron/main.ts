@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, safeStorage } from 'electron';
 import { access, unlink } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectSnapshots, ensureDaemon, post, request, waitForInfo, type DaemonInfo } from './daemon-bridge.js';
@@ -10,6 +11,15 @@ import { createGopBuffer } from './gop-buffer.js';
 import { loginViaDaemon } from './login.js';
 import { apiRoute } from './api-route.js';
 import { providerRoute } from './provider-route.js';
+import { testAnthropicKey } from './setup/anthropic-key.js';
+import { finishSetup } from './setup/finish.js';
+import { nodeHardwareDeps } from './setup/hardware.js';
+import { registerSetupIpc } from './setup/ipc.js';
+import { resolveSetupPaths } from './setup/paths.js';
+import { nodeProbeDeps, probeSetup } from './setup/probe.js';
+import { createRunners, nodeRunnerDeps } from './setup/runners.js';
+import { readSetupFileSync, writeSetupFile } from './setup/setup-file.js';
+import { decideStartup } from './setup/startup.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -95,17 +105,49 @@ app.whenReady().then(() => {
   ipcMain.handle('enxame:getProviderModels', (_e, role: string) => gate.use((info) => request(info, 'GET', providerRoute(role, 'models'))));
 
   const projectRoot = path.join(here, '..');
-  ensureDaemon(projectRoot);
-  waitForInfo().then((info) => {
-    gate.set(info);
-    void migrateCredentials();
-    const broadcast = (ch: string, d: unknown) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send(ch, d); };
-    connectSnapshots(info, {
-      onSnapshot: (data) => { lastSnapshot = data; broadcast('enxame:snapshot', data); },
-      onFrame: (f) => { const id = (f as { id?: unknown })?.id; if (typeof id === 'string') lastFrames.set(id, f); broadcast('enxame:frame', f); },
-      onVideo: (p) => { gop.push(p as never); broadcast('enxame:video', p); },
-    });
-  }).catch((e) => { gate.fail(e.message); console.error('[enxame] sem daemon:', e.message); });
+  const broadcast = (ch: string, d: unknown) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send(ch, d); };
+
+  // Sobe o daemon uma vez (idempotente); falhou, a próxima chamada tenta de novo.
+  let daemonStart: Promise<void> | null = null;
+  const startDaemon = (): Promise<void> => {
+    daemonStart ??= (async () => {
+      ensureDaemon(projectRoot);
+      const info = await waitForInfo();
+      gate.set(info);
+      void migrateCredentials();
+      connectSnapshots(info, {
+        onSnapshot: (data) => { lastSnapshot = data; broadcast('enxame:snapshot', data); },
+        onFrame: (f) => { const id = (f as { id?: unknown })?.id; if (typeof id === 'string') lastFrames.set(id, f); broadcast('enxame:frame', f); },
+        onVideo: (p) => { gop.push(p as never); broadcast('enxame:video', p); },
+      });
+    })().catch((e: Error) => { gate.fail(e.message); console.error('[enxame] sem daemon:', e.message); daemonStart = null; throw e; });
+    return daemonStart;
+  };
+
+  // Onboarding (spec onboarding): leitura síncrona do setup.json para os canais existirem antes de a janela pedir.
+  const supported = process.platform === 'linux' && os.arch() === 'x64';
+  const saved = readSetupFileSync(resolveSetupPaths().setupFile);
+  const paths = resolveSetupPaths(process.env, os.homedir(), saved?.paths.sdkRoot ?? null);
+  const probe = () => probeSetup(paths, nodeProbeDeps(), nodeHardwareDeps());
+  const startupP = decideStartup({ supported, saved, paths, probe, now: () => new Date().toISOString() }).then(async (s) => {
+    if (s.write) await writeSetupFile(paths.setupFile, s.write).catch((e: Error) => console.error('[enxame] setup.json:', e.message));
+    return s;
+  });
+  void startupP.then((s) => { if (s.completed) void startDaemon().catch(() => undefined); });
+
+  registerSetupIpc({
+    handle: (ch, fn) => ipcMain.handle(ch, fn),
+    send: broadcast,
+    paths,
+    status: async () => ({ completed: (await startupP).completed, supported }),
+    probe,
+    runners: (localModel, bin, log) => createRunners(localModel, bin, nodeRunnerDeps(paths, log)),
+    testKey: (key) => testAnthropicKey(key),
+    finish: (req, bin) => finishSetup(req, bin, {
+      paths, writeSetup: (f) => writeSetupFile(paths.setupFile, f), startDaemon,
+      daemon: (method, p, body) => daemon(method, p, body), now: () => new Date().toISOString(),
+    }),
+  });
 });
 
 app.on('window-all-closed', () => {
