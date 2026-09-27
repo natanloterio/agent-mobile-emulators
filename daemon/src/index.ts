@@ -108,6 +108,7 @@ const server = await startServer({
   db, token: daemonToken, screen, video, port: process.env.ENXAME_PORT ? Number(process.env.ENXAME_PORT) : undefined, videoState: (id) => video.state(id),
   host: () => host.read(),
   listLocal: (current) => localRuntimes.listAll(current),
+  unloadLocal: (row) => localRuntimes.unload(row.endpoint, row.model, row.runtime),
   // Kill switch derruba o Ollama que é nosso (spec §4.3); /resume + próximo objetivo o sobem de novo.
   onKill: () => { ollama.stop(); server.broadcast(); },
   // Kill switch já é recusado na rota (409). Plano do cliente é re-sondado no start de cada identidade.

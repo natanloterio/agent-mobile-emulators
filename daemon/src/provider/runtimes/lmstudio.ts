@@ -51,6 +51,8 @@ type V0 = { data?: { id: string; state?: string; type?: string; capabilities?: s
 export interface LmStudio {
   list(endpoint: string): Promise<RuntimeListing>;
   ensure(endpoint: string, model: string): Promise<RuntimeStatus>;
+  /** Tira o modelo da memória (`lms unload`); não carregado ou sem CLI: nada a fazer. */
+  unload(endpoint: string, model: string): Promise<void>;
   stop(): void;
 }
 
@@ -116,8 +118,15 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
     return { running: true, spawnedByUs: startedByUs, adopted: false, pid: null, models: (api.data ?? []).map((m) => m.id), contextWarning: await contextWarning(model) };
   };
 
+  const unload = async (endpoint: string, model: string): Promise<void> => {
+    const api = await v0(endpoint);
+    if (!lms || !api || !(api.data ?? []).some((m) => m.id === model && m.state === 'loaded')) return;
+    const r = await exec(lms, ['unload', model], { timeoutMs: LIST_TIMEOUT_MS });
+    if (r.code !== 0) throw new Error(`lms unload ${model}: ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
+  };
+
   return {
-    list, ensure,
+    list, ensure, unload,
     // Kill switch / saída: só desliga o servidor se foi o daemon que o ligou (nunca o LM Studio aberto pelo usuário).
     stop: () => { if (startedByUs && lms) { startedByUs = false; void exec(lms, ['server', 'stop'], { timeoutMs: 10_000 }); } },
   };
