@@ -62,17 +62,23 @@ Download the installer for your system from the [releases page](https://github.c
 | Windows x64 | `Enxame Setup 0.1.0.exe` |
 
 **Unsigned builds.** The 0.1.0 installers are not code-signed, so the OS will warn you on first open:
-- **macOS**: right-click the app → **Open**, or run `xattr -dr com.apple.quarantine /Applications/Enxame.app`.
+- **macOS**: drag **Enxame** to **Applications** and try to open it once (macOS blocks it). Then open
+  **System Settings → Privacy & Security**, scroll down to the message about Enxame and click **Open Anyway**
+  (on macOS 15 and later the old right-click → **Open** shortcut no longer works). Alternatively, run
+  `xattr -dr com.apple.quarantine /Applications/Enxame.app` in Terminal.
 - **Windows**: SmartScreen will show a warning; click **More info** → **Run anyway**.
 
 **First run.** On every system, Enxame's onboarding checks the machine and installs what is missing, without
 `sudo`/admin: the Android SDK with its own Java, platform-tools, the emulator, an Android 14 (API 34) Google Play
-system image (**arm64** on Apple Silicon, x86_64 elsewhere), Ollama and a local model. It asks you to act only when
-it can't do something itself:
+system image (**arm64** on Apple Silicon, x86_64 elsewhere), Ollama and a local model. On macOS hardware
+acceleration (Hypervisor.framework) is built in and needs nothing from you; only on a Mac without hypervisor support
+does the check report it as off. The app asks you to act only when it can't do something itself:
 - **Linux**: add your user to the `kvm` group, or turn on virtualization in the BIOS.
-- **macOS**: Hypervisor.framework is built in, so this is normally automatic.
 - **Windows**: turning on Windows Hypervisor Platform needs an administrator and a restart; the app shows the command to run.
 - **Any system**: a locked OS keyring needs to be unlocked before Enxame can use it.
+
+The onboarding also asks for your **Anthropic API key** (optional, for the cloud roles) and stores it in the OS
+keyring. No `.env` file is needed for the installed app.
 
 The **base AVD** is still created by hand on every system (see [Your first identity](#your-first-identity)).
 
@@ -97,7 +103,7 @@ issue if something doesn't work on your system.
 
 Plan for about 4.6 GB of RAM and 4 vCPUs per running emulator. On a 32-thread machine the practical ceiling is about **8 emulators at once**.
 
-> The conta1 identity seed is still fixed in `daemon/src/index.ts` (AVD `mcp_test_playstore`). Edit it if your setup differs.
+Identities are created on the **Identidades** screen (see [Your first identity](#your-first-identity)); there is no built-in identity.
 
 ---
 
@@ -121,7 +127,7 @@ On Linux x64, macOS or Windows x64 the first run lands on the **setup screen** i
 
 The app starts the daemon on its own if none is running. The daemon writes its address and access token to `~/.local/share/enxame/daemon.json`. It uses a private adb server on port **5038**, so it won't clash with Android Studio.
 
-An `ANTHROPIC_API_KEY` in `.env` still works and wins over the key saved by the setup screen. It is optional, since the setup screen also offers to save one to the OS keyring.
+When running from source, an `ANTHROPIC_API_KEY` in `.env` still works and wins over the key saved by the setup screen. It is optional, since the setup screen also offers to save one to the OS keyring. The installed app does not read `.env`.
 
 For UI work with hot reload:
 
@@ -202,7 +208,7 @@ A **mission** is a long goal for one identity, such as *"create an email account
 
 | Variable | Default | What it does |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | none | Key for the cloud roles. Goes in `.env`. Leave it out to use only local models. |
+| `ANTHROPIC_API_KEY` | none | Key for the cloud roles. In the installed app, set it in the onboarding (stored in the OS keyring); when running from source it can also go in `.env`. Leave it out to use only local models. |
 | `ENXAME_AVD_BASE` | `enxame_golden`, if it exists | AVD cloned when provisioning. |
 | `ENXAME_DEFAULT_PIN` | none | PIN given to new identities when you don't type one. 4–16 digits. |
 | `ENXAME_STEP_BUDGET` | `30` | Starting value for the agent-steps-per-task limit (see below). `0` disables it (the task runs until it finishes, is paused or the kill switch is hit). |
@@ -250,7 +256,7 @@ Cost is tracked per task and per goal: dollars for cloud models, GPU seconds for
 | An identity is `needs-human` | Open the device, fix what it reports (challenge, wrong PIN, lost session), then press **Resolvi, devolver à fila** (Resolved, back to queue). |
 | Readiness shows *"versão mudou"* (version changed) | The target app updated itself. Pin the version again, or update the version recorded for the identity. |
 | The plan says *"regra determinística"* (deterministic rule) | The leader model failed, or it is a cloud model and there is no API key. A simple built-in rule planned the goal instead. Switch the leader to a local model in **Provedores**, or add the key. |
-| The app says *"daemon não conectado"* (daemon not connected) | The daemon is still starting or failed to start. Check the terminal output (a malformed `ANTHROPIC_API_KEY` stops it), then restart the app. |
+| The app says *"daemon não conectado"* (daemon not connected) | The daemon is still starting or failed to start. In the installed app, read `<data dir>/daemon.log` (`~/.local/share/enxame/daemon.log` by default); when running from source, the daemon prints to the terminal instead. A malformed `ANTHROPIC_API_KEY` stops it. Then restart the app. |
 
 After a crash or restart, the daemon marks interrupted work as failed. It never resumes an action whose result it doesn't know.
 
