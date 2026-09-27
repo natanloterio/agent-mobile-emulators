@@ -97,4 +97,19 @@ export interface EnxameBridge {
   readonly setProvider: (role: LiveRoleKey, patch: ProviderPatch) => Promise<void>;
   readonly testProvider: (role: LiveRoleKey) => Promise<LiveProviderTest>;
   readonly getProviderModels: (role: LiveRoleKey) => Promise<ProviderModelsResponse>;
+  /** Cofre de credenciais no main (spec login determinístico); ausente em preload antigo. */
+  readonly credentials?: CredentialsBridge;
+  /** Login feito pelo daemon com a senha que o main decifra; o renderer nunca a relê. */
+  readonly login?: (id: string) => Promise<LoginResult>;
 }
+export interface CredentialsAvailability { readonly ok: boolean; readonly reason: string | null }
+/** Por id de identidade; nunca a senha. */
+export type CredentialsStatus = Readonly<Record<string, { readonly username: string }>>;
+export interface CredentialsBridge {
+  readonly available: () => Promise<CredentialsAvailability>;
+  readonly status: () => Promise<CredentialsStatus>;
+  readonly set: (id: string, username: string, password: string) => Promise<void>;
+  readonly clear: (id: string) => Promise<void>;
+}
+export type LoginOutcome = 'logged-in' | 'already-logged-in' | 'needs-human';
+export interface LoginResult { readonly outcome: LoginOutcome; readonly detail: string }
