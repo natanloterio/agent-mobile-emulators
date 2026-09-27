@@ -2,6 +2,8 @@
 
 **A desktop cockpit for a swarm of Android emulators driven by AI agents.**
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+
 You describe a goal in plain language, such as *"Reply to the comments from the last 24 hours on every account"*. Enxame splits it into tasks, hands one to each emulator, and runs them without step-by-step supervision. Later you come back to see what was done, what it cost, and which accounts need a human.
 
 Each emulator is an **identity**: one Android Virtual Device (AVD) tied to one account, which keeps its own app data and history over time. It is built for automating apps that have no API.
@@ -48,12 +50,43 @@ Enxame daemon (Node) ── SQLite (goals, tasks, steps, identities)
 
 ---
 
+## Install
+
+Download the installer for your system from the [releases page](https://github.com/natanloterio/agent-mobile-emulators/releases):
+
+| System | File |
+|---|---|
+| Linux x64 | `Enxame-0.1.0.AppImage` or `enxame_0.1.0_amd64.deb` |
+| macOS Intel | `Enxame-0.1.0.dmg` |
+| macOS Apple Silicon | `Enxame-0.1.0-arm64.dmg` |
+| Windows x64 | `Enxame Setup 0.1.0.exe` |
+
+**Unsigned builds.** The 0.1.0 installers are not code-signed, so the OS will warn you on first open:
+- **macOS**: right-click the app → **Open**, or run `xattr -dr com.apple.quarantine /Applications/Enxame.app`.
+- **Windows**: SmartScreen will show a warning; click **More info** → **Run anyway**.
+
+**First run.** On every system, Enxame's onboarding checks the machine and installs what is missing, without
+`sudo`/admin: the Android SDK with its own Java, platform-tools, the emulator, an Android 14 (API 34) Google Play
+system image (**arm64** on Apple Silicon, x86_64 elsewhere), Ollama and a local model. It asks you to act only when
+it can't do something itself:
+- **Linux**: add your user to the `kvm` group, or turn on virtualization in the BIOS.
+- **macOS**: Hypervisor.framework is built in, so this is normally automatic.
+- **Windows**: turning on Windows Hypervisor Platform needs an administrator and a restart; the app shows the command to run.
+- **Any system**: a locked OS keyring needs to be unlocked before Enxame can use it.
+
+The **base AVD** is still created by hand on every system (see [Your first identity](#your-first-identity)).
+
+**Pre-release notice.** This is a pré-lançamento (pre-release). The full automatic install has only been validated
+by automated tests and a smoke test in CI on macOS and Windows, never end to end on a real machine. Please open an
+issue if something doesn't work on your system.
+
+---
+
 ## Requirements
 
 - **Linux, macOS or Windows** with a desktop session. This build was developed and tested on Ubuntu with an NVIDIA GPU; macOS and Windows support has not been tested on real machines yet.
-- **Node.js 24 or newer**. The daemon uses the built-in `node:sqlite`.
 - **Android SDK** with the emulator, platform-tools and an **Android 14 (API 34) Google Play** system image: **x86_64** on Linux, Windows and Intel Macs, **arm64-v8a** on Apple Silicon Macs (they cannot run x86_64 images). The daemon uses the SDK the setup screen installed or found, else `ANDROID_HOME` or `ANDROID_SDK_ROOT`, or else at Android Studio's default location: `~/Android/Sdk` (Linux), `~/Library/Android/sdk` (macOS), `%LOCALAPPDATA%\Android\Sdk` (Windows).
-- **First-run setup screen (Linux x86_64 only).** On Linux x86_64 the app checks the machine on first run, and its **setup screen** installs what is missing without `sudo`: the Android SDK (with its own Java), platform-tools, the emulator, the **Android 14 (API 34) Google Play x86_64** image, **Ollama** and a local model. It asks you to act only when it cannot: your user in the `kvm` group, virtualization in the BIOS, or a locked OS keyring. It does not create the base AVD (see below). Run the check again any time from **Provedores → Verificar dependências**. On macOS and Windows there is no setup screen: install everything in this list yourself.
+- **First-run setup screen.** On Linux x64, macOS (Intel and Apple Silicon) and Windows x64, the app checks the machine on first run and its **setup screen** installs what is missing without `sudo`/admin — see [Install](#install) for what it checks, installs and asks for on each system. It does not create the base AVD (see below). Run the check again any time from **Provedores → Verificar dependências**. On any other platform there is no setup screen: install everything in this list yourself.
 - **Hardware acceleration** for the emulator: KVM on Linux, Hypervisor.framework on macOS (built in), WHPX or AEHD on Windows.
 - At least one **base AVD** with:
   - the target app installed (Instagram by default);
@@ -68,7 +101,9 @@ Plan for about 4.6 GB of RAM and 4 vCPUs per running emulator. On a 32-thread ma
 
 ---
 
-## Getting started
+## Build from source
+
+Requires **Node.js 24 or newer** (the daemon uses the built-in `node:sqlite`).
 
 ```bash
 git clone https://github.com/natanloterio/agent-mobile-emulators.git
@@ -82,7 +117,7 @@ npm run daemon:build          # daemon
 npx electron --no-sandbox .   # starts the app; the app starts the daemon for you (--no-sandbox is only needed on Linux)
 ```
 
-On Linux x86_64 the first run lands on the **setup screen** instead (see [Requirements](#requirements)); once it finishes, the app opens straight into the Cockpit from then on.
+On Linux x64, macOS or Windows x64 the first run lands on the **setup screen** instead (see [Install](#install) and [Requirements](#requirements)); once it finishes, the app opens straight into the Cockpit from then on.
 
 The app starts the daemon on its own if none is running. The daemon writes its address and access token to `~/.local/share/enxame/daemon.json`. It uses a private adb server on port **5038**, so it won't clash with Android Studio.
 
@@ -237,4 +272,5 @@ npm run bench                 # local-model bake-off
 
 ## License
 
-Private project. The bundled `scrcpy-server` is © Genymobile, Apache-2.0; see `daemon/vendor/LICENSE-scrcpy`.
+[AGPL-3.0-only](LICENSE), © 2026 Natan Loterio. The bundled `scrcpy-server` is © Genymobile, Apache-2.0; see
+`daemon/vendor/LICENSE-scrcpy`. See `NOTICE` for the full third-party notices.
