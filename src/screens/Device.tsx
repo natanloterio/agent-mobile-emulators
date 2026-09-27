@@ -6,7 +6,7 @@ import { Pill } from '../components/Pill';
 import { useI18n } from '../i18n/I18nProvider';
 import type { InputGesture, MissionView } from '../live/types';
 import type { VideoBus } from '../live/videoBus';
-import type { MissionAction } from '../state/missionActions';
+import type { MissionAction, MissionInstructThen } from '../state/missionActions';
 import { isOpenMission } from '../state/missionView';
 import type { LogRow, Stat, TileVM } from '../state/selectors';
 import './Device.css';
@@ -39,6 +39,7 @@ interface DeviceProps {
   readonly missionError?: string | null;
   readonly now?: number;
   readonly onMission?: (a: MissionAction) => void;
+  readonly onInstruct?: (text: string, then?: MissionInstructThen) => Promise<boolean>;
 }
 
 function NeedsCard({ error, busy, onResolve, onBan }: { readonly error: string; readonly busy: boolean; readonly onResolve: () => void; readonly onBan?: () => void }) {
@@ -121,7 +122,10 @@ export function Device(p: DeviceProps) {
         <div className="device__right">
           {sel.needs && !(p.mission && isOpenMission(p.mission)) && <NeedsCard error={sel.error} busy={busy} onResolve={p.onResolve} onBan={p.onBan} />}
           {p.mission && (
-            <MissionPanel mission={p.mission} busy={!!p.missionBusy} error={p.missionError ?? null} now={p.now ?? Date.now()} onAction={(a) => p.onMission?.(a)} />
+            <MissionPanel
+              mission={p.mission} busy={!!p.missionBusy} error={p.missionError ?? null} now={p.now ?? Date.now()}
+              onAction={(a) => p.onMission?.(a)} onInstruct={(text, then) => p.onInstruct?.(text, then) ?? Promise.resolve(false)}
+            />
           )}
 
           <div className="stats">

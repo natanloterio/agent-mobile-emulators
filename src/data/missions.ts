@@ -18,5 +18,8 @@ export function demoMission(i18n: I18n = PT): MissionView {
       { key: 'email.inbox', value: t('mission.demo.mem.inbox'), secret: false },
       { key: 'email.password', value: null, secret: true },
     ],
+    notes: [
+      { id: 1, text: t('mission.demo.note'), createdAt: '2026-09-27T09:58:00Z', readSeq: 1 },
+    ],
   };
 }

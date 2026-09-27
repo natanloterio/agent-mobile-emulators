@@ -27,4 +27,17 @@ describe('missionActions', () => {
     expect(t.calls).toEqual([{ method: 'POST', path: '/missions/m1/continue', body: undefined }]);
     expect(t.actions).toContainEqual({ type: 'request', key: missionKey('m1'), phase: 'ok' });
   });
+  it('instruct manda texto aparado para /missions/:id/instruct; vazio não chama o daemon', async () => {
+    const t = mk();
+    expect(await t.a.instruct('m1', '  use o YopMail  ')).toBe(true);
+    expect(t.calls).toEqual([{ method: 'POST', path: '/missions/m1/instruct', body: { text: 'use o YopMail' } }]);
+    expect(t.actions).toContainEqual({ type: 'request', key: missionKey('m1'), phase: 'ok' });
+    expect(await t.a.instruct('m1', '   ')).toBe(false);
+    expect(t.calls).toHaveLength(1);
+  });
+  it('instruct com `then` manda junto no corpo', async () => {
+    const t = mk();
+    await t.a.instruct('m1', 'toque em reenviar', 'continue');
+    expect(t.calls).toEqual([{ method: 'POST', path: '/missions/m1/instruct', body: { text: 'toque em reenviar', then: 'continue' } }]);
+  });
 });

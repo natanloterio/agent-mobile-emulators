@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, setIdentityFlags, setIdentityState, upsertIdentity } from '../src/db/identities.js';
 import { createMission, getMission, listSubtasks, setMissionState, setSubtaskReport } from '../src/db/missions.js';
+import { addNote, listNotes } from '../src/db/mission-notes.js';
 import { setTaskState } from '../src/db/tasks.js';
 import { runMission, type MissionDeps, type SubtaskJob } from '../src/mission/loop.js';
 import type { PlannerDecision, PlannerInput } from '../src/mission/planner.js';
@@ -130,6 +131,22 @@ describe('runMission', () => {
     expect(r).toBe('paused');
     expect(getMission(h.db, h.id)?.humanReason).toBe('cofre: chaveiro travado');
     expect(h.inputs).toHaveLength(0);
+  });
+  it('instruções do operador: até 10 mais recentes vão ao planejador; as lidas por ele ganham o seq da subtarefa criada', async () => {
+    const h = harness([next('criar e-mail'), { kind: 'done', summary: 'ok' }]);
+    const id1 = addNote(h.db, h.id, 'nota antiga');
+    const id2 = addNote(h.db, h.id, 'nota recente');
+    expect(await runMission(h.id, h.deps)).toBe('done');
+    expect(h.inputs[0].notes).toEqual(['nota recente', 'nota antiga']);
+    const notes = listNotes(h.db, h.id);
+    expect(notes.find((n) => n.id === id1)).toMatchObject({ readSeq: 1 });
+    expect(notes.find((n) => n.id === id2)).toMatchObject({ readSeq: 1 });
+  });
+  it('planejador decide human: as notas lidas não ganham seq (nenhuma subtarefa foi criada)', async () => {
+    const h = harness([{ kind: 'human', reason: 'preciso de humano' }]);
+    addNote(h.db, h.id, 'nota');
+    expect(await runMission(h.id, h.deps)).toBe('awaiting-human');
+    expect(listNotes(h.db, h.id)[0].readSeq).toBeNull();
   });
   it('kill switch durante o planejamento → paused sem criar subtarefa', async () => {
     let planned = false;

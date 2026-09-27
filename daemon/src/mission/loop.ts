@@ -1,7 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { getIdentity, setIdentityState, type IdentityRow } from '../db/identities.js';
+import { listNotes, markNotesRead } from '../db/mission-notes.js';
 import {
-  addMissionCost, addSubtask, getMission, listMemory, listSubtasks, recalcStalled, setMissionState, type MissionRow, type MissionState,
+  addMissionCost, addSubtask, getMission, listMemory, listSubtasks, recalcStalled, setMissionState, subtaskSeq, type MissionRow, type MissionState,
 } from '../db/missions.js';
 import { setTaskState } from '../db/tasks.js';
 import { LANGS, type Lang } from '../leader/lang.js';
@@ -30,6 +31,9 @@ export interface MissionDeps {
 export const PAUSE_REASON = {
   kill: 'kill switch', control: 'controle humano', paused: 'identidade pausada', gone: 'identidade indisponível', user: 'pausada pelo usuário',
 } as const;
+
+/** Instruções do operador mandadas ao planejador por ciclo (spec instruções): as mais recentes bastam. */
+const PLANNER_NOTES = 10;
 
 const msg = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 200);
 const asLang = (l: string): Lang => ((LANGS as readonly string[]).includes(l) ? (l as Lang) : 'pt');
@@ -95,12 +99,15 @@ export async function runMission(missionId: string, d: MissionDeps): Promise<Mis
     try { mask = await d.mask(m.id); }
     catch (e) { return pause(d, m, `cofre: ${msg(e)}`); }
 
+    // Instruções do operador (spec instruções): as 10 mais recentes, mais recente primeiro, vão para todo ciclo do planejador.
+    const notes = listNotes(d.db, m.id).slice(0, PLANNER_NOTES);
     let decision: PlannerDecision;
     try {
       const r = await d.plan({
         missionText: m.text, identity: { name: identity.name, handle: identity.handle, appPackage: identity.appPackage },
         // mask entra em summarizeScreen (mascara cada rótulo antes do corte de 120; achado residual) em vez de envolver o resultado.
         memory: listMemory(d.db, m.id), subtasks: listSubtasks(d.db, m.id), screen: summarizeScreen(screen, 40, mask), lang: asLang(m.lang),
+        notes: notes.map((n) => n.text),
       });
       addMissionCost(d.db, m.id, r.costUsd);
       decision = maskDecision(r.decision, mask);
@@ -120,6 +127,8 @@ export async function runMission(missionId: string, d: MissionDeps): Promise<Mis
     if (decision.kind === 'human') return toHuman(d, m, decision.reason);
 
     const taskId = addSubtask(d.db, m.id, decision.objective, decision.successCriteria);
+    // As notas que o planejador acabou de ler também contam como lidas neste ciclo (marcador não recua as já lidas antes).
+    if (notes.length) markNotesRead(d.db, notes.map((n) => n.id), subtaskSeq(d.db, taskId));
     d.onChange?.();
     const instruction = missionInstruction({ objective: decision.objective, successCriteria: decision.successCriteria, memory: listMemory(d.db, m.id), missionText: m.text });
     const shouldStop = () => d.isKilled() || getMission(d.db, m.id)?.state !== 'running';

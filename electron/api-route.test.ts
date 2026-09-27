@@ -21,7 +21,7 @@ describe('apiRoute', () => {
   it('rotas de missão entram; credenciais continuam fora do canal genérico', () => {
     expect(apiRoute('POST', '/missions')).toEqual({ method: 'POST', path: '/missions' });
     expect(apiRoute('post', '/missions/0b6f6c1e-8a1d-4b43-9d0e-2b1f3c4d5e6f/continue').path).toBe('/missions/0b6f6c1e-8a1d-4b43-9d0e-2b1f3c4d5e6f/continue');
-    for (const a of ['pause', 'resume', 'abandon']) expect(() => apiRoute('POST', `/missions/m-1/${a}`)).not.toThrow();
+    for (const a of ['pause', 'resume', 'abandon', 'instruct']) expect(() => apiRoute('POST', `/missions/m-1/${a}`)).not.toThrow();
     expect(() => apiRoute('POST', '/missions/m-1/voar')).toThrow();
     expect(() => apiRoute('POST', '/missions/../kill')).toThrow();
     expect(() => apiRoute('GET', '/credentials')).toThrow();

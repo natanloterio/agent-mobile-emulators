@@ -240,7 +240,11 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       // Pacing (spec §4.3): parada roda sem tools; `forcedTools` restringe o passo a um conjunto fixo (pedido final da missão).
       prepareStep: async ({ messages: m }) => {
         const go = pacer ? await pacer.beforeStep() : 'go';
-        return { messages: pruneScreens(m, mission ? CONFIG.mission.keepScreens : CONFIG.worker.keepScreens), ...(go === 'stop' ? { activeTools: [] } : forcedTools ? { activeTools: forcedTools as string[] } : {}) };
+        const pruned = pruneScreens(m, mission ? CONFIG.mission.keepScreens : CONFIG.worker.keepScreens);
+        // Instrução do operador chegada durante a subtarefa (spec instruções): entra no próximo passo, uma mensagem por nota.
+        const notes = mission?.takeNotes?.() ?? [];
+        const messages = notes.length ? [...pruned, ...notes.map((text) => ({ role: 'user' as const, content: `Instrução do operador: ${text}` }))] : pruned;
+        return { messages, ...(go === 'stop' ? { activeTools: [] } : forcedTools ? { activeTools: forcedTools as string[] } : {}) };
       },
       onLanguageModelCallEnd: (e) => { lastGenMs = Math.round((e as { performance?: { responseTimeMs?: number } }).performance?.responseTimeMs ?? 0); },
       onStepFinish: (step) => {
