@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, upsertIdentity, type IdentityRow } from '../src/db/identities.js';
 import type { ChildLike } from '../src/device/adb.js';
-import { bootEmulator, createEmulatorSupervisor, emulatorArgs, killEmulator, loadSnapshot, saveSnapshot } from '../src/fleet/emulator.js';
+import { bootEmulator, createEmulatorSupervisor, emulatorArgs, killEmulator, killProcessTree, loadSnapshot, saveSnapshot } from '../src/fleet/emulator.js';
 
 const row: IdentityRow = { id: 'conta2', name: 'conta2', handle: 'sem conta', avdName: 'enxame_conta2', serial: 'emulator-5556', consolePort: 5556, mcpHostPort: 8081, mcpToken: 't', deviceSlug: 'conta2', appPackage: 'p', appVersionName: 'v', state: 'provisioned' };
 
@@ -117,5 +117,34 @@ describe('emulador', () => {
     let t = 0;
     const adb = { emu: async () => 'OK', devices: async () => ['emulator-5556'] };
     await expect(killEmulator(adb, 'emulator-5556', { sleep: async () => { t += 1000; }, now: () => t, timeoutMs: 3000 })).rejects.toThrow(/continua no adb/);
+  });
+});
+
+describe('killProcessTree — emulator + qemu por SO', () => {
+  const harness = (platform: NodeJS.Platform, failGroup = false) => {
+    const kills: [number, string][] = []; const runs: string[][] = [];
+    const deps = {
+      platform,
+      kill: (pid: number, sig: NodeJS.Signals) => { if (failGroup && pid < 0) throw new Error('ESRCH'); kills.push([pid, sig]); },
+      run: (file: string, args: readonly string[]) => { runs.push([file, ...args]); },
+    };
+    return { deps, kills, runs };
+  };
+  it('Linux/macOS: sinal no grupo (pid negativo)', () => {
+    for (const platform of ['linux', 'darwin'] as const) {
+      const h = harness(platform);
+      killProcessTree(42, 'SIGTERM', h.deps);
+      expect(h.kills).toEqual([[-42, 'SIGTERM']]); expect(h.runs).toEqual([]);
+    }
+  });
+  it('grupo já morto: tenta o pid direto', () => {
+    const h = harness('linux', true);
+    killProcessTree(42, 'SIGTERM', h.deps);
+    expect(h.kills).toEqual([[42, 'SIGTERM']]);
+  });
+  it('Windows: taskkill /T /F derruba a árvore (não existe grupo de processos)', () => {
+    const h = harness('win32');
+    killProcessTree(42, 'SIGTERM', h.deps);
+    expect(h.runs).toEqual([['taskkill', '/PID', '42', '/T', '/F']]); expect(h.kills).toEqual([]);
   });
 });
