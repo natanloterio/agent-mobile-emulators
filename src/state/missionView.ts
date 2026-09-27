@@ -11,6 +11,11 @@ export function missionForIdentity(snap: FleetSnapshot | null, identityId: strin
   return mine.find(isOpenMission) ?? mine[0] ?? null;
 }
 
+/** `then` que o bloco de instrução manda com a nota (spec instruções): awaiting-human continua, paused retoma. */
+export function missionInstructThen(state: MissionView['state']): 'continue' | 'resume' | undefined {
+  return state === 'awaiting-human' ? 'continue' : state === 'paused' ? 'resume' : undefined;
+}
+
 export function missionTaskLabel(m: MissionView, { t }: I18n = PT): string {
   if (m.state === 'awaiting-human') return t('mission.tile.awaiting', { reason: m.humanReason ?? '' });
   if (m.state === 'paused') return t('mission.tile.paused', { reason: m.humanReason ?? '' });

@@ -4,17 +4,19 @@ import { Notice } from '../components/Notice';
 import { Pill } from '../components/Pill';
 import { useI18n } from '../i18n/I18nProvider';
 import type { MissionView } from '../live/types';
-import type { MissionAction } from '../state/missionActions';
+import type { MissionAction, MissionInstructThen } from '../state/missionActions';
 import { isOpenMission, missionElapsed, missionTimeline } from '../state/missionView';
+import { MissionInstruct } from './MissionInstruct';
 import './Mission.css';
 
 interface MissionPanelProps {
   readonly mission: MissionView; readonly busy: boolean; readonly error: string | null; readonly now: number;
   readonly onAction: (a: MissionAction) => void;
+  readonly onInstruct: (text: string, then?: MissionInstructThen) => void;
 }
 
 /** Painel da missão no Device (spec missões §Interface): estado, humano, linha do tempo, memória e ações. */
-export function MissionPanel({ mission: m, busy, error, now, onAction }: MissionPanelProps) {
+export function MissionPanel({ mission: m, busy, error, now, onAction, onInstruct }: MissionPanelProps) {
   const i18n = useI18n(); const { t, fmt } = i18n;
   const open = isOpenMission(m);
   return (
@@ -43,13 +45,15 @@ export function MissionPanel({ mission: m, busy, error, now, onAction }: Mission
 
       {open && (
         <div className="mission__actions">
-          {m.state === 'awaiting-human' && <Button variant="tertiary" disabled={busy} onClick={() => onAction('continue')}>{t('mission.action.continue')}</Button>}
           {m.state === 'running' && <Button variant="secondary" disabled={busy} onClick={() => onAction('pause')}>{t('mission.action.pause')}</Button>}
           {m.state === 'paused' && <Button variant="primary" disabled={busy} onClick={() => onAction('resume')}>{t('mission.action.resume')}</Button>}
           <Button variant="ghost" disabled={busy} onClick={() => onAction('abandon')}>{t('mission.action.abandon')}</Button>
         </div>
       )}
-      {error && <Notice>{error}</Notice>}
+
+      {open && (
+        <MissionInstruct mission={m} busy={busy} error={error} onInstruct={onInstruct} onResolved={() => onAction('continue')} />
+      )}
 
       <div>
         <Heading size="h4">{t('mission.timeline.title')}</Heading>

@@ -114,6 +114,7 @@ export function App() {
             missionBusy={mReq?.busy}
             missionError={mReq?.error ?? null}
             onMission={isLive && m ? (a) => void mission.act(m.id, a, m.text) : undefined}
+            onInstruct={isLive && m ? (text, then) => void mission.instruct(m.id, text, then) : undefined}
           />
         );
       }

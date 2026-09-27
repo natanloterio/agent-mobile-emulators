@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createI18n } from '../i18n/translate';
 import type { FleetSnapshot, MissionView } from '../live/types';
-import { isOpenMission, missionElapsed, missionForIdentity, missionTaskLabel, missionTimeline } from './missionView';
+import { isOpenMission, missionElapsed, missionForIdentity, missionInstructThen, missionTaskLabel, missionTimeline } from './missionView';
 
 const base: MissionView = {
   id: 'm1', identityId: 'conta2', text: 'crie e-mail e Instagram', state: 'running', humanReason: null, stalled: false, costUsd: 0.42,
@@ -40,5 +40,12 @@ describe('missionView', () => {
     expect(missionElapsed(base, Date.parse('2026-09-27T10:42:00Z'), pt)).toBe('42 min');
     expect(missionElapsed(base, Date.parse('2026-09-27T12:05:00Z'), pt)).toBe('2 h 5 min');
     expect(missionElapsed({ ...base, finishedAt: '2026-09-27T10:10:00Z' }, Date.parse('2026-09-28T00:00:00Z'), pt)).toBe('10 min');
+  });
+  it('`then` da instrução: awaiting-human continua, paused retoma, o resto não manda `then`', () => {
+    expect(missionInstructThen('awaiting-human')).toBe('continue');
+    expect(missionInstructThen('paused')).toBe('resume');
+    expect(missionInstructThen('running')).toBeUndefined();
+    expect(missionInstructThen('done')).toBeUndefined();
+    expect(missionInstructThen('abandoned')).toBeUndefined();
   });
 });
