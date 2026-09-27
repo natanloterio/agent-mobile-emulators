@@ -118,7 +118,9 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
           const runtimes = await o.listLocal({ runtime: cfg.runtime, endpoint: cfg.endpoint });
           const mine = runtimes.find((r) => r.kind === cfg.runtime) ?? runtimes[0];
           return send(res, 200, {
-            source: 'local', models: mine?.models.map((m) => m.id) ?? [], error: mine?.error ?? null,
+            // Tela antiga só tem esta linha de erro: parado vira a frase de sempre; a nova lê `runtimes[].running`.
+            source: 'local', models: mine?.models.map((m) => m.id) ?? [],
+            error: mine?.error ?? (mine && mine.installed && !mine.running ? `${mine.label} parado — o próximo teste ou objetivo o sobe` : null),
             runtimes: runtimes.map(({ models: _m, ...r }) => r), entries: runtimes.flatMap((r) => r.models),
           });
         }

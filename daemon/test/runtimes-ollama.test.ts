@@ -22,12 +22,20 @@ describe('listOllama', () => {
   it('servidor parado: lista do disco (manifests), aviso de parado', async () => {
     const fetch = (async () => { throw new Error('ECONNREFUSED'); }) as never;
     const r = await listOllama('http://127.0.0.1:11434/v1', { fetch, manifests: () => [{ name: 'qwen3.5:27b', sizeBytes: 17e9 }], installed: () => true });
-    expect(r).toMatchObject({ running: false, installed: true, error: expect.stringMatching(/parado/) });
+    expect(r).toMatchObject({ running: false, installed: true, error: null });
     expect(r.models).toEqual([{ id: 'qwen3.5:27b', runtime: 'ollama', label: 'qwen3.5:27b', sizeBytes: 17e9, loaded: null, toolUse: null }]);
   });
   it('sem Ollama na máquina: não instalado, lista vazia', async () => {
     const fetch = (async () => { throw new Error('ECONNREFUSED'); }) as never;
     const r = await listOllama('http://127.0.0.1:11434/v1', { fetch, manifests: () => [], installed: () => false });
     expect(r).toMatchObject({ installed: false, running: false, models: [] });
+  });
+});
+
+describe('modelos :cloud (integrador)', () => {
+  it('não entram na lista: não estão baixados', async () => {
+    const fetch = (async (u: string) => ({ ok: true, json: async () => (u.endsWith('/api/ps') ? { models: [] } : { models: [{ name: 'kimi-k2.5:cloud', size: 0 }, { name: 'gpt-oss:20b', size: 1 }] }) })) as never;
+    const r = await listOllama('http://127.0.0.1:11434/v1', { fetch, manifests: () => [], installed: () => true });
+    expect(r.models.map((m) => m.id)).toEqual(['gpt-oss:20b']);
   });
 });

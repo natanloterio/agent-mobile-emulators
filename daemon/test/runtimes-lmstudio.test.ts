@@ -6,13 +6,14 @@ const LS = `Waking up LM Studio service...\n[{"type":"llm","modelKey":"google/ge
 {"type":"llm","modelKey":"llama-3.2-3b-instruct","displayName":"Llama 3.2 3B","sizeBytes":2020000000,"trainedForToolUse":false}]`;
 const V0 = (state: Record<string, string>) => ({ data: Object.entries(state).map(([id, s]) => ({ id, state: s, type: 'llm', capabilities: ['tool_use'] })) });
 
-function fakes(o: { running?: boolean; loaded?: string[]; lms?: boolean } = {}) {
+function fakes(o: { running?: boolean; loaded?: string[]; lms?: boolean; ctx?: number } = {}) {
   let running = o.running ?? true; const loaded = new Set(o.loaded ?? []); const calls: string[] = [];
   const exec = async (_f: string, args: readonly string[]) => {
     calls.push(args.join(' '));
     if (args[0] === 'ls') return { stdout: LS, stderr: '', code: 0 };
     if (args[0] === 'server' && args[1] === 'start') { running = true; return { stdout: '', stderr: '', code: 0 }; }
     if (args[0] === 'load') { loaded.add(args[1]); return { stdout: '', stderr: '', code: 0 }; }
+    if (args[0] === 'ps') return { stdout: JSON.stringify([...loaded].map((k) => ({ modelKey: k, identifier: k, contextLength: o.ctx ?? 32768 }))), stderr: '', code: 0 };
     return { stdout: '', stderr: '', code: 0 };
   };
   const fetch = (async (u: string) => {
@@ -41,7 +42,7 @@ describe('LM Studio', () => {
   it('servidor parado: lista pelo CLI, loaded desconhecido e aviso', async () => {
     const f = fakes({ running: false });
     const r = await createLmStudio({ exec: f.exec, fetch: f.fetch, lmsPath: f.lmsPath, sleep: async () => {} }).list('http://127.0.0.1:1234/v1');
-    expect(r).toMatchObject({ running: false, error: expect.stringMatching(/parado/) });
+    expect(r).toMatchObject({ running: false, error: null });
     expect(r.models[0].loaded).toBeNull();
   });
   it('sem CLI e sem servidor: não instalado', async () => {
@@ -67,5 +68,14 @@ describe('LM Studio', () => {
     const f = fakes({ running: false });
     const lm = createLmStudio({ exec: f.exec, fetch: f.fetch, lmsPath: f.lmsPath, sleep: async () => {} });
     await expect(lm.ensure('http://10.0.0.5:1234/v1', 'llama-3.2-3b-instruct')).rejects.toThrow(/remoto/);
+  });
+});
+
+describe('contexto do modelo carregado (integrador)', () => {
+  it('32k ou mais: sem aviso; menos: aviso dizendo como recarregar', async () => {
+    const ok = fakes({ loaded: ['llama-3.2-3b-instruct'] });
+    expect((await createLmStudio({ exec: ok.exec, fetch: ok.fetch, lmsPath: ok.lmsPath, sleep: async () => {} }).ensure('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct')).contextWarning).toBeNull();
+    const low = fakes({ loaded: ['llama-3.2-3b-instruct'], ctx: 4096 });
+    expect((await createLmStudio({ exec: low.exec, fetch: low.fetch, lmsPath: low.lmsPath, sleep: async () => {} }).ensure('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct')).contextWarning).toMatch(/4096.*--context-length 32768/);
   });
 });

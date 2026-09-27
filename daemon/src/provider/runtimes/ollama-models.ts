@@ -47,6 +47,9 @@ async function getJson<T>(f: typeof fetch, url: string): Promise<T | null> {
   try { const r = await f(url); return r.ok ? ((await r.json()) as T) : null; } catch { return null; }
 }
 
+/** Modelos `:cloud` do Ollama rodam no servidor deles: não estão baixados nem são locais. */
+export const isCloudModel = (name: string): boolean => /[:-]cloud$/.test(name);
+
 /** Modelos do Ollama: da API com o servidor no ar (com o que está carregado), do disco com ele parado. */
 export async function listOllama(endpoint: string, deps: OllamaListDeps = {}): Promise<RuntimeListing> {
   const f = deps.fetch ?? fetch; const base = ollamaBase(endpoint);
@@ -57,10 +60,11 @@ export async function listOllama(endpoint: string, deps: OllamaListDeps = {}): P
     const ps = await getJson<{ models?: { name: string }[] }>(f, `${base}/api/ps`);
     const loaded = new Set((ps?.models ?? []).map((m) => m.name));
     return { kind: 'ollama', label: 'Ollama', endpoint, installed: true, running: true, error: null,
-      models: tags.models.map((m) => entry(m.name, m.size ?? null, ps ? loaded.has(m.name) : null)) };
+      models: tags.models.filter((m) => !isCloudModel(m.name)).map((m) => entry(m.name, m.size ?? null, ps ? loaded.has(m.name) : null)) };
   }
   const disk = (deps.manifests ?? (() => diskManifests()))();
   return { kind: 'ollama', label: 'Ollama', endpoint, installed, running: false,
-    error: installed ? 'Ollama parado — o próximo teste ou objetivo o sobe' : null,
-    models: disk.map((m) => entry(m.name, m.sizeBytes, null)) };
+    // Parado não é erro: o estado já diz; a rota monta a frase para a tela antiga (spec runtimes-locais).
+    error: null,
+    models: disk.filter((m) => !isCloudModel(m.name)).map((m) => entry(m.name, m.sizeBytes, null)) };
 }

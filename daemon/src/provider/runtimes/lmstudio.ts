@@ -69,6 +69,17 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
     return r.code === 0 ? parseLmsLs(r.stdout) : null;
   };
 
+  /** Contexto real do modelo carregado (`lms ps --json`): abaixo de 32k os passos longos seriam truncados. */
+  const contextWarning = async (model: string): Promise<string | null> => {
+    if (!lms) return 'contexto desconhecido (sem o CLI lms): garanta contexto ≥ 32768 no LM Studio';
+    const r = await exec(lms, ['ps', '--json'], { timeoutMs: LIST_TIMEOUT_MS });
+    let loaded: { modelKey?: string; identifier?: string; contextLength?: number }[] = [];
+    try { loaded = JSON.parse(r.stdout.slice(Math.max(0, r.stdout.indexOf('[')))) as typeof loaded; } catch { /* saída ilegível */ }
+    const ctx = loaded.find((m) => m.identifier === model || m.modelKey === model)?.contextLength;
+    if (typeof ctx !== 'number') return 'contexto desconhecido no LM Studio: garanta contexto ≥ 32768';
+    return ctx >= Number(CONTEXT_LENGTH) ? null : `contexto do modelo no LM Studio é ${ctx} (< ${CONTEXT_LENGTH}): recarregue com lms load ${model} --context-length ${CONTEXT_LENGTH}`;
+  };
+
   const list = async (endpoint: string): Promise<RuntimeListing> => {
     const [api, disk] = await Promise.all([v0(endpoint), cli()]);
     const state = new Map((api?.data ?? []).map((m) => [m.id, m.state === 'loaded']));
@@ -79,7 +90,7 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
     const models = base.map((m) => ({ ...m, loaded: api ? (state.get(m.id) ?? false) : null }));
     const installed = !!lms || !!api;
     return { kind: 'lmstudio', label: 'LM Studio', endpoint, installed, running: !!api,
-      error: api ? null : installed ? 'LM Studio parado — o próximo teste ou objetivo sobe o servidor' : null, models };
+      error: null, models };
   };
 
   const ensure = async (endpoint: string, model: string): Promise<RuntimeStatus> => {
@@ -102,7 +113,7 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
       const r = await exec(lms, ['load', model, '--context-length', CONTEXT_LENGTH, '-y'], { timeoutMs: LOAD_TIMEOUT_MS });
       if (r.code !== 0) throw new ProviderError('infra-local', `lms load ${model} falhou: ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
     }
-    return { running: true, spawnedByUs: startedByUs, adopted: false, pid: null, models: (api.data ?? []).map((m) => m.id) };
+    return { running: true, spawnedByUs: startedByUs, adopted: false, pid: null, models: (api.data ?? []).map((m) => m.id), contextWarning: await contextWarning(model) };
   };
 
   return {
