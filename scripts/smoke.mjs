@@ -13,6 +13,16 @@ const port = '47899';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * `rm` que nunca lança: no Windows um handle pode ser liberado só um pouco depois do processo terminar
+ * (TerminateProcess, antivírus com o arquivo aberto) — `EBUSY`/`EPERM` transitórios, por isso `maxRetries`.
+ * Limpeza é best-effort e não pode mascarar o resultado real do teste (nem transformar um passe em falha).
+ */
+async function safeRm(dir) {
+  await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    .catch((e) => console.warn('[smoke] limpeza:', e.message));
+}
+
+/**
  * Isola da máquina: sem isto, o onboarding depende do que já está instalado onde quem roda o teste mora
  * (SDK/AVDs/modelos do Ollama) — nesta máquina, e em runners do GitHub para macOS/Windows, o SDK e o JDK já
  * vêm prontos, e o onboarding é pulado (nenhuma etapa do `.onb` aparece). `ANDROID_HOME`/`ANDROID_SDK_ROOT`
@@ -24,25 +34,29 @@ async function launch(dataDir) {
   const androidHome = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-sdk-'));
   const avdHome = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-avd-'));
   const ollamaModels = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-ollama-'));
-  const cleanup = () => Promise.all(
-    [androidHome, avdHome, ollamaModels].map((d) => rm(d, { recursive: true, force: true })),
-  );
-  const app = await electron.launch({
-    executablePath: exe,
-    args,
-    env: {
-      ...process.env,
-      ENXAME_DATA_DIR: dataDir,
-      ENXAME_PORT: port,
-      ELECTRON_ENABLE_LOGGING: '1',
-      ANDROID_HOME: androidHome,
-      ANDROID_SDK_ROOT: androidHome,
-      ANDROID_AVD_HOME: avdHome,
-      OLLAMA_MODELS: ollamaModels,
-    },
-    timeout: 60_000,
-  });
-  return { app, cleanup };
+  const cleanup = () => Promise.all([androidHome, avdHome, ollamaModels].map(safeRm));
+  try {
+    const app = await electron.launch({
+      executablePath: exe,
+      args,
+      env: {
+        ...process.env,
+        ENXAME_DATA_DIR: dataDir,
+        ENXAME_PORT: port,
+        ELECTRON_ENABLE_LOGGING: '1',
+        ANDROID_HOME: androidHome,
+        ANDROID_SDK_ROOT: androidHome,
+        ANDROID_AVD_HOME: avdHome,
+        OLLAMA_MODELS: ollamaModels,
+      },
+      timeout: 60_000,
+    });
+    return { app, cleanup };
+  } catch (e) {
+    // Se o launch falhar (ex.: executável inexistente) os três dirs acima ficariam órfãos.
+    await cleanup();
+    throw e;
+  }
 }
 
 /** PID do `daemon.json` do dataDir, se existir. */
@@ -56,16 +70,26 @@ function killPid(pid) { if (pid) { try { process.kill(pid); } catch { /* já sai
  * Fecha a app com prazo: o daemon empacotado sobrevive à app e, se ainda estiver vivo, herda pipes extras
  * do Playwright (fds sem CLOEXEC) — o `app.close()` nunca resolve enquanto ele estiver de pé. Quem chama
  * já deve ter matado o daemon antes; ainda assim, com limite de 15s, e SIGKILL no processo se não bastar.
+ * O timer do prazo é limpo (e marcado `unref`) pra não manter o event loop vivo à toa quando o close()
+ * ganha a corrida.
  */
 async function closeApp(app) {
-  const closed = await Promise.race([app.close().then(() => true), sleep(15_000).then(() => false)]);
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(false), 15_000);
+    timer.unref?.();
+  });
+  const closed = await Promise.race([app.close().then(() => true), timeout]);
+  clearTimeout(timer);
   if (!closed) { try { app.process().kill('SIGKILL'); } catch { /* já saiu */ } }
 }
 
 async function onboardingAppears() {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-'));
-  const { app, cleanup } = await launch(dataDir);
+  let app;
+  let cleanup;
   try {
+    ({ app, cleanup } = await launch(dataDir));
     const win = await app.firstWindow();
     await win.waitForSelector('.onb', { timeout: 60_000 });
     await win.waitForSelector('.onb-dep', { timeout: 120_000 });
@@ -73,21 +97,25 @@ async function onboardingAppears() {
     if (rows < 6) throw new Error(`onboarding com ${rows} itens (esperado ≥ 6)`);
     console.log(`[smoke] onboarding ok com ${rows} itens`);
   } finally {
-    // Numa máquina onde toda dependência já está ok, o onboarding é pulado e o daemon sobe mesmo assim
-    // (o `.onb` acima já teria falhado); mata-lo aqui evita travar o close() e o teste falha limpo.
-    killPid(await daemonPid(dataDir));
-    await closeApp(app);
-    await cleanup();
-    await rm(dataDir, { recursive: true, force: true });
+    if (app) {
+      // Numa máquina onde toda dependência já está ok, o onboarding é pulado e o daemon sobe mesmo assim
+      // (o `.onb` acima já teria falhado); mata-lo aqui evita travar o close() e o teste falha limpo.
+      killPid(await daemonPid(dataDir));
+      await closeApp(app);
+    }
+    if (cleanup) await cleanup();
+    await safeRm(dataDir);
   }
 }
 
 async function daemonStarts() {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'enxame-smoke-'));
   await writeFile(path.join(dataDir, 'setup.json'), JSON.stringify({ version: 1, completedAt: '2026-01-01T00:00:00.000Z', paths: { sdkRoot: path.join(dataDir, 'sdk'), ollamaBin: null } }));
-  const { app, cleanup } = await launch(dataDir);
+  let app;
+  let cleanup;
   let pid = null;
   try {
+    ({ app, cleanup } = await launch(dataDir));
     await app.firstWindow();
     let info = null;
     for (let i = 0; i < 80 && !info; i++) {
@@ -99,14 +127,22 @@ async function daemonStarts() {
     if (r.status !== 200) throw new Error(`GET /state respondeu ${r.status}`);
     console.log('[smoke] daemon ok');
   } finally {
-    // Mata o daemon ANTES do close(): vivo, ele herda pipes do Playwright e o close() nunca resolve.
-    killPid(pid);
-    await closeApp(app);
-    await cleanup();
-    await rm(dataDir, { recursive: true, force: true });
+    if (app) {
+      // Mata o daemon ANTES do close(): vivo, ele herda pipes do Playwright e o close() nunca resolve.
+      killPid(pid);
+      await closeApp(app);
+    }
+    if (cleanup) await cleanup();
+    await safeRm(dataDir);
   }
 }
 
-await onboardingAppears();
-await daemonStarts();
-console.log('[smoke] tudo ok');
+try {
+  await onboardingAppears();
+  await daemonStarts();
+  console.log('[smoke] tudo ok');
+  process.exit(0);
+} catch (e) {
+  console.error(`[smoke] FALHOU: ${e.message}`);
+  process.exit(1);
+}
