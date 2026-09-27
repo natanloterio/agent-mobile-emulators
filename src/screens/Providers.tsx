@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Button } from '../components/Button';
 import { Heading } from '../components/Heading';
 import { useI18n } from '../i18n/I18nProvider';
 import type { GpuBarView } from '../lib/gpuBar';
@@ -27,13 +28,15 @@ interface ProvidersProps {
   readonly onTest: (role: RoleKey) => void;
   readonly onSetField: (role: RoleKey, patch: Omit<ProviderPatch, 'mode'>) => void;
   readonly onLoadModels: (role: RoleKey) => void;
+  /** Reabre o onboarding (spec onboarding); ausente fora do Electron. */
+  readonly onReopenSetup?: () => void;
   /** Cartão "Limites dos agentes" (spec limites §UI): só no modo vivo (`null` esconde, como no demo). */
   readonly budgets: BudgetsCardProps | null;
 }
 
 const MODES: readonly ProviderMode[] = ['nuvem', 'local'];
 
-export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, gpu, showVram, isMobile, onPickMode, onTest, onSetField, onLoadModels, budgets }: ProvidersProps) {
+export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, gpu, showVram, isMobile, onPickMode, onTest, onSetField, onLoadModels, onReopenSetup, budgets }: ProvidersProps) {
   // Recarrega a lista de modelos quando a tela abre e quando algum papel troca de modo.
   const { t } = useI18n();
   const modeKey = roles.map((r) => `${r.key}:${r.mode}`).join('|');
@@ -44,6 +47,9 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, g
       <header className="screen__title">
         <Heading size={isMobile ? 'h3' : 'h2'}>{t('providers.title')}</Heading>
         <p className="screen__lede">{t('providers.lede')}</p>
+        {onReopenSetup && (
+          <div><Button variant="secondary" size="sm" onClick={onReopenSetup}>{t('providers.setup')}</Button></div>
+        )}
       </header>
 
       <div className="roles">

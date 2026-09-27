@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { KillBanner } from './components/KillBanner';
 import { MobileBottomNav, MobileTopbar } from './components/MobileChrome';
 import { Sidebar } from './components/Sidebar';
@@ -31,6 +31,7 @@ import {
   selectCostRows, selectGoalPct, selectGoalStats, selectIdRows, selectNeedsList, selectReportCards, selectRoles, selectSelected,
 } from './state/selectors';
 import { useFleet } from './state/useFleet';
+import type { Screen } from './types/fleet';
 import './components/Shell.css';
 
 // Parâmetros do design (props do editor).
@@ -38,8 +39,17 @@ const FULL_TILES = true;
 const SHOW_COST = true;
 const DEMO_PAST = PAST_GOALS.map((g) => ({ ...g, key: g.text }));
 
-export function App() {
+export interface AppProps {
+  /** Tela para abrir ao sair do onboarding ("Criar identidade" → Identidades). */
+  readonly startScreen?: Screen | null;
+  /** Provedores → Verificar dependências (reabre o onboarding). */
+  readonly onReopenSetup?: () => void;
+}
+
+export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
   const { state, actions, bridged, goal, identity, credentials, mission, settings } = useFleet();
+  // Só na montagem: a tela escolhida no fim do onboarding.
+  useEffect(() => { if (startScreen) actions.go(startScreen); }, [startScreen]);
   const isMobile = useIsMobile();
   const { snap: live, frames, bus } = useLiveFleet();
   const i18n = useI18n();
@@ -190,6 +200,7 @@ export function App() {
             onTest={actions.testConnection}
             onSetField={actions.setProviderField}
             onLoadModels={actions.loadProviderModels}
+            onReopenSetup={onReopenSetup}
             budgets={live?.stepBudgets ? {
               goal: live.stepBudgets.goal,
               mission: live.stepBudgets.mission,
