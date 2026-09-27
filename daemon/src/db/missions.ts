@@ -68,6 +68,11 @@ export function addSubtask(db: DatabaseSync, missionId: string, objective: strin
   return taskId;
 }
 
+/** Seq da subtarefa (spec instruções): o loop marca as notas lidas com o seq da subtarefa recém-criada. */
+export function subtaskSeq(db: DatabaseSync, taskId: string): number {
+  return Number((db.prepare('select seq from task where id=?').get(taskId) as { seq: number }).seq);
+}
+
 export function listSubtasks(db: DatabaseSync, missionId: string): readonly SubtaskRow[] {
   return (db.prepare('select id, seq, objective, success_criteria, state, report_json, cost_usd from task where goal_id=? order by seq').all(missionId) as Record<string, unknown>[])
     .map((x) => ({ id: String(x.id), seq: Number(x.seq), objective: String(x.objective ?? ''), successCriteria: String(x.success_criteria ?? ''), state: String(x.state), report: parseReport(x.report_json), costUsd: Number(x.cost_usd) }));

@@ -81,6 +81,8 @@ export interface MissionRunCtx {
   readonly missionId: string;
   readonly vault: Vault;
   readonly mask: SecretMask;
+  /** Instruções do operador ainda não lidas (spec instruções): tira-as e já marca lidas com o seq desta subtarefa. Ausente = nenhuma. */
+  readonly takeNotes?: () => readonly string[];
 }
 export interface MissionToolCtx extends MissionRunCtx {
   readonly db: DatabaseSync;
