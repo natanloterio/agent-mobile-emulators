@@ -49,6 +49,8 @@ async function blockReason(d: SchedulerDeps, identityId: string): Promise<{ reas
     const r = await readinessOf(d.db, id, d.ensureReady);
     if (!r.ready) return { reason: r.readyLabel };
     if (d.isKilled()) return { reason: 'kill switch' };
+    // Uma missão pode ter começado durante a sonda.
+    if (openMissionFor(d.db, identityId)) return { reason: 'em missão' };
   }
   const fresh = getIdentity(d.db, identityId);
   return fresh ? { identity: fresh } : { reason: 'identidade removida' };

@@ -26,4 +26,14 @@ describe('identidade em missão fica fora dos objetivos comuns', () => {
     const step = db.prepare("select result_excerpt from step where tool='(scheduler)'").get() as { result_excerpt: string };
     expect(step.result_excerpt).toBe('pulada: em missão');
   });
+  it('scheduler: missão iniciada durante a sonda → pula "em missão" (re-checa depois do await)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    let ran = 0;
+    const plan = { text: 'objetivo', pattern: 'fan-out' as const, rationale: 'r', tasks: [{ identityId: 'conta1', name: 'conta1', handle: '@a', instruction: 'i', signals: OK, ready: true, readyLabel: 'pronto' }], estimate: { tasks: 1, outOfProbe: 0, stepBudget: 30, fleetReadyMs: 0 }, leader: { model: 'm', costUsd: 0, error: null } };
+    const ensureReady = async () => { createMission(db, 'conta1', 'm', 'pt'); return ready; };
+    await runGoal(plan, { db, isKilled: () => false, runWorker: async () => { ran++; }, ensureReady, staggerMs: 0, jitterMs: 0 });
+    expect(ran).toBe(0);
+    const step = db.prepare("select result_excerpt from step where tool='(scheduler)'").get() as { result_excerpt: string };
+    expect(step.result_excerpt).toBe('pulada: em missão');
+  });
 });
