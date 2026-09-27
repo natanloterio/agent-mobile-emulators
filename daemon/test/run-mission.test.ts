@@ -17,7 +17,7 @@ const screenOf = (pkg: string, labels: readonly string[]) =>
   + labels.map((l, i) => `node_${i}\tEditText\t${l}\t-\t-\t0,${i * 10},10,${i * 10 + 10}\ton,ena,edt`).join('\n') + '\n';
 
 /** MCP falso com estado: o que for digitado aparece na próxima leitura de tela e no find_nodes (campo sem máscara). */
-function fakeMcp(opts: { pkg?: string; labels?: string[]; fail?: 'device-missing'; typeFails?: boolean } = {}) {
+function fakeMcp(opts: { pkg?: string; labels?: string[]; fail?: 'device-missing'; typeFails?: boolean; typeFailsInfra?: boolean } = {}) {
   const typed: string[] = []; const clicked: string[] = [];
   const screen = () => screenOf(opts.pkg ?? 'com.instagram.android', [...(opts.labels ?? ['Confirmar']), ...typed]);
   const connect: RunTaskDeps['connect'] = async () => ({
@@ -26,7 +26,12 @@ function fakeMcp(opts: { pkg?: string; labels?: string[]; fail?: 'device-missing
       [`${P}find_nodes`]: { description: 'x', inputSchema: {}, execute: async () => ({ content: [{ type: 'text', text: `achei: ${typed.join(',')}` }] }) },
       [`${P}click_node`]: { description: 'x', inputSchema: {}, execute: async (i: { node_id: string }) => { clicked.push(i.node_id); return 'ok'; } },
       // erro cru do MCP: ecoa o parâmetro (a senha) — a fixture existe para provar que isso nunca sobe como veio (fix round 1, item 1).
-      [`${P}type_append_text`]: { description: 'x', inputSchema: {}, execute: async (i: { text: string }) => { if (opts.typeFails) throw new Error(`falhou digitando ${i.text}`); typed.push(i.text); return 'ok'; } },
+      // typeFailsInfra: além de ecoar, classifica como infra ("fetch failed") — prova que o halt/summary também não ecoa (achado residual).
+      [`${P}type_append_text`]: { description: 'x', inputSchema: {}, execute: async (i: { text: string }) => {
+        if (opts.typeFailsInfra) throw new Error(`fetch failed ao digitar ${i.text}`);
+        if (opts.typeFails) throw new Error(`falhou digitando ${i.text}`);
+        typed.push(i.text); return 'ok';
+      } },
     }) as never,
     close: async () => {},
   });
@@ -128,6 +133,21 @@ describe('runTask em modo missão', () => {
     const dump = JSON.stringify(s.db.prepare('select * from step').all());
     expect(dump).not.toContain(pwd);
     expect(dump).not.toContain('falhou digitando');
+  });
+  it('erro ao digitar segredo classificado como infra (ecoa a senha): halt/summary da subtarefa nunca a carregam (achado residual)', async () => {
+    const s = setup(); const mcp = fakeMcp({ typeFailsInfra: true }); const key = 'account.com.instagram.android.password';
+    const g = scripted([['secret_new', { key }], [`${P}get_screen_state`, {}], ['type_secret', { node_id: 'node_0', key }]]);
+    const r = await s.run({ connect: mcp.connect, generate: g.generate });
+    const pwd = await s.vault.get(secretEntryId(s.missionId, key));
+    expect(pwd).toHaveLength(20);
+    expect(taskState(s.db, s.taskId)).toBe('interrupted');
+    expect(r.summary).not.toContain(pwd as string);
+    expect(r.humanReason ?? '').not.toContain(pwd as string);
+    expect(r.platformBlock ?? '').not.toContain(pwd as string);
+    expect(JSON.stringify(r.report ?? {})).not.toContain(pwd as string);
+    expect(g.seen.join('\n')).not.toContain(pwd as string);
+    const dump = JSON.stringify(s.db.prepare('select * from step').all());
+    expect(dump).not.toContain(pwd);
   });
   it('MCP indisponível antes do loop (connect falha) → interrupted, não failed', async () => {
     const s = setup();
