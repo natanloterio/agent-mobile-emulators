@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { CONFIG } from '../config.js';
 import type { IdentityRow } from '../db/identities.js';
 import { readProviderConfig, type ProviderConfig } from '../provider/config.js';
-import { buildModel as defaultBuildModel, pricingFor } from '../provider/factory.js';
+import { buildModel as defaultBuildModel, pricingFor, structuredOutputOptions } from '../provider/factory.js';
 import { createOllamaSupervisor } from '../provider/ollama.js';
 import { costOf, type UsageLike } from '../worker/record.js';
 import { DEFAULT_LANG, LEADER_TEXTS, sliceInstruction, type Lang } from './lang.js';
@@ -69,7 +69,7 @@ async function llmDecision(text: string, fleet: readonly Readiness[], cfg: Provi
   // Papel local: o Ollama tem de estar de pé antes da chamada, como no worker (run.ts).
   if (row.mode === 'local') await (d.ollama ?? createOllamaSupervisor()).ensure(row.endpoint, row.model, row.runtime);
   const model = d.model ?? (d.buildModel ?? defaultBuildModel)(row, { anthropicApiKey: d.apiKey });
-  const call = () => (d.generate ?? generateText)({ model, instructions: leaderInstructions(lang), prompt: leaderPrompt(text, fleet), output: Output.object({ schema: LeaderOut, name: 'plano' }) });
+  const call = () => (d.generate ?? generateText)({ model, instructions: leaderInstructions(lang), prompt: leaderPrompt(text, fleet), output: Output.object({ schema: LeaderOut, name: 'plano' }), providerOptions: structuredOutputOptions(row) as never });
   // Modelo local às vezes escapa da gramática e responde prosa (gpt-oss:20b, ~1 em 3 medido): uma nova tentativa antes da regra.
   const attempts = row.mode === 'local' ? LOCAL_ATTEMPTS : 1;
   let res!: Awaited<ReturnType<typeof call>>;

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { MemoryRow, SubtaskRow } from '../db/missions.js';
 import { LEADER_TEXTS, type Lang } from '../leader/lang.js';
 import type { ProviderConfig } from '../provider/config.js';
-import { buildModel as defaultBuildModel, pricingFor } from '../provider/factory.js';
+import { buildModel as defaultBuildModel, pricingFor, structuredOutputOptions } from '../provider/factory.js';
 import { createOllamaSupervisor, warnIfExternalOllama } from '../provider/ollama.js';
 import { costOf, type UsageLike } from '../worker/record.js';
 
@@ -71,7 +71,7 @@ export async function planNext(input: PlannerInput, d: PlannerDeps): Promise<{ d
   let costUsd = 0; let last: unknown = null;
   for (let k = 1; k <= ATTEMPTS; k++) {
     try {
-      const res = await (d.generate ?? generateText)({ model, instructions: instructions(input.lang), prompt: plannerPrompt(input), output: Output.object({ schema: PlannerOut, name: 'decisao' }) });
+      const res = await (d.generate ?? generateText)({ model, instructions: instructions(input.lang), prompt: plannerPrompt(input), output: Output.object({ schema: PlannerOut, name: 'decisao' }), providerOptions: structuredOutputOptions(row) as never });
       costUsd += costOf((res.totalUsage ?? res.usage) as UsageLike, pricingFor(row));
       return { decision: toDecision(res.output), costUsd };
     } catch (e) { last = e; }
