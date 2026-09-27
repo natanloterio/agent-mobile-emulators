@@ -1,28 +1,31 @@
-import { execFile } from 'node:child_process';
+import { lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { CONFIG } from '../config.js';
 import { listIdentities, setIdentityFlags } from '../db/identities.js';
-import type { Exec } from '../device/adb.js';
 import { isValidAvdName } from './avd.js';
 
-/** Ocupação em disco por identidade (spec inc. 5 §2): `du -sb` do diretório do AVD, cacheado. */
+/** Ocupação em disco por identidade (spec inc. 5 §2): soma dos arquivos do diretório do AVD, cacheada. */
 export interface DiskUsage {
   get(avdName: string): Promise<number>;
   invalidate(avdName: string): void;
 }
 
-export const parseDu = (out: string): number | null => {
-  const m = /^(\d+)\s/.exec(out.trim() + ' ');
-  return m ? Number(m[1]) : null;
-};
+/**
+ * Tamanho aparente de todos os arquivos sob `dir` (o que o `du -sb` media), em Node puro para rodar em qualquer SO.
+ * Symlinks não são seguidos: contam só o próprio link, como no `du`.
+ */
+export async function dirBytes(dir: string): Promise<number> {
+  let total = 0;
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name);
+    total += entry.isDirectory() ? await dirBytes(p) : (await lstat(p)).size;
+  }
+  return total;
+}
 
-const defaultExec: Exec = (file, args, env) => new Promise((resolve) => {
-  execFile(file, [...args], { env, timeout: 60_000 }, (err, stdout, stderr) => resolve({ stdout: String(stdout), stderr: String(stderr), code: err ? 1 : 0 }));
-});
-
-export function createDiskUsage(deps: { exec?: Exec; home?: string; cacheMs?: number; now?: () => number } = {}): DiskUsage {
-  const exec = deps.exec ?? defaultExec;
+export function createDiskUsage(deps: { measure?: (dir: string) => Promise<number>; home?: string; cacheMs?: number; now?: () => number } = {}): DiskUsage {
+  const measure = deps.measure ?? dirBytes;
   const home = deps.home ?? CONFIG.avd.home;
   const cacheMs = deps.cacheMs ?? CONFIG.avd.diskCacheMs;
   const now = deps.now ?? Date.now;
@@ -33,9 +36,8 @@ export function createDiskUsage(deps: { exec?: Exec; home?: string; cacheMs?: nu
       if (!isValidAvdName(name)) throw new Error(`nome de AVD inválido: "${name}"`);
       const hit = cache.get(name);
       if (hit && now() - hit.at <= cacheMs) return hit.bytes;
-      const r = await exec('du', ['-sb', path.join(home, `${name}.avd`)], process.env);
-      const bytes = r.code === 0 ? parseDu(r.stdout) : null;
-      if (bytes === null) throw new Error(`du falhou para ${name}: ${(r.stderr || r.stdout).trim() || `código ${r.code}`}`);
+      let bytes: number;
+      try { bytes = await measure(path.join(home, `${name}.avd`)); } catch (e) { throw new Error(`disco falhou para ${name}: ${(e as Error).message}`); }
       cache.set(name, { bytes, at: now() });
       return bytes;
     },
