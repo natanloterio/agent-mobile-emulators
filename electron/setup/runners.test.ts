@@ -5,7 +5,7 @@ import { CMDLINE_TOOLS, createRunners, JRE, OLLAMA, parseSdkPercent, type Runner
 
 const paths = resolveSetupPaths({}, '/home/u');
 
-function deps(o: { runFails?: (cmd: string, args: readonly string[]) => Error | null; javaHere?: boolean } = {}) {
+function deps(o: { runFails?: (cmd: string, args: readonly string[]) => Error | null; javaHere?: boolean; sdkmanagerHere?: boolean } = {}) {
   const calls: string[] = [];
   const d: RunnerDeps = {
     paths,
@@ -23,7 +23,7 @@ function deps(o: { runFails?: (cmd: string, args: readonly string[]) => Error | 
       chmod: async () => undefined,
       readdir: async () => ['sdkmanager', 'avdmanager'],
     },
-    exists: async (p) => (o.javaHere ?? true) && p.endsWith('/jre/bin/java'),
+    exists: async (p) => (p.endsWith('/jre/bin/java') && (o.javaHere ?? true)) || (p.endsWith('/bin/sdkmanager') && (o.sdkmanagerHere ?? false)),
     pull: async (model, bin, progress) => { calls.push(`pull ${model} ${bin}`); progress(10, 20); },
     log: () => undefined,
   };
@@ -40,7 +40,7 @@ describe('parseSdkPercent', () => {
 
 describe('createRunners', () => {
   it('sdk: baixa JRE e cmdline-tools, extrai, move para cmdline-tools/latest e aceita licenças', async () => {
-    const { d, calls } = deps();
+    const { d, calls } = deps({ javaHere: false });
     const seen: [number, number][] = [];
     await createRunners('gpt-oss:20b', 'ollama', d).sdk((a, b) => seen.push([a, b]));
     expect(calls).toContain(`download ${JRE.url}`);
@@ -49,6 +49,21 @@ describe('createRunners', () => {
     expect(calls).toContain(`mv ${paths.downloadsDir}/cmdline-tools-unzip/cmdline-tools ${paths.sdkRoot}/cmdline-tools/latest`);
     expect(calls).toContain('run $SDK/cmdline-tools/latest/bin/sdkmanager --sdk_root=$SDK --licenses');
     expect(seen.at(-1)).toEqual([JRE.sizeMb + CMDLINE_TOOLS.sizeMb, JRE.sizeMb + CMDLINE_TOOLS.sizeMb]);
+  });
+  it('sdk: com o JRE do Enxame já extraído, só baixa as cmdline-tools', async () => {
+    const { d, calls } = deps({ javaHere: true });
+    await createRunners('gpt-oss:20b', 'ollama', d).sdk(() => {});
+    expect(calls).not.toContain(`download ${JRE.url}`);
+    expect(calls.some((c) => c.startsWith('run tar -xzf'))).toBe(false);
+    expect(calls).toContain(`download ${CMDLINE_TOOLS.url}`);
+  });
+  it('sdk: sdkmanager já presente (repetir depois de falha), só instala o JRE e aceita licenças', async () => {
+    const { d, calls } = deps({ javaHere: false, sdkmanagerHere: true });
+    await createRunners('gpt-oss:20b', 'ollama', d).sdk(() => {});
+    expect(calls).toContain(`download ${JRE.url}`);
+    expect(calls).not.toContain(`download ${CMDLINE_TOOLS.url}`);
+    expect(calls.some((c) => c.startsWith('unzip'))).toBe(false);
+    expect(calls).toContain('run $SDK/cmdline-tools/latest/bin/sdkmanager --sdk_root=$SDK --licenses');
   });
   it('img: sdkmanager --install da imagem, progresso pela barra', async () => {
     const { d, calls } = deps();

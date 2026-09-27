@@ -26,6 +26,18 @@ export function nodeMajor(v: string | null): number | null {
   const m = /^v?(\d+)\./.exec(v?.trim() ?? '');
   return m ? Number(m[1]) : null;
 }
+/** Versão maior do `java -version` ("17.0.12", "21", ou o antigo "1.8.0_392" = 8). */
+export function javaMajor(out: string | null): number | null {
+  const m = /version "(\d+)(?:\.(\d+))?/.exec(out ?? '');
+  if (!m) return null;
+  const first = Number(m[1]);
+  return first === 1 && m[2] ? Number(m[2]) : first;
+}
+/** Java mínimo das cmdline-tools atuais; o JRE do Enxame (Temurin 17) atende. */
+export const MIN_JAVA = 17;
+/** Só o JRE do Enxame (quando as cmdline-tools já estão lá). */
+const JRE_ONLY_MB = 47;
+
 export const parseOllamaVersion = (out: string | null): string | null => /(\d+\.\d+\.\d+)/.exec(out ?? '')?.[1] ?? null;
 
 const ok = (id: DepId, version: string | null): DepStatus => ({ id, state: 'ok', version, sizeMb: null, fix: null });
@@ -35,6 +47,15 @@ const user = (id: DepId, fix: UserFix): DepStatus => ({ id, state: 'user', versi
 async function sdkPackage(id: 'sdk' | 'adb' | 'emu' | 'img', bin: string, dir: string, d: ProbeDeps): Promise<DepStatus> {
   if (!(await d.exists(bin))) return todo(id);
   return ok(id, parseSourceProperties((await d.readText(path.join(dir, 'source.properties'))) ?? '') ?? '?');
+}
+
+/** sdkmanager presente não basta: ele precisa do JRE do Enxame ou de um Java ≥ 17 no PATH. */
+async function probeSdkTools(paths: SetupPaths, d: ProbeDeps): Promise<DepStatus> {
+  const dir = path.join(paths.sdkRoot, 'cmdline-tools', 'latest');
+  const s = await sdkPackage('sdk', path.join(dir, 'bin', 'sdkmanager'), dir, d);
+  if (s.state !== 'ok' || (await d.exists(path.join(paths.jreDir, 'bin', 'java')))) return s;
+  const major = javaMajor(await d.exec('java', ['-version']));
+  return major !== null && major >= MIN_JAVA ? s : { ...todo('sdk'), sizeMb: JRE_ONLY_MB };
 }
 
 async function probeKvm(d: ProbeDeps): Promise<DepStatus> {
@@ -66,7 +87,7 @@ export async function probeDeps(paths: SetupPaths, d: ProbeDeps): Promise<{ deps
   const major = nodeMajor(nodeOut);
   const node = major !== null && major >= MIN_NODE ? ok('node', nodeOut!.trim().replace(/^v/, '')) : user('node', 'node-missing');
   const [sdkS, adb, emu, sysImg, kvm, ollama, keyringOk, localModels] = await Promise.all([
-    sdkPackage('sdk', path.join(sdk, 'cmdline-tools', 'latest', 'bin', 'sdkmanager'), path.join(sdk, 'cmdline-tools', 'latest'), d),
+    probeSdkTools(paths, d),
     sdkPackage('adb', path.join(sdk, 'platform-tools', 'adb'), path.join(sdk, 'platform-tools'), d),
     sdkPackage('emu', path.join(sdk, 'emulator', 'emulator'), path.join(sdk, 'emulator'), d),
     sdkPackage('img', path.join(img, 'system.img'), img, d),

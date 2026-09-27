@@ -60,18 +60,21 @@ async function sdkEnv(d: RunnerDeps): Promise<NodeJS.ProcessEnv> {
   return { ...process.env, JAVA_HOME: d.paths.jreDir, PATH: `${path.join(d.paths.jreDir, 'bin')}:${process.env.PATH ?? ''}` };
 }
 
-async function installCmdlineTools(d: RunnerDeps, progress: Progress): Promise<void> {
-  const total = JRE.sizeMb + CMDLINE_TOOLS.sizeMb;
-  const dl = d.paths.downloadsDir;
-  const jreFile = path.join(dl, 'jre.tar.gz');
-  await d.download({ url: JRE.url, dest: jreFile, checksum: JRE.checksum, onProgress: (b) => progress(Math.min(JRE.sizeMb, toMb(b)), total) });
+/** JRE do Enxame; pulado quando já foi extraído antes. */
+async function installJre(d: RunnerDeps, onBytes: (b: number) => void): Promise<void> {
+  const jreFile = path.join(d.paths.downloadsDir, 'jre.tar.gz');
+  await d.download({ url: JRE.url, dest: jreFile, checksum: JRE.checksum, onProgress: onBytes });
   await d.fs.rm(d.paths.jreDir, { recursive: true, force: true });
   await d.fs.mkdir(d.paths.jreDir, { recursive: true });
   await d.run('tar', ['-xzf', jreFile, '-C', d.paths.jreDir, '--strip-components=1'], { onLine: d.log });
   await d.fs.rm(jreFile, { recursive: true, force: true });
+}
 
+/** cmdline-tools em `<sdk>/cmdline-tools/latest`; pulado quando o sdkmanager já existe (repetir não baixa de novo). */
+async function installToolsZip(d: RunnerDeps, onBytes: (b: number) => void): Promise<void> {
+  const dl = d.paths.downloadsDir;
   const zip = path.join(dl, 'cmdline-tools.zip');
-  await d.download({ url: CMDLINE_TOOLS.url, dest: zip, checksum: CMDLINE_TOOLS.checksum, onProgress: (b) => progress(JRE.sizeMb + Math.min(CMDLINE_TOOLS.sizeMb, toMb(b)), total) });
+  await d.download({ url: CMDLINE_TOOLS.url, dest: zip, checksum: CMDLINE_TOOLS.checksum, onProgress: onBytes });
   const unzipDir = path.join(dl, 'cmdline-tools-unzip');
   await d.fs.rm(unzipDir, { recursive: true, force: true });
   await d.extractZip(zip, unzipDir); // o zip traz uma pasta `cmdline-tools/`
@@ -82,7 +85,15 @@ async function installCmdlineTools(d: RunnerDeps, progress: Progress): Promise<v
   const bin = path.join(latest, 'bin');
   for (const f of await d.fs.readdir(bin)) await d.fs.chmod(path.join(bin, f), 0o755);
   await d.fs.rm(zip, { recursive: true, force: true });
+}
 
+async function installCmdlineTools(d: RunnerDeps, progress: Progress): Promise<void> {
+  const needJre = !(await d.exists(path.join(d.paths.jreDir, 'bin', 'java')));
+  const needTools = !(await d.exists(sdkmanager(d)));
+  const jreMb = needJre ? JRE.sizeMb : 0;
+  const total = jreMb + (needTools ? CMDLINE_TOOLS.sizeMb : 0);
+  if (needJre) await installJre(d, (b) => progress(Math.min(JRE.sizeMb, toMb(b)), total));
+  if (needTools) await installToolsZip(d, (b) => progress(jreMb + Math.min(CMDLINE_TOOLS.sizeMb, toMb(b)), total));
   await d.run(sdkmanager(d), [`--sdk_root=${d.paths.sdkRoot}`, '--licenses'], { env: await sdkEnv(d), stdin: 'y\n'.repeat(30), onLine: d.log });
   progress(total, total);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveSetupPaths } from './paths.js';
-import { listLocalModels, nodeMajor, parseOllamaVersion, parseSourceProperties, probeDeps, type ProbeDeps } from './probe.js';
+import { javaMajor, listLocalModels, nodeMajor, parseOllamaVersion, parseSourceProperties, probeDeps, type ProbeDeps } from './probe.js';
 
 const paths = resolveSetupPaths({}, '/home/u');
 const SDK = paths.sdkRoot;
@@ -27,7 +27,7 @@ const allInstalled = fake({
     [`${SDK}/emulator/source.properties`]: 'Pkg.Revision=35.3.11\n',
     [`${IMG}/source.properties`]: 'Pkg.Revision=14\n',
   },
-  exec: { 'node --version': 'v26.0.0\n', 'ollama --version': 'Warning: could not connect to a running Ollama instance\nWarning: client version is 0.12.3\n' },
+  exec: { 'node --version': 'v26.0.0\n', 'java -version': 'openjdk version "21.0.4" 2024-07-16\nOpenJDK Runtime Environment\n', 'ollama --version': 'Warning: could not connect to a running Ollama instance\nWarning: client version is 0.12.3\n' },
   dirs: { '/home/u/.ollama/models/manifests/registry.ollama.ai/library': ['gpt-oss'], '/home/u/.ollama/models/manifests/registry.ollama.ai/library/gpt-oss': ['20b'] },
 });
 
@@ -39,6 +39,13 @@ describe('parsers', () => {
     expect(nodeMajor(null)).toBeNull();
     expect(parseOllamaVersion('ollama version is 0.34.4')).toBe('0.34.4');
     expect(parseOllamaVersion(null)).toBeNull();
+  });
+  it('versão maior do java -version (stderr)', () => {
+    expect(javaMajor('openjdk version "17.0.12" 2024-07-16')).toBe(17);
+    expect(javaMajor('openjdk version "21" 2023-09-19')).toBe(21);
+    expect(javaMajor('java version "1.8.0_392"')).toBe(8);
+    expect(javaMajor(null)).toBeNull();
+    expect(javaMajor('bash: java: command not found')).toBeNull();
   });
 });
 
@@ -71,6 +78,19 @@ describe('probeDeps', () => {
     const r = await probeDeps(paths, fake({ exec: { [`${paths.ollamaBin} --version`]: 'ollama version is 0.34.4', 'ollama --version': 'ollama version is 0.12.3' } }));
     expect(r.ollamaBin).toBe(paths.ollamaBin);
     expect(r.deps.find((d) => d.id === 'ollama')?.version).toBe('0.34.4');
+  });
+});
+
+describe('probeDeps: Java do sdkmanager', () => {
+  const SM = `${SDK}/cmdline-tools/latest/bin/sdkmanager`;
+  const sdkOf = async (d: ProbeDeps) => (await probeDeps(paths, d)).deps.find((x) => x.id === 'sdk');
+  it('sdkmanager sem JRE do Enxame e sem Java ≥ 17: sdk fica para instalar (só o JRE)', async () => {
+    expect(await sdkOf(fake({ files: [SM] }))).toMatchObject({ state: 'todo', sizeMb: 47 });
+    expect(await sdkOf(fake({ files: [SM], exec: { 'java -version': 'java version "1.8.0_392"' } }))).toMatchObject({ state: 'todo' });
+  });
+  it('sdkmanager com Java ≥ 17 no PATH ou com o JRE do Enxame: ok', async () => {
+    expect(await sdkOf(fake({ files: [SM], exec: { 'java -version': 'openjdk version "17.0.12"' } }))).toMatchObject({ state: 'ok' });
+    expect(await sdkOf(fake({ files: [SM, `${paths.jreDir}/bin/java`] }))).toMatchObject({ state: 'ok' });
   });
 });
 
