@@ -23,6 +23,8 @@ export function ensureDaemon(projectRoot: string): ChildProcess | null {
   const info = readInfo();
   if (info && alive(info.pid)) return null;
   const child = spawn('node', ['--env-file-if-exists=.env', 'dist-daemon/index.js'], { cwd: projectRoot, stdio: 'inherit', env: process.env, windowsHide: true });
+  // Sem `node` no PATH o spawn emite 'error'; sem este ouvinte o main cairia. O waitForInfo expira e a tela mostra o erro.
+  child.on('error', (e) => console.error('[enxame] não deu para subir o daemon:', e.message));
   return child;
 }
 

@@ -52,7 +52,8 @@ Enxame daemon (Node) ── SQLite (goals, tasks, steps, identities)
 
 - **Linux, macOS or Windows** with a desktop session. This build was developed and tested on Ubuntu with an NVIDIA GPU; macOS and Windows support has not been tested on real machines yet.
 - **Node.js 24 or newer**. The daemon uses the built-in `node:sqlite`.
-- **Android SDK** with the emulator, platform-tools and an **Android 14 (API 34) Google Play** system image: **x86_64** on Linux, Windows and Intel Macs, **arm64-v8a** on Apple Silicon Macs (they cannot run x86_64 images). The daemon finds the SDK through `ANDROID_HOME` or `ANDROID_SDK_ROOT`, or else at Android Studio's default location: `~/Android/Sdk` (Linux), `~/Library/Android/sdk` (macOS), `%LOCALAPPDATA%\Android\Sdk` (Windows).
+- **Android SDK** with the emulator, platform-tools and an **Android 14 (API 34) Google Play** system image: **x86_64** on Linux, Windows and Intel Macs, **arm64-v8a** on Apple Silicon Macs (they cannot run x86_64 images). The daemon uses the SDK the setup screen installed or found, else `ANDROID_HOME` or `ANDROID_SDK_ROOT`, or else at Android Studio's default location: `~/Android/Sdk` (Linux), `~/Library/Android/sdk` (macOS), `%LOCALAPPDATA%\Android\Sdk` (Windows).
+- **First-run setup screen (Linux x86_64 only).** On Linux x86_64 the app checks the machine on first run, and its **setup screen** installs what is missing without `sudo`: the Android SDK (with its own Java), platform-tools, the emulator, the **Android 14 (API 34) Google Play x86_64** image, **Ollama** and a local model. It asks you to act only when it cannot: your user in the `kvm` group, virtualization in the BIOS, or a locked OS keyring. It does not create the base AVD (see below). Run the check again any time from **Provedores → Verificar dependências**. On macOS and Windows there is no setup screen: install everything in this list yourself.
 - **Hardware acceleration** for the emulator: KVM on Linux, Hypervisor.framework on macOS (built in), WHPX or AEHD on Windows.
 - At least one **base AVD** with:
   - the target app installed (Instagram by default);
@@ -81,7 +82,11 @@ npm run daemon:build          # daemon
 npx electron --no-sandbox .   # starts the app; the app starts the daemon for you (--no-sandbox is only needed on Linux)
 ```
 
+On Linux x86_64 the first run lands on the **setup screen** instead (see [Requirements](#requirements)); once it finishes, the app opens straight into the Cockpit from then on.
+
 The app starts the daemon on its own if none is running. The daemon writes its address and access token to `~/.local/share/enxame/daemon.json`. It uses a private adb server on port **5038**, so it won't clash with Android Studio.
+
+An `ANTHROPIC_API_KEY` in `.env` still works and wins over the key saved by the setup screen. It is optional, since the setup screen also offers to save one to the OS keyring.
 
 For UI work with hot reload:
 

@@ -124,6 +124,8 @@ export interface EnxameBridge {
   readonly credentials?: CredentialsBridge;
   /** Login feito pelo daemon com a senha que o main decifra; o renderer nunca a relê. */
   readonly login?: (id: string) => Promise<LoginResult>;
+  /** Onboarding de primeira execução; ausente em preload antigo e no navegador. */
+  readonly setup?: SetupBridge;
 }
 export interface CredentialsAvailability { readonly ok: boolean; readonly reason: string | null }
 /** Por id de identidade; nunca a senha. */
@@ -136,3 +138,13 @@ export interface CredentialsBridge {
 }
 export type LoginOutcome = 'logged-in' | 'already-logged-in' | 'needs-human';
 export interface LoginResult { readonly outcome: LoginOutcome; readonly detail: string }
+/** Onboarding (spec onboarding): tudo chega como `unknown` e é validado em src/onboarding/schema.ts. */
+export interface SetupBridge {
+  readonly status: () => Promise<unknown>;
+  readonly check: () => Promise<unknown>;
+  readonly install: (req: { readonly jobs: readonly string[]; readonly localModel: string }) => Promise<void>;
+  readonly onJob: (cb: (e: unknown) => void) => () => void;
+  readonly onLog: (cb: (line: string) => void) => () => void;
+  readonly testKey: (key: string) => Promise<unknown>;
+  readonly finish: (req: { readonly mode: string; readonly localModel: string; readonly anthropicKey: string | null; readonly applyRoles: boolean }) => Promise<void>;
+}

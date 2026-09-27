@@ -1,0 +1,599 @@
+<title>Enxame Onboarding</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
+<style>
+  /* Tokens do Positivus, os mesmos de src/styles/tokens.css. O app é só tema claro; o mockup também. */
+  :root {
+    --green: #b9ff66;
+    --dark: #191a23;
+    --dark-2: #292a32;
+    --grey: #f3f3f3;
+    --grey-2: #b8b9bf;
+    --black: #000;
+    --white: #fff;
+    --danger: #b3261e;
+    --muted: #5d5e66;
+    --sans: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --r-heading: 7px;
+    --r-control: 14px;
+    --r-card: 32px;
+    --shadow: 0 5px 0 0 var(--dark);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--grey); color: var(--black); font-family: var(--sans); font-size: 16px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+  button, input { font-family: var(--sans); font-size: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+
+  /* Barra do mockup (não faz parte do app) */
+  .mockbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 16px; background: var(--white); border-bottom: 1px dashed var(--grey-2); font-size: 13px; color: var(--muted); }
+  .mockbar strong { color: var(--black); font-weight: 500; }
+  .seg { display: inline-flex; border: 1px solid var(--dark); border-radius: 10px; overflow: hidden; }
+  .seg button { border: 0; background: var(--white); padding: 6px 12px; font-size: 13px; }
+  .seg button + button { border-left: 1px solid var(--dark); }
+  .seg button[aria-pressed="true"] { background: var(--dark); color: var(--white); }
+
+  /* Janela */
+  .app { display: grid; grid-template-columns: 270px 1fr; min-height: calc(100% - 46px); background: var(--white); }
+  .rail { background: var(--dark); color: var(--white); padding: 28px 18px; display: flex; flex-direction: column; gap: 32px; }
+  .logo { display: flex; align-items: center; gap: 10px; padding: 0 10px; font-size: 26px; font-weight: 500; letter-spacing: -0.5px; }
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .steps button { width: 100%; display: flex; gap: 12px; align-items: center; text-align: left; border: 0; border-radius: var(--r-control); padding: 12px 14px; background: transparent; color: var(--white); font-size: 17px; }
+  .steps button:hover { outline: 1px solid var(--green); }
+  .steps .num { width: 28px; height: 28px; flex: none; border-radius: 50%; border: 1px solid var(--grey-2); display: grid; place-items: center; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .steps .sub { display: block; font-size: 13px; color: var(--grey-2); }
+  .steps [aria-current="step"] { background: var(--green); color: var(--black); }
+  .steps [aria-current="step"] .num { border-color: var(--black); }
+  .steps [aria-current="step"] .sub { color: var(--dark-2); }
+  .steps .done .num { background: var(--green); color: var(--black); border-color: var(--green); }
+  .rail-foot { margin-top: auto; background: var(--dark-2); border-radius: var(--r-control); padding: 16px; font-size: 14px; color: var(--grey-2); display: flex; flex-direction: column; gap: 6px; }
+  .rail-foot b { color: var(--green); font-weight: 500; }
+
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .content { flex: 1; padding: 40px 48px 32px; display: flex; flex-direction: column; gap: 28px; max-width: 1040px; width: 100%; }
+  .footer { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; padding: 16px 48px calc(16px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--dark); background: var(--white); }
+  .footer .hint { color: var(--muted); font-size: 15px; }
+  .footer .actions { display: flex; gap: 10px; }
+
+  /* Primitivas */
+  .heading { display: inline-block; margin: 0; padding: 0 7px; border-radius: var(--r-heading); background: var(--green); font-size: 36px; font-weight: 500; line-height: 1.1; width: fit-content; text-wrap: balance; }
+  .lede { margin: 0; max-width: 62ch; font-size: 18px; color: var(--dark-2); }
+  .head { display: flex; flex-direction: column; gap: 14px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--dark); border-radius: var(--r-control); padding: 13px 24px; font-size: 17px; line-height: 1; white-space: nowrap; background: var(--white); color: var(--black); }
+  .btn:hover { background: var(--grey); }
+  .btn--primary { background: var(--dark); color: var(--white); }
+  .btn--primary:hover { background: var(--dark-2); }
+  .btn--sm { padding: 8px 14px; font-size: 14px; border-radius: 10px; }
+  .btn[disabled] { opacity: .4; cursor: not-allowed; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--dark); border-radius: var(--r-heading); font-size: 13px; line-height: 1.4; white-space: nowrap; width: fit-content; }
+  .pill--ok { background: var(--green); }
+  .pill--todo { background: var(--white); }
+  .pill--user { background: var(--dark); color: var(--white); }
+  .pill--err { background: var(--danger); border-color: var(--danger); color: var(--white); }
+  .pill--wait { background: var(--grey); border-color: var(--grey-2); color: var(--muted); }
+  .card { border: 1px solid var(--dark); border-radius: var(--r-card); padding: 26px 30px; background: var(--white); }
+  .card--shadow { box-shadow: var(--shadow); }
+  .card--grey { background: var(--grey); }
+  .card--dark { background: var(--dark); color: var(--white); }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .mono { font-family: var(--mono); font-size: 13px; }
+
+  /* Passo 1: verificar */
+  .summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .stat { border: 1px solid var(--dark); border-radius: 22px; padding: 18px 22px; display: flex; flex-direction: column; gap: 4px; }
+  .stat b { font-size: 34px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .stat--ok { background: var(--green); }
+  .stat--user { background: var(--dark); color: var(--white); }
+  .stat--user .label { color: var(--grey-2); }
+  .deps { display: flex; flex-direction: column; border: 1px solid var(--dark); border-radius: 26px; overflow: hidden; }
+  .dep { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 4px 16px; align-items: start; padding: 18px 24px; }
+  .dep + .dep { border-top: 1px solid var(--grey-2); }
+  .dep .ico { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--dark); display: grid; place-items: center; font-size: 15px; }
+  .dep[data-s="ok"] .ico { background: var(--green); }
+  .dep[data-s="user"] .ico { background: var(--dark); color: var(--white); }
+  .dep[data-s="checking"] .ico { border-style: dashed; border-color: var(--grey-2); }
+  .dep h3 { margin: 0; font-size: 18px; font-weight: 500; }
+  .dep p { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
+  .dep .meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; text-align: right; }
+  .dep .meta .mono { color: var(--muted); }
+  .fix { grid-column: 2 / -1; margin-top: 10px; background: var(--grey); border-radius: var(--r-control); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .cmd { display: flex; gap: 10px; align-items: center; background: var(--dark); color: var(--green); border-radius: 10px; padding: 10px 12px; overflow-x: auto; }
+  .cmd code { flex: 1; white-space: nowrap; font-family: var(--mono); font-size: 13px; }
+  .cmd .btn { background: var(--dark-2); color: var(--white); border-color: var(--grey-2); }
+  .hw { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; align-items: center; }
+  .hw ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-variant-numeric: tabular-nums; }
+  .hw li { display: contents; }
+  .hw li span:first-child { color: var(--grey-2); }
+  .capacity { display: flex; flex-direction: column; gap: 10px; }
+  .capacity b { font-size: 56px; font-weight: 500; line-height: 1; color: var(--green); font-variant-numeric: tabular-nums; }
+  .phones { display: flex; flex-wrap: wrap; gap: 6px; }
+  .phones i { width: 16px; height: 26px; border: 1.5px solid var(--green); border-radius: 4px; }
+  .phones i.on { background: var(--green); }
+
+  /* Passo 2: modelos */
+  .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .mode { position: relative; text-align: left; border: 1px solid var(--dark); border-radius: 26px; padding: 22px; background: var(--white); display: flex; flex-direction: column; gap: 10px; color: var(--black); }
+  .mode:hover { background: var(--grey); }
+  .mode[aria-checked="true"] { background: var(--green); box-shadow: var(--shadow); }
+  .mode h3 { margin: 0; font-size: 20px; font-weight: 500; }
+  .mode p { margin: 0; font-size: 15px; color: var(--dark-2); }
+  .mode .roles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+  .models { display: flex; flex-direction: column; gap: 10px; }
+  .model { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 14px; align-items: center; border: 1px solid var(--dark); border-radius: 18px; padding: 14px 18px; background: var(--white); text-align: left; color: var(--black); }
+  .model[aria-checked="true"] { outline: 3px solid var(--dark); outline-offset: -1px; }
+  .model[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+  .radio { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--dark); display: grid; place-items: center; }
+  .model[aria-checked="true"] .radio::after { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--dark); }
+  .model h4 { margin: 0; font-size: 17px; font-weight: 500; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .model p { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
+  .model .size { text-align: right; font-variant-numeric: tabular-nums; font-size: 15px; }
+  .vram { display: flex; flex-direction: column; gap: 8px; }
+  .vram-bar { height: 22px; border: 1px solid var(--dark); border-radius: 8px; background: var(--white); display: flex; overflow: hidden; }
+  .vram-bar span { height: 100%; }
+  .vram-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .vram-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--dark); margin-right: 6px; vertical-align: -1px; }
+  .two { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field label { font-weight: 500; }
+  .field input { border: 1px solid var(--dark); border-radius: var(--r-control); padding: 13px 16px; background: var(--white); width: 100%; }
+  .field small { color: var(--muted); font-size: 14px; }
+
+  /* Passo 3: instalar */
+  .jobs { display: flex; flex-direction: column; gap: 12px; }
+  .job { border: 1px solid var(--dark); border-radius: 22px; padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; background: var(--white); }
+  .job[data-s="err"] { border-color: var(--danger); box-shadow: 0 5px 0 0 var(--danger); }
+  .job-top { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+  .job h3 { margin: 0; font-size: 18px; font-weight: 500; }
+  .job .nums { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
+  .prog { height: 14px; border: 1px solid var(--dark); border-radius: 7px; overflow: hidden; background: var(--grey); }
+  .prog span { display: block; height: 100%; background: var(--green); border-right: 1px solid var(--dark); transition: width .6s ease; }
+  .job[data-s="done"] .prog span { border-right: 0; }
+  .job[data-s="err"] .prog span { background: var(--danger); }
+  .job[data-s="wait"] .prog { border-style: dashed; border-color: var(--grey-2); }
+  .errbox { background: #fbeceb; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; color: var(--danger); }
+  .errbox p { margin: 0; color: var(--black); }
+  .errbox .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .log { background: var(--dark); color: var(--grey-2); border-radius: 22px; padding: 18px 22px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; max-height: 190px; overflow: auto; white-space: pre; }
+  .log b { color: var(--green); font-weight: 400; }
+  .log em { color: #ff8a80; font-style: normal; }
+  details summary { cursor: pointer; font-weight: 500; margin-bottom: 10px; }
+  .total { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: baseline; }
+  .total b { font-size: 44px; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+  /* Passo 4: pronto */
+  .ready { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+  .checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .checklist li { display: flex; gap: 10px; align-items: baseline; }
+  .checklist li::before { content: "✓"; font-weight: 700; }
+  .next { display: flex; flex-direction: column; gap: 14px; }
+  .next h3 { margin: 0; font-size: 24px; font-weight: 500; }
+  .next p { margin: 0; color: var(--grey-2); }
+
+  [hidden] { display: none !important; }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .rail { padding: 16px; gap: 14px; }
+    .rail-foot { display: none; }
+    .steps { flex-direction: row; overflow-x: auto; gap: 4px; }
+    .steps button { padding: 8px 10px; font-size: 15px; white-space: nowrap; }
+    .steps .sub { display: none; }
+    .content { padding: 24px 16px; }
+    .footer { padding-inline: 16px; }
+    .summary, .modes, .two, .hw, .ready { grid-template-columns: 1fr; }
+    .heading { font-size: 28px; }
+    .dep { grid-template-columns: 34px minmax(0, 1fr); padding: 16px; }
+    .dep .meta { grid-column: 2; align-items: flex-start; text-align: left; flex-direction: row; flex-wrap: wrap; }
+    .fix { grid-column: 1 / -1; }
+    .card { padding: 22px 20px; border-radius: 26px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .prog span { transition: none; } }
+</style>
+
+<div class="mockbar" role="region" aria-label="Controles do mockup">
+  <span><strong>Mockup</strong> · tela de primeira execução do Enxame</span>
+  <span>Cenário:</span>
+  <div class="seg" id="scenario">
+    <button type="button" data-v="parcial" aria-pressed="true">Máquina já usada</button>
+    <button type="button" data-v="limpa" aria-pressed="false">Máquina limpa</button>
+    <button type="button" data-v="erro" aria-pressed="false">Erro no download</button>
+  </div>
+</div>
+
+<div class="app">
+  <aside class="rail">
+    <div class="logo">
+      <svg viewBox="0 0 35.252 35.252" width="28" height="28" aria-hidden="true"><path d="M 17.651 5.186 L 35.252 0 L 30.116 17.651 L 35.252 35.252 L 17.651 30.116 L 0 35.252 L 5.186 17.651 L 0 0 L 17.651 5.186 Z" fill="#B9FF66"></path></svg>
+      Enxame
+    </div>
+    <ol class="steps" id="steps"></ol>
+    <div class="rail-foot">
+      <span>Primeira execução</span>
+      <span>Dá para refazer esta verificação depois em <b>Provedores → Verificar dependências</b>.</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="content" id="content"></div>
+    <div class="footer">
+      <span class="hint" id="hint"></span>
+      <div class="actions">
+        <button type="button" class="btn" id="back">Voltar</button>
+        <button type="button" class="btn btn--primary" id="next">Continuar</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+  const STEPS = [
+    { id: 'check', title: 'Verificar', sub: 'O que já está na máquina' },
+    { id: 'models', title: 'Modelos', sub: 'Quem pensa pelos agentes' },
+    { id: 'install', title: 'Instalar', sub: 'Baixar o que falta' },
+    { id: 'ready', title: 'Pronto', sub: 'Primeira identidade' },
+  ];
+
+  // Dependências reais do README. sizeMb = download estimado.
+  const DEPS = [
+    { id: 'sdk', name: 'Android SDK', role: 'Base para criar e rodar os emuladores', where: '~/Android/Sdk', sizeMb: 150 },
+    { id: 'emu', name: 'Android Emulator', role: 'Roda cada identidade como um celular', sizeMb: 380 },
+    { id: 'adb', name: 'platform-tools (adb)', role: 'Canal entre o Enxame e os emuladores', sizeMb: 14 },
+    { id: 'img', name: 'Android 14 · Google Play · x86_64', role: 'Sistema que cada identidade usa (API 34)', sizeMb: 1600 },
+    { id: 'kvm', name: 'Aceleração de hardware (KVM)', role: 'Sem ela o emulador fica lento demais para os agentes' },
+    { id: 'ollama', name: 'Ollama', role: 'Roda modelos de IA no seu computador', sizeMb: 1600 },
+    { id: 'model', name: 'Modelo local', role: 'Pensa pelos agentes sem custo por uso', sizeMb: 13000, dynamicName: true },
+    { id: 'keyring', name: 'Chaveiro do sistema', role: 'Guarda as senhas das contas com segurança' },
+  ];
+
+  const SCENARIOS = {
+    parcial: {
+      sdk: { s: 'ok', v: '35.0.2' }, emu: { s: 'ok', v: '35.3.11' }, adb: { s: 'ok', v: '35.0.2' },
+      img: { s: 'todo' }, kvm: { s: 'ok', v: '/dev/kvm' }, ollama: { s: 'ok', v: '0.12.3' },
+      model: { s: 'todo' }, keyring: { s: 'ok', v: 'GNOME Keyring' },
+    },
+    limpa: {
+      sdk: { s: 'todo' }, emu: { s: 'todo' }, adb: { s: 'todo' }, img: { s: 'todo' },
+      kvm: { s: 'user' }, ollama: { s: 'todo' }, model: { s: 'todo' }, keyring: { s: 'ok', v: 'GNOME Keyring' },
+    },
+  };
+  SCENARIOS.erro = SCENARIOS.parcial;
+
+  const MODELS = [
+    { id: 'gpt-oss:20b', sizeGb: 13, vramGb: 14, note: 'Padrão do Enxame. Bom em chamar ferramentas.', tag: 'Recomendado' },
+    { id: 'qwen3:14b', sizeGb: 9.3, vramGb: 11, note: 'Mais leve. Sobra espaço para outro modelo.' },
+    { id: 'qwen3:32b', sizeGb: 20, vramGb: 22, note: 'Mais capaz, ocupa quase toda a placa.' },
+    { id: 'gpt-oss:120b', sizeGb: 65, vramGb: 66, note: 'Não cabe nos 24 GB da sua placa.', tooBig: true },
+  ];
+
+  const MODES = [
+    { id: 'misto', title: 'Misto', text: 'O líder usa a nuvem para planejar bem. Os agentes rodam no seu computador.', roles: [['Líder', 'Claude'], ['Agentes', 'local'], ['Escalada', 'Claude']], tag: 'Recomendado' },
+    { id: 'local', title: 'Só local', text: 'Tudo no seu computador. Funciona offline e não tem custo por uso.', roles: [['Líder', 'local'], ['Agentes', 'local'], ['Escalada', 'local']] },
+    { id: 'nuvem', title: 'Só nuvem', text: 'Tudo na Anthropic. Não precisa de Ollama nem de placa de vídeo.', roles: [['Líder', 'Claude'], ['Agentes', 'Claude'], ['Escalada', 'Claude']] },
+  ];
+
+  const state = { step: 0, scenario: 'parcial', mode: 'misto', model: 'gpt-oss:20b', progress: {}, timer: null };
+
+  const $ = (sel) => document.querySelector(sel);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fmtMb = (mb) => mb >= 1000 ? `${(mb / 1000).toFixed(1).replace('.', ',')} GB` : `${mb} MB`;
+  const needsLocal = () => state.mode !== 'nuvem';
+  const currentModel = () => MODELS.find((m) => m.id === state.model);
+
+  function depsFor() {
+    const sc = SCENARIOS[state.scenario];
+    return DEPS
+      .filter((d) => needsLocal() || (d.id !== 'ollama' && d.id !== 'model'))
+      .map((d) => {
+        const base = { ...d, ...sc[d.id] };
+        return d.dynamicName
+          ? { ...base, name: `Modelo local ${state.model}`, sizeMb: Math.round(currentModel().sizeGb * 1000) }
+          : base;
+      });
+  }
+  const toInstall = () => depsFor().filter((d) => d.s === 'todo');
+
+  /* ---------- Passo 1 ---------- */
+  function renderCheck() {
+    const deps = depsFor();
+    const count = (s) => deps.filter((d) => d.s === s).length;
+    const dl = toInstall().reduce((a, d) => a + (d.sizeMb || 0), 0);
+    const rows = deps.map((d) => {
+      const pill = {
+        ok: `<span class="pill pill--ok">Instalado</span>`,
+        todo: `<span class="pill pill--todo">Vamos instalar</span>`,
+        user: `<span class="pill pill--user">Precisa de você</span>`,
+      }[d.s];
+      const icon = { ok: '✓', todo: '↓', user: '!' }[d.s];
+      const detail = d.s === 'ok' ? (d.v || '') : (d.sizeMb ? fmtMb(d.sizeMb) : '');
+      const fix = d.s === 'user' && d.id === 'kvm' ? `
+        <div class="fix">
+          <span>O emulador existe, mas seu usuário não pode usar <span class="mono">/dev/kvm</span>. Rode no terminal, saia da sessão e entre de novo:</span>
+          <div class="cmd"><code>sudo usermod -aG kvm $USER</code><button type="button" class="btn btn--sm" data-copy="sudo usermod -aG kvm $USER">Copiar</button></div>
+          <div><button type="button" class="btn btn--sm" id="recheck">Verificar de novo</button></div>
+        </div>` : '';
+      return `
+        <div class="dep" data-s="${d.s}">
+          <span class="ico" aria-hidden="true">${icon}</span>
+          <div><h3>${esc(d.name)}</h3><p>${esc(d.role)}</p></div>
+          <div class="meta">${pill}<span class="mono">${esc(detail)}</span></div>
+          ${fix}
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="head">
+        <h1 class="heading">Vamos deixar sua máquina pronta</h1>
+        <p class="lede">O Enxame precisa do Android e de um modelo de IA para funcionar. Verificamos o que já está instalado. O que faltar, a gente baixa e configura para você.</p>
+      </div>
+      <div class="summary">
+        <div class="stat stat--ok"><span class="label">Prontos</span><b>${count('ok')}</b><span>de ${deps.length} itens</span></div>
+        <div class="stat"><span class="label">Para instalar</span><b>${count('todo')}</b><span>${fmtMb(dl)} de download</span></div>
+        <div class="stat ${count('user') ? 'stat--user' : ''}"><span class="label">Precisam de você</span><b>${count('user')}</b><span>${count('user') ? 'um comando no terminal' : 'nada a fazer'}</span></div>
+      </div>
+      <div class="deps">${rows}</div>
+      <div class="card card--dark hw">
+        <div>
+          <span class="label" style="color:var(--grey-2)">Seu computador</span>
+          <ul>
+            <li><span>Memória</span><span>64 GB</span></li>
+            <li><span>Processador</span><span>32 threads · Ryzen 9 7950X</span></li>
+            <li><span>Placa de vídeo</span><span>RTX 4090 · 24 GB</span></li>
+            <li><span>Disco livre</span><span>${state.scenario === 'erro' ? '11,2 GB em /home' : '412 GB em /home'}</span></li>
+          </ul>
+        </div>
+        <div class="capacity">
+          <span class="label" style="color:var(--grey-2)">Emuladores ao mesmo tempo</span>
+          <b>8</b>
+          <div class="phones" aria-hidden="true">${'<i class="on"></i>'.repeat(8)}${'<i></i>'.repeat(4)}</div>
+          <span style="color:var(--grey-2);font-size:14px">Cada um usa cerca de 4,6 GB de memória e 4 threads. O limite vem do processador.</span>
+        </div>
+      </div>`;
+  }
+
+  /* ---------- Passo 2 ---------- */
+  function renderModels() {
+    const modes = MODES.map((m) => `
+      <button type="button" class="mode" role="radio" aria-checked="${state.mode === m.id}" data-mode="${m.id}">
+        ${m.tag ? `<span class="pill pill--user">${m.tag}</span>` : '<span class="pill pill--wait">&nbsp;</span>'}
+        <h3>${m.title}</h3>
+        <p>${m.text}</p>
+        <div class="roles">${m.roles.map(([r, v]) => `<span class="pill pill--todo">${r}: ${v}</span>`).join('')}</div>
+      </button>`).join('');
+
+    const models = MODELS.map((m) => `
+      <button type="button" class="model" role="radio" aria-checked="${state.model === m.id}" ${m.tooBig ? 'aria-disabled="true"' : ''} data-model="${m.id}">
+        <span class="radio" aria-hidden="true"></span>
+        <div><h4><span class="mono" style="font-size:15px">${m.id}</span>${m.tag ? `<span class="pill pill--ok">${m.tag}</span>` : ''}${m.tooBig ? '<span class="pill pill--wait">Não cabe</span>' : ''}</h4><p>${m.note}</p></div>
+        <span class="size">${String(m.sizeGb).replace('.', ',')} GB<br><span style="color:var(--muted);font-size:13px">${m.vramGb} GB de vídeo</span></span>
+      </button>`).join('');
+
+    const cm = currentModel();
+    const pct = (gb) => (gb / 24) * 100;
+    const localCard = needsLocal() ? `
+      <div class="card">
+        <div class="head" style="gap:18px">
+          <span class="label">Modelo local · roda no Ollama</span>
+          <div class="models" role="radiogroup" aria-label="Modelo local">${models}</div>
+          <div class="vram">
+            <span class="label">Memória da placa de vídeo</span>
+            <div class="vram-bar" aria-hidden="true">
+              <span style="width:${pct(1.2)}%;background:var(--grey-2)"></span>
+              <span style="width:${pct(cm.vramGb)}%;background:var(--green)"></span>
+            </div>
+            <div class="vram-legend">
+              <span><i style="background:var(--grey-2)"></i>Sistema 1,2 GB</span>
+              <span><i style="background:var(--green)"></i>${cm.id} ${cm.vramGb} GB</span>
+              <span><i style="background:var(--white)"></i>Livre ${String((24 - 1.2 - cm.vramGb).toFixed(1)).replace('.', ',')} GB de 24 GB</span>
+            </div>
+          </div>
+        </div>
+      </div>` : '';
+
+    const keyCard = state.mode !== 'local' ? `
+      <div class="card card--grey">
+        <div class="field">
+          <label for="apikey">Chave da API da Anthropic</label>
+          <input id="apikey" type="password" placeholder="sk-ant-…" autocomplete="off">
+          <small>Fica guardada no chaveiro do sistema, nunca em arquivo. Você cria a chave em console.anthropic.com.</small>
+          <div><button type="button" class="btn btn--sm">Testar chave</button></div>
+        </div>
+      </div>` : `
+      <div class="card card--grey"><p style="margin:0">Sem chave, sem internet depois da instalação. Missões longas podem errar mais sem a escalada para a nuvem.</p></div>`;
+
+    return `
+      <div class="head">
+        <h1 class="heading">Quem vai pensar pelos agentes?</h1>
+        <p class="lede">Cada papel usa um modelo. Escolha um ponto de partida. Você pode trocar o modelo de cada papel depois, em Provedores.</p>
+      </div>
+      <div class="modes" role="radiogroup" aria-label="Onde os modelos rodam">${modes}</div>
+      <div class="${needsLocal() ? 'two' : ''}">${localCard}${keyCard}</div>`;
+  }
+
+  /* ---------- Passo 3 ---------- */
+  function jobState(d) {
+    const p = state.progress[d.id] ?? 0;
+    if (state.scenario === 'erro' && d.id === 'model' && p >= 61) return { s: 'err', p: 61 };
+    if (p >= 100) return { s: 'done', p: 100 };
+    if (p > 0) return { s: 'run', p };
+    return { s: 'wait', p: 0 };
+  }
+
+  function renderInstall() {
+    const jobs = toInstall();
+    const totalMb = jobs.reduce((a, d) => a + d.sizeMb, 0);
+    const doneMb = jobs.reduce((a, d) => a + d.sizeMb * jobState(d).p / 100, 0);
+    const hasErr = jobs.some((d) => jobState(d).s === 'err');
+
+    const cards = jobs.map((d) => {
+      const js = jobState(d);
+      const pill = {
+        done: '<span class="pill pill--ok">Concluído</span>',
+        run: '<span class="pill pill--todo">Baixando</span>',
+        wait: '<span class="pill pill--wait">Na fila</span>',
+        err: '<span class="pill pill--err">Falhou</span>',
+      }[js.s];
+      const speed = js.s === 'run' ? ` · 42 MB/s · faltam ${Math.max(1, Math.round((d.sizeMb * (100 - js.p) / 100) / 42 / 60))} min` : '';
+      const extra = d.id === 'ollama' && js.s !== 'done'
+        ? '<span class="nums">Instala em ~/.local, sem pedir senha de administrador</span>' : '';
+      const err = js.s === 'err' ? `
+        <div class="errbox">
+          <strong>Disco cheio em /home</strong>
+          <p>Faltam 4,1 GB para terminar de baixar ${esc(state.model)}. Libere espaço e continue de onde parou, ou escolha um modelo menor.</p>
+          <div class="row">
+            <button type="button" class="btn btn--sm btn--primary" id="retry">Continuar download</button>
+            <button type="button" class="btn btn--sm" data-goto="1">Escolher outro modelo</button>
+          </div>
+        </div>` : '';
+      return `
+        <div class="job" data-s="${js.s}">
+          <div class="job-top"><h3>${esc(d.name)}</h3>${pill}</div>
+          <div class="prog" role="progressbar" aria-valuenow="${Math.round(js.p)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${js.p}%"></span></div>
+          <div class="job-top"><span class="nums">${fmtMb(Math.round(d.sizeMb * js.p / 100))} de ${fmtMb(d.sizeMb)}${speed}</span>${extra}</div>
+          ${err}
+        </div>`;
+    }).join('');
+
+    const logLines = [
+      '<b>$</b> sdkmanager --install "system-images;android-34;google_apis_playstore;x86_64"',
+      '[=====================                  ] 54% Baixando x86_64-34_r14.zip',
+      needsLocal() ? `<b>$</b> ollama pull ${esc(state.model)}` : '',
+      needsLocal() ? 'pulling manifest' : '',
+      needsLocal() ? 'pulling e7b273f96360... 61% ▕███████████      ▏ 7.9 GB/13 GB  42 MB/s' : '',
+      hasErr ? '<em>Error: write /home/natan/.ollama/models/blobs/sha256-e7b2…: no space left on device</em>' : '',
+    ].filter(Boolean).join('\n');
+
+    return `
+      <div class="head">
+        <h1 class="heading">Instalando o que falta</h1>
+        <p class="lede">Pode deixar esta janela aberta e fazer outra coisa. Se fechar o app, o download continua de onde parou na próxima vez.</p>
+      </div>
+      <div class="total">
+        <b>${fmtMb(Math.round(doneMb))}</b>
+        <span style="color:var(--muted)">de ${fmtMb(totalMb)} · ${jobs.filter((d) => jobState(d).s === 'done').length} de ${jobs.length} itens prontos</span>
+      </div>
+      <div class="jobs">${cards || '<div class="card card--grey">Nada para instalar. Tudo já estava pronto.</div>'}</div>
+      <details>
+        <summary>Ver detalhes técnicos</summary>
+        <div class="log">${logLines}</div>
+      </details>`;
+  }
+
+  /* ---------- Passo 4 ---------- */
+  function renderReady() {
+    const items = [
+      'Android 14 com Google Play, pronto para criar emuladores',
+      'Aceleração de hardware ativa',
+      needsLocal() ? `Ollama com ${state.model} carregado na placa de vídeo` : 'Modelos na nuvem pela Anthropic',
+      `Papéis configurados no modo ${MODES.find((m) => m.id === state.mode).title.toLowerCase()}`,
+      'Senhas guardadas no chaveiro do sistema',
+    ];
+    return `
+      <div class="head">
+        <h1 class="heading">Tudo pronto</h1>
+        <p class="lede">A máquina tem tudo que o Enxame precisa. Falta criar a primeira identidade: um emulador ligado a uma conta sua.</p>
+      </div>
+      <div class="ready">
+        <div class="card card--grey"><span class="label">Instalado e testado</span><ul class="checklist" style="margin-top:14px">${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>
+        <div class="card card--dark card--shadow next">
+          <span class="label" style="color:var(--green)">Próximo passo</span>
+          <h3>Criar a primeira identidade</h3>
+          <p>Vamos criar o emulador base, instalar o Instagram e o app de controle, e pedir para você entrar na conta uma única vez.</p>
+          <div><button type="button" class="btn" style="background:var(--green)">Criar identidade</button></div>
+        </div>
+      </div>`;
+  }
+
+  /* ---------- Navegação ---------- */
+  function footer() {
+    const jobs = toInstall();
+    const back = $('#back');
+    const next = $('#next');
+    back.disabled = state.step === 0;
+    back.hidden = state.step === 3;
+    const hasUser = depsFor().some((d) => d.s === 'user');
+    const allDone = jobs.every((d) => jobState(d).s === 'done');
+    const hasErr = jobs.some((d) => jobState(d).s === 'err');
+    const cfg = [
+      { label: 'Continuar', hint: hasUser ? 'Resolva o item marcado para continuar' : `${jobs.length} itens vão ser instalados no próximo passo`, disabled: hasUser },
+      { label: 'Instalar', hint: `${fmtMb(jobs.reduce((a, d) => a + d.sizeMb, 0))} de download`, disabled: false },
+      { label: 'Continuar', hint: hasErr ? 'Um download parou. Veja o aviso acima.' : allDone ? 'Instalação concluída' : 'Instalando…', disabled: !allDone },
+      { label: 'Abrir o Cockpit', hint: 'Você pode criar a identidade depois, em Identidades.', disabled: false },
+    ][state.step];
+    next.textContent = cfg.label;
+    next.disabled = cfg.disabled;
+    $('#hint').textContent = cfg.hint;
+  }
+
+  function renderSteps() {
+    $('#steps').innerHTML = STEPS.map((s, i) => `
+      <li><button type="button" data-goto="${i}" ${i === state.step ? 'aria-current="step"' : ''} class="${i < state.step ? 'done' : ''}">
+        <span class="num">${i < state.step ? '✓' : i + 1}</span>
+        <span>${s.title}<span class="sub">${s.sub}</span></span>
+      </button></li>`).join('');
+  }
+
+  function render() {
+    renderSteps();
+    $('#content').innerHTML = [renderCheck, renderModels, renderInstall, renderReady][state.step]();
+    footer();
+  }
+
+  function tick() {
+    const jobs = toInstall();
+    const active = jobs.find((d) => { const s = jobState(d).s; return s === 'run' || s === 'wait'; });
+    if (!active || jobs.some((d) => jobState(d).s === 'err')) { stopSim(); render(); return; }
+    const step = Math.max(6, 8000 / active.sizeMb); // acelerado para o mockup
+    state.progress = { ...state.progress, [active.id]: Math.min(100, (state.progress[active.id] ?? 0) + step) };
+    if (state.step === 2) render();
+  }
+  function startSim() { if (!state.timer) state.timer = setInterval(tick, 700); }
+  function stopSim() { clearInterval(state.timer); state.timer = null; }
+
+  function go(i) {
+    state.step = Math.max(0, Math.min(STEPS.length - 1, i));
+    if (state.step === 2) {
+      // Cenário parcial abre com a imagem do Android já em andamento, para a tela não nascer vazia.
+      if (!Object.keys(state.progress).length) {
+        const first = toInstall()[0];
+        if (state.scenario === 'erro') state.progress = { img: 100, model: 48 };
+        else if (first) state.progress = { [first.id]: 54 };
+      }
+      startSim();
+    }
+    render();
+    $('#content').scrollIntoView({ block: 'start' });
+  }
+
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.goto) return go(Number(t.dataset.goto));
+    if (t.dataset.mode) { state.mode = t.dataset.mode; return render(); }
+    if (t.dataset.model) { if (t.getAttribute('aria-disabled') !== 'true') { state.model = t.dataset.model; render(); } return; }
+    if (t.dataset.copy) {
+      navigator.clipboard?.writeText(t.dataset.copy).then(() => { t.textContent = 'Copiado'; }, () => {});
+      return;
+    }
+    if (t.id === 'recheck') { state.scenario === 'limpa' && (SCENARIOS.limpa = { ...SCENARIOS.limpa, kvm: { s: 'ok', v: '/dev/kvm' } }); return render(); }
+    if (t.id === 'retry') { state.scenario = 'parcial'; syncScenario(); startSim(); return render(); }
+    if (t.id === 'next') return state.step === 3 ? null : go(state.step + 1);
+    if (t.id === 'back') return go(state.step - 1);
+    if (t.closest('#scenario')) {
+      state.scenario = t.dataset.v;
+      state.progress = {};
+      if (t.dataset.v === 'limpa') SCENARIOS.limpa = { ...SCENARIOS.limpa, kvm: { s: 'user' } };
+      stopSim();
+      syncScenario();
+      go(state.scenario === 'erro' ? 2 : 0);
+    }
+  });
+
+  function syncScenario() {
+    document.querySelectorAll('#scenario button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === state.scenario)));
+  }
+
+  render();
+})();
+</script>

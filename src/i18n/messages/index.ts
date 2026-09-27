@@ -5,12 +5,13 @@ import { device } from './device';
 import { goal } from './goal';
 import { identities } from './identities';
 import { mission } from './mission';
+import { onboarding } from './onboarding';
 import { providers } from './providers';
 import { report } from './report';
 import { shell } from './shell';
 
 /** Um arquivo por namespace, cada um com os seis idiomas: frentes paralelas não disputam o mesmo arquivo. */
-const NAMESPACES = { shell, common, cockpit, device, goal, report, identities, providers, mission } as const;
+const NAMESPACES = { shell, common, cockpit, device, goal, report, identities, providers, mission, onboarding } as const;
 type Namespaces = typeof NAMESPACES;
 type KeysOf<N extends keyof Namespaces> = Extract<keyof Namespaces[N]['pt'], string>;
 

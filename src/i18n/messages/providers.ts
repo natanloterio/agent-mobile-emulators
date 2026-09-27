@@ -3,6 +3,7 @@ import { defineMessages } from '../define';
 /** Tela Provedores: papéis, modo nuvem/local, teste de conexão, resultado do teste e o quadro de VRAM. */
 export const providers = defineMessages({
   'title': 'Provedores',
+  'setup': 'Verificar dependências',
   'lede': 'Modelo configurado por papel, não global. Local ganha onde há volume: no worker.',
   'mode.nuvem': 'Nuvem',
   'mode.local': 'Local',
@@ -54,6 +55,7 @@ export const providers = defineMessages({
 }, {
   en: {
     'title': 'Providers',
+    'setup': 'Check dependencies',
     'lede': 'Models are set per role, not globally. Local wins where the volume is: on the worker.',
     'mode.nuvem': 'Cloud',
     'mode.local': 'Local',
@@ -105,6 +107,7 @@ export const providers = defineMessages({
   },
   es: {
     'title': 'Proveedores',
+    'setup': 'Verificar dependencias',
     'lede': 'Modelo configurado por rol, no global. Lo local gana donde hay volumen: en el worker.',
     'mode.nuvem': 'Nube',
     'mode.local': 'Local',
@@ -156,6 +159,7 @@ export const providers = defineMessages({
   },
   fr: {
     'title': 'Fournisseurs',
+    'setup': 'Vérifier les dépendances',
     'lede': 'Modèle défini par rôle, pas globalement. Le local l’emporte là où il y a du volume : sur le worker.',
     'mode.nuvem': 'Cloud',
     'mode.local': 'Local',
@@ -207,6 +211,7 @@ export const providers = defineMessages({
   },
   de: {
     'title': 'Anbieter',
+    'setup': 'Abhängigkeiten prüfen',
     'lede': 'Modell pro Rolle, nicht global. Lokal lohnt sich dort, wo das Volumen liegt: beim Worker.',
     'mode.nuvem': 'Cloud',
     'mode.local': 'Lokal',
@@ -258,6 +263,7 @@ export const providers = defineMessages({
   },
   zh: {
     'title': '模型提供方',
+    'setup': '检查依赖项',
     'lede': '按角色配置模型，而非全局统一。本地模型在调用量大的地方更划算：worker。',
     'mode.nuvem': '云端',
     'mode.local': '本地',

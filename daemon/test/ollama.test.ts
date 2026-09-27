@@ -18,7 +18,7 @@ function harness(script: (() => Response)[]) {
   }) as unknown as typeof fetch;
   const child = { pid: 4242, kill: (s?: string) => { killed.push(String(s)); return true; }, on: () => undefined };
   const sup = createOllamaSupervisor({
-    fetch: fetchFn, sleep: async () => {}, timeoutMs: 20_000, logPath: '/dev/null', openLog: () => 'ignore', findProcesses: () => [],
+    bin: 'ollama', fetch: fetchFn, sleep: async () => {}, timeoutMs: 20_000, logPath: '/dev/null', openLog: () => 'ignore', findProcesses: () => [],
     spawn: (cmd, args, opts) => { spawned.push({ cmd, args, env: opts.env }); return child; },
   });
   return { sup, spawned, killed, posts };
@@ -41,6 +41,33 @@ describe('supervisor do Ollama', () => {
     expect(h.spawned[0]).toMatchObject({ cmd: 'ollama', args: ['serve'] });
     expect(h.spawned[0].env).toMatchObject({ ...OLLAMA_ENV, OLLAMA_HOST: '127.0.0.1:11434' });
     h.sup.stop(); expect(h.killed).toEqual(['SIGTERM']);
+  });
+  it('spawna o binário configurado em deps.bin', async () => {
+    const spawned: string[] = [];
+    const sup = createOllamaSupervisor({
+      bin: '/opt/enxame/ollama/bin/ollama',
+      fetch: (async () => { if (spawned.length === 0) throw new Error('fetch failed: ECONNREFUSED'); return tags('gpt-oss:20b'); }) as unknown as typeof fetch,
+      sleep: async () => {}, timeoutMs: 20_000, logPath: '/dev/null', openLog: () => 'ignore', findProcesses: () => [],
+      spawn: (cmd) => { spawned.push(cmd); return { pid: 1, kill: () => true, on: () => undefined }; },
+    });
+    await sup.ensure('http://127.0.0.1:11434/v1', 'gpt-oss:20b');
+    expect(spawned).toEqual(['/opt/enxame/ollama/bin/ollama']);
+  });
+  it('sem deps.bin, resolve o binário a cada spawn (Ollama instalado por um onboarding reaberto vale sem reiniciar o daemon)', async () => {
+    const spawned: string[] = [];
+    let installed = 'ollama';
+    let up = false;
+    const sup = createOllamaSupervisor({
+      resolveBin: () => installed,
+      fetch: (async () => { if (!up) throw new Error('fetch failed: ECONNREFUSED'); return tags('gpt-oss:20b'); }) as unknown as typeof fetch,
+      sleep: async () => {}, timeoutMs: 20_000, logPath: '/dev/null', openLog: () => 'ignore', findProcesses: () => [],
+      spawn: (cmd) => { spawned.push(cmd); up = true; return { pid: 1, kill: () => true, on: () => undefined }; },
+    });
+    await sup.ensure('http://127.0.0.1:11434/v1', 'gpt-oss:20b');
+    sup.stop(); up = false;
+    installed = '/home/u/.local/share/enxame/tools/ollama/bin/ollama';
+    await sup.ensure('http://127.0.0.1:11434/v1', 'gpt-oss:20b');
+    expect(spawned).toEqual(['ollama', '/home/u/.local/share/enxame/tools/ollama/bin/ollama']);
   });
   it('não sobe dentro do timeout → mata o filho e lança infra-local', async () => {
     const killed: string[] = [];
