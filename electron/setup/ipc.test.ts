@@ -57,4 +57,19 @@ describe('registerSetupIpc', () => {
     await expect(call('enxame:setup:testKey', 'abc')).rejects.toThrow();
     expect(await call('enxame:setup:testKey', KEY)).toEqual({ result: 'ok' });
   });
+  it('status fica completed depois de um finish bem-sucedido', async () => {
+    const { call } = mk();
+    expect(await call('enxame:setup:status')).toEqual({ completed: false, supported: true });
+    await call('enxame:setup:finish', { mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: null });
+    expect(await call('enxame:setup:status')).toEqual({ completed: true, supported: true });
+  });
+  it('recusa finish com instalação em andamento', async () => {
+    let release: () => void = () => {};
+    const slow: JobRunners = { sdk: async () => {}, adb: async () => {}, emu: async () => {}, img: () => new Promise<void>((r) => { release = r; }), ollama: async () => {}, model: async () => {} };
+    const { call } = mk({ runners: () => slow });
+    const install = call('enxame:setup:install', { jobs: ['img'], localModel: 'gpt-oss:20b' }) as Promise<void>;
+    await expect(call('enxame:setup:finish', { mode: 'local', localModel: 'gpt-oss:20b', anthropicKey: null })).rejects.toThrow(/instalação em andamento/);
+    release();
+    await install;
+  });
 });
