@@ -11,13 +11,20 @@ interface DepsOpts {
   readonly sdkmanagerHere?: boolean;
   /** padrão `true`: o `run`/`extractZip` do Ollama acrescenta `paths.ollamaBin` ao conjunto de arquivos existentes. */
   readonly ollamaBinAppears?: boolean;
+  /** HOME simulado (padrão `/home/u`); usado para testar caminhos com espaço no Windows. */
+  readonly home?: string;
+  /** Variáveis de ambiente simuladas (ex.: `LOCALAPPDATA` no Windows). */
+  readonly env?: NodeJS.ProcessEnv;
+  /** O que o `readdir` do diretório temporário do JRE (zip com strip) devolve; padrão uma pasta só. */
+  readonly readdirJre?: readonly string[];
 }
 
 /** `exists` reflete um conjunto de arquivos que cresce conforme o `run`/`extractZip` falso "instala" cada coisa. */
 function deps(platform: PlatformId, o: DepsOpts = {}) {
-  const paths = resolveSetupPaths({}, '/home/u', null, platform);
+  const paths = resolveSetupPaths(o.env ?? {}, o.home ?? '/home/u', null, platform);
   const calls: string[] = [];
   const envs: (NodeJS.ProcessEnv | undefined)[] = [];
+  const verbatims: (boolean | undefined)[] = [];
   const present = new Set<string>();
   if (o.javaHere) present.add(paths.javaBin);
   if (o.sdkmanagerHere) present.add(paths.sdkmanager);
@@ -27,6 +34,7 @@ function deps(platform: PlatformId, o: DepsOpts = {}) {
     run: async (cmd, args, opts) => {
       calls.push(`run ${cmd} ${args.join(' ')}`);
       envs.push(opts?.env);
+      verbatims.push(opts?.verbatim);
       opts?.onLine?.('[=====     ] 50% Downloading');
       if (cmd === 'tar') {
         if (args.includes(paths.jreDir)) present.add(paths.javaBin);
@@ -43,14 +51,17 @@ function deps(platform: PlatformId, o: DepsOpts = {}) {
       mkdir: async () => undefined,
       rename: async (a, b) => { calls.push(`mv ${a} ${b}`); if (b === paths.jreDir) present.add(paths.javaBin); },
       chmod: async () => undefined,
-      readdir: async (p) => (p.includes('jre') ? ['jdk-17.0.20.1+1-jre'] : ['sdkmanager', 'avdmanager']),
+      readdir: async (p) => (p.includes('jre') ? (o.readdirJre ?? ['jdk-17.0.20.1+1-jre']) : ['sdkmanager', 'avdmanager']),
     },
     exists: async (p) => present.has(p),
     pull: async (model, bin, progress) => { calls.push(`pull ${model} ${bin}`); progress(10, 20); },
     log: () => undefined,
   };
-  return { d, calls, envs };
+  return { d, calls, envs, verbatims };
 }
+
+/** Aspas só quando o argumento tem espaço — mesma regra de `q` em runners.ts. */
+const q = (arg: string): string => (arg.includes(' ') ? `"${arg}"` : arg);
 
 describe('parseSdkPercent', () => {
   it('lê a porcentagem da barra do sdkmanager', () => {
@@ -137,10 +148,12 @@ describe('macOS Apple Silicon', () => {
 });
 
 describe('Windows', () => {
-  it('sdkmanager.bat roda por cmd /c e PATH usa ;', async () => {
-    const { d, calls, envs } = deps('win32-x64', { javaHere: true });
+  it('sdkmanager.bat roda por cmd /d /s /c com aspas e verbatim; PATH usa ;', async () => {
+    const { d, calls, envs, verbatims } = deps('win32-x64', { javaHere: true });
     await createRunners('gpt-oss:20b', 'ollama', d).adb(() => {});
-    expect(calls.at(-1)).toBe(`run cmd /c ${d.paths.sdkmanager} --sdk_root=${d.paths.sdkRoot} --install platform-tools`);
+    const args = [`--sdk_root=${d.paths.sdkRoot}`, '--install', 'platform-tools'];
+    expect(calls.at(-1)).toBe(`run cmd /d /s /c ""${d.paths.sdkmanager}" ${args.map(q).join(' ')}"`);
+    expect(verbatims.at(-1)).toBe(true);
     expect(envs.at(-1)?.PATH?.startsWith(`${d.paths.javaHome}\\bin;`)).toBe(true);
   });
   it('JRE .zip: extrai e move a pasta de dentro para jre/', async () => {
@@ -149,11 +162,36 @@ describe('Windows', () => {
     expect(calls.some((c) => c.startsWith(`unzip ${d.paths.downloadsDir}\\jre.zip`))).toBe(true);
     expect(calls.some((c) => c.startsWith('mv ') && c.endsWith(` ${d.paths.jreDir}`))).toBe(true);
   });
+  it('JRE .zip com formato inesperado (sem uma pasta única dentro): erro claro', async () => {
+    const { d } = deps('win32-x64', { readdirJre: [] });
+    await expect(createRunners('gpt-oss:20b', 'ollama', d).sdk(() => {})).rejects.toMatchObject({ kind: 'process', message: expect.stringContaining('formato inesperado') });
+  });
   it('ollama: zip com extract-zip, sem tar', async () => {
     const { d, calls } = deps('win32-x64');
     await createRunners('gpt-oss:20b', 'ollama', d).ollama(() => {});
     expect(calls).toContain(`unzip ${d.paths.downloadsDir}\\ollama-windows-amd64.zip ${d.paths.ollamaDir}`);
     expect(calls.some((c) => c.startsWith('run tar'))).toBe(false);
+  });
+});
+
+describe('Windows: caminho do SDK com espaço', () => {
+  const home = 'C:\\Users\\John Doe';
+  const env = { LOCALAPPDATA: `${home}\\AppData\\Local` };
+
+  it('licenças: aspas ao redor do .bat e verbatim: true', async () => {
+    const { d, calls, verbatims } = deps('win32-x64', { home, env, javaHere: true, sdkmanagerHere: true });
+    expect(d.paths.sdkmanager).toContain(' '); // sanidade: o caminho simulado tem espaço
+    await createRunners('gpt-oss:20b', 'ollama', d).sdk(() => {});
+    const args = [`--sdk_root=${d.paths.sdkRoot}`, '--licenses'];
+    expect(calls.at(-1)).toBe(`run cmd /d /s /c ""${d.paths.sdkmanager}" ${args.map(q).join(' ')}"`);
+    expect(verbatims.at(-1)).toBe(true);
+  });
+  it('instalação (adb): mesma proteção de aspas e verbatim: true', async () => {
+    const { d, calls, verbatims } = deps('win32-x64', { home, env });
+    await createRunners('gpt-oss:20b', 'ollama', d).adb(() => {});
+    const args = [`--sdk_root=${d.paths.sdkRoot}`, '--install', 'platform-tools'];
+    expect(calls.at(-1)).toBe(`run cmd /d /s /c ""${d.paths.sdkmanager}" ${args.map(q).join(' ')}"`);
+    expect(verbatims.at(-1)).toBe(true);
   });
 });
 

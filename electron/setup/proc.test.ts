@@ -1,8 +1,10 @@
-import type { ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runProcess } from './proc';
+
+vi.mock('node:child_process', () => ({ spawn: vi.fn() }));
 
 function fakeChild(script: (c: { out: PassThrough; err: PassThrough; close: (code: number) => void; stdin: string[] }) => void) {
   const ev = new EventEmitter();
@@ -42,5 +44,12 @@ describe('runProcess', () => {
   it('erro em stdout/stderr rejeita sem derrubar o main', async () => {
     const { child } = fakeChild(({ out }) => setTimeout(() => out.emit('error', new Error('stream broke')), 5));
     await expect(runProcess('cmd', [], {}, () => child)).rejects.toMatchObject({ kind: 'process', message: expect.stringContaining('stream broke') });
+  });
+  it('verbatim: true chega no spawn padrão como windowsVerbatimArguments: true', async () => {
+    const { child } = fakeChild(({ close }) => setTimeout(() => close(0), 5));
+    const spawnMock = vi.mocked(spawn);
+    spawnMock.mockReturnValue(child);
+    await runProcess('cmd', ['/d', '/s', '/c', 'x'], { verbatim: true });
+    expect(spawnMock).toHaveBeenCalledWith('cmd', ['/d', '/s', '/c', 'x'], expect.objectContaining({ windowsVerbatimArguments: true }));
   });
 });

@@ -51,9 +51,18 @@ async function sdkEnv(d: RunnerDeps): Promise<NodeJS.ProcessEnv> {
   };
 }
 
-/** No Windows o sdkmanager é um .bat, que o spawn só roda pelo cmd. */
+/** Aspas só quando o argumento tem espaço (os args aqui nunca trazem aspas). */
+const q = (arg: string): string => (arg.includes(' ') ? `"${arg}"` : arg);
+
+/**
+ * No Windows o sdkmanager é um .bat, que o spawn só roda pelo cmd. `/d /s /c "<bat com espaço> args..."`
+ * evita que o cmd, ao tirar as aspas externas, quebre um caminho com espaço (ex.: `C:\Users\John Doe\...`);
+ * `verbatim` impede o libuv de re-aspar essa linha já montada.
+ */
 function runSdkmanager(d: RunnerDeps, args: readonly string[], o: ProcOpts): Promise<void> {
-  return isWindows(d.paths.platform) ? d.run('cmd', ['/c', d.paths.sdkmanager, ...args], o) : d.run(d.paths.sdkmanager, args, o);
+  if (!isWindows(d.paths.platform)) return d.run(d.paths.sdkmanager, args, o);
+  const bat = d.paths.sdkmanager;
+  return d.run('cmd', ['/d', '/s', '/c', `""${bat}" ${args.map(q).join(' ')}"`], { ...o, verbatim: true });
 }
 
 /** Abre o pacote conforme o formato; `strip` tira a pasta de cima (JRE). */
@@ -63,7 +72,9 @@ async function extractArchive(d: RunnerDeps, a: Pinned, file: string, dest: stri
     const tmp = `${dest}-unzip`;
     await d.fs.rm(tmp, { recursive: true, force: true });
     await d.extractZip(file, tmp);
-    const [inner] = await d.fs.readdir(tmp);
+    const entries = await d.fs.readdir(tmp);
+    if (entries.length !== 1) throw new SetupError('process', 'o pacote do Java veio com um formato inesperado');
+    const [inner] = entries;
     await d.fs.rm(dest, { recursive: true, force: true });
     await d.fs.rename(pathOf(d).join(tmp, inner), dest);
     await d.fs.rm(tmp, { recursive: true, force: true });
