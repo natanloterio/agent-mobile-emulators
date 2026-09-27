@@ -99,6 +99,18 @@ async function readAllPages(first: unknown, exec: (input: unknown) => Promise<un
 
 const isErrorResult = (out: unknown): boolean => !!out && typeof out === 'object' && (out as { isError?: boolean }).isError === true;
 
+const CLICK_NODE = /click_node$/;
+const NOT_CLICKABLE = /is not clickable/i;
+const NOT_CLICKABLE_NOTE = 'click_node recusou: o nó não é clicável (o clicável costuma ser o contêiner). O daemon tocou o mesmo nó por coordenada com tap_node; leia a tela para ver o efeito.';
+
+/** Acrescenta uma nota ao resultado MCP preservando o shape `content: [...]` (o toModelOutput do @ai-sdk/mcp exige). */
+function withNote(out: unknown, note: string): unknown {
+  if (out && typeof out === 'object' && Array.isArray((out as { content?: unknown }).content)) {
+    return { ...(out as object), content: [{ type: 'text', text: note }, ...(out as { content: unknown[] }).content] };
+  }
+  return `${note}\n${typeof out === 'string' ? out : JSON.stringify(out)}`;
+}
+
 /** Envolve cada tool do MCP: write-ahead, isError → erro, leitura paginada, invalidação da tela após ação, classificação de falha. */
 function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
   let calls = 0;
@@ -120,7 +132,17 @@ function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
         }
         if (ACTION_TOOL.test(name)) ctx.onScreen(null); // a tela mudou; o gate nega até nova leitura
         return out;
-      } catch (e) { const h = classifyMcpError(e); if (h) ctx.onHalt(h); throw e; }
+      } catch (e) {
+        // Texto de item raramente é o nó clicável (o contêiner é): o mesmo nó, já aprovado pelo gate, recebe um toque por coordenada.
+        const tap = CLICK_NODE.test(name) ? tools[name.replace(CLICK_NODE, 'tap_node')] as (Tool & { execute?: (i: unknown, o: unknown) => Promise<unknown> }) | undefined : undefined;
+        if (tap?.execute && NOT_CLICKABLE.test(String((e as Error)?.message ?? e))) {
+          const out = await tap.execute({ node_id: (input as { node_id?: unknown })?.node_id }, opts);
+          if (isErrorResult(out)) throw new Error(textOf(out) || `${name}: tap_node de reserva falhou`);
+          ctx.onScreen(null);
+          return withNote(out, NOT_CLICKABLE_NOTE);
+        }
+        const h = classifyMcpError(e); if (h) ctx.onHalt(h); throw e;
+      }
     };
     return [name, { ...base, execute } as Tool];
   }));
