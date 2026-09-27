@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { CONFIG } from '../config.js';
 import { getIdentity, listIdentities, setIdentityFlags, setIdentityState, upsertIdentity, type IdentityRow } from '../db/identities.js';
+import { openMissionFor } from '../db/missions.js';
 import type { Adb } from '../device/adb.js';
 import type { ProbeResult } from '../device/probe.js';
 import { killEmulator, loadSnapshot, saveSnapshot } from '../fleet/emulator.js';
@@ -37,6 +38,8 @@ export interface IdentityOps {
   readonly defaultPin?: string | null;
   /** Login fixo do Instagram (fleet/login.ts) com as credenciais que o main do Electron decifrou. */
   readonly login?: (identity: IdentityRow, creds: { username: string; password: string }) => Promise<{ outcome: 'logged-in' | 'already-logged-in' | 'needs-human'; detail: string }>;
+  /** Credencial do app alvo guardada no cofre do daemon; usada quando o login chega sem corpo. */
+  readonly credentials?: (id: string) => Promise<{ username: string; password: string } | null>;
   readonly now?: () => Date; readonly uuid?: () => string;
   readonly baseAvd?: string; readonly snapshotName?: string;
   readonly killSleep?: (ms: number) => Promise<void>;
@@ -278,7 +281,16 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
    */
   const login: Action = async (ctx, id) => {
     if (!ops.login) return ctx.send(404, { error: 'login pelo daemon indisponível' });
-    const body = await parse(ctx, CredsBody); if (!body) return;
+    const raw = await ctx.body();
+    const empty = !!raw && typeof raw === 'object' && Object.keys(raw as object).length === 0;
+    let body: { username: string; password: string } | null;
+    if (empty) {
+      body = (await ops.credentials?.(id.id)) ?? null;
+      if (!body) return ctx.send(409, { error: 'sem credenciais salvas para esta identidade' });
+    } else {
+      body = await parse(ctx, CredsBody); if (!body) return;
+    }
+    if (openMissionFor(ctx.db, id.id)?.state === 'running') return ctx.send(409, { error: 'identidade em missão; pause a missão antes' });
     if (id.state === 'running' || id.state === 'banned' || id.discardedAt || id.controlled) return ctx.send(409, { error: `login indisponível em ${id.controlled ? 'controle humano' : id.state}` });
     if (!(await online(id))) return ctx.send(409, { error: 'emulador fora do adb: dê boot antes' });
     const prev = id.state;
