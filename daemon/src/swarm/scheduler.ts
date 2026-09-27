@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { CONFIG } from '../config.js';
 import { getIdentity, type IdentityRow } from '../db/identities.js';
+import { openMissionFor } from '../db/missions.js';
 import { createGoal, createTask, finishGoal, finishStep, setTaskState, writeIntent, type GoalState } from '../db/tasks.js';
 import { humanBlockLabel, readinessOf, type EnsureReady } from '../leader/readiness.js';
 import type { GoalPlan, PlanTask } from '../leader/types.js';
@@ -43,10 +44,13 @@ async function blockReason(d: SchedulerDeps, identityId: string): Promise<{ reas
   if (!id) return { reason: 'identidade removida' };
   const blocked = humanBlockLabel(id);
   if (blocked) return { reason: blocked };
+  if (openMissionFor(d.db, identityId)) return { reason: 'em missão' };
   if (d.ensureReady) {
     const r = await readinessOf(d.db, id, d.ensureReady);
     if (!r.ready) return { reason: r.readyLabel };
     if (d.isKilled()) return { reason: 'kill switch' };
+    // Uma missão pode ter começado durante a sonda.
+    if (openMissionFor(d.db, identityId)) return { reason: 'em missão' };
   }
   const fresh = getIdentity(d.db, identityId);
   return fresh ? { identity: fresh } : { reason: 'identidade removida' };

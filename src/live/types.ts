@@ -77,9 +77,24 @@ export interface ProviderModelsResponse {
   readonly runtimes?: readonly RuntimeInfo[]; readonly entries?: readonly ModelEntry[];
 }
 export interface ProviderPatch { readonly mode?: 'nuvem' | 'local'; readonly model?: string; readonly endpoint?: string; readonly runtime?: LocalRuntime }
+/** Estado de uma missão (spec missões): aberta enquanto `running`/`awaiting-human`/`paused`. */
+export type MissionState = 'running' | 'awaiting-human' | 'paused' | 'done' | 'abandoned';
+export interface MissionSubtaskView {
+  readonly seq: number; readonly objective: string; readonly state: string;
+  readonly report: { readonly ok: boolean; readonly did: string; readonly blockers: string } | null;
+  readonly costUsd: number;
+}
+export interface MissionView {
+  readonly id: string; readonly identityId: string; readonly text: string; readonly state: MissionState; readonly humanReason: string | null;
+  readonly stalled: boolean; readonly costUsd: number; readonly startedAt: string; readonly finishedAt: string | null;
+  readonly current: { readonly seq: number; readonly objective: string } | null;
+  readonly subtasks: readonly MissionSubtaskView[];
+  readonly memory: readonly { readonly key: string; readonly value: string | null; readonly secret: boolean }[];
+}
 export interface FleetSnapshot {
   readonly identities: readonly LiveIdentity[]; readonly providers?: Readonly<Record<LiveRoleKey, LiveProvider>>; readonly killed: boolean; readonly updatedAt: string;
   readonly goal?: GoalSummary | null; readonly host?: HostMetrics | null;
+  readonly missions?: readonly MissionView[];
 }
 /** Poster (último screencap PNG, base64) de uma identidade; casado por id (spec inc. 4 §4.3). */
 export interface LiveFrame { readonly id: string; readonly at: string; readonly png: string }

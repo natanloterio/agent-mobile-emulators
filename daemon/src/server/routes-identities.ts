@@ -3,10 +3,12 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { CONFIG } from '../config.js';
 import { getIdentity, listIdentities, setIdentityFlags, setIdentityState, upsertIdentity, type IdentityRow } from '../db/identities.js';
+import { openMissionFor } from '../db/missions.js';
 import type { Adb } from '../device/adb.js';
 import type { ProbeResult } from '../device/probe.js';
 import { killEmulator, loadSnapshot, saveSnapshot } from '../fleet/emulator.js';
 import type { Route, RouteCtx } from './api.js';
+import { CredsBody, issues } from './routes-credentials.js';
 import { buildSnapshot, isRestoreUnsafe } from './snapshot.js';
 
 /** Rotas do ciclo de vida da identidade (spec inc. 5 §3.2, Frente B). `/control` e `/input` ficam para outra rota. */
@@ -37,6 +39,8 @@ export interface IdentityOps {
   readonly defaultPin?: string | null;
   /** Login fixo do Instagram (fleet/login.ts) com as credenciais que o main do Electron decifrou. */
   readonly login?: (identity: IdentityRow, creds: { username: string; password: string }) => Promise<{ outcome: 'logged-in' | 'already-logged-in' | 'needs-human'; detail: string }>;
+  /** Credencial do app alvo guardada no cofre do daemon; usada quando o login chega sem corpo. */
+  readonly credentials?: (id: string) => Promise<{ username: string; password: string } | null>;
   readonly now?: () => Date; readonly uuid?: () => string;
   readonly baseAvd?: string; readonly snapshotName?: string;
   readonly killSleep?: (ms: number) => Promise<void>;
@@ -55,8 +59,6 @@ export const normalizeHandle = (h: string): string | null => (HANDLE.test(h) ? `
 const PinSchema = z.string().regex(/^\d{4,16}$/, 'PIN: só dígitos, 4 a 16');
 const CreateBody = z.object({ name: z.string().regex(NAME, 'nome: [A-Za-z0-9_], até 32').optional(), handle: z.string().optional(), pin: PinSchema.optional() });
 const PinBody = z.object({ pin: PinSchema });
-// Mensagens de validação nunca repetem o valor recebido (a senha).
-const CredsBody = z.object({ username: z.string().trim().min(1, 'usuário obrigatório').max(100, 'usuário longo demais'), password: z.string().min(1, 'senha obrigatória').max(200, 'senha longa demais') });
 const BootBody = z.object({ window: z.boolean().optional() });
 const LoginBody = z.object({ handle: z.string() });
 const PauseBody = z.object({ paused: z.boolean() });
@@ -64,7 +66,6 @@ const BanBody = z.object({ reason: z.string().trim().min(1, 'motivo obrigatório
 const RestoreBody = z.object({ confirm: z.boolean().optional() });
 
 const errMsg = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 300);
-const issues = (e: z.ZodError) => e.issues.map((i) => i.message).join('; ');
 
 type Action = (ctx: RouteCtx, id: IdentityRow) => Promise<void>;
 
@@ -278,7 +279,16 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
    */
   const login: Action = async (ctx, id) => {
     if (!ops.login) return ctx.send(404, { error: 'login pelo daemon indisponível' });
-    const body = await parse(ctx, CredsBody); if (!body) return;
+    const raw = await ctx.body();
+    const empty = !!raw && typeof raw === 'object' && Object.keys(raw as object).length === 0;
+    let body: { username: string; password: string } | null;
+    if (empty) {
+      body = (await ops.credentials?.(id.id)) ?? null;
+      if (!body) return ctx.send(409, { error: 'sem credenciais salvas para esta identidade' });
+    } else {
+      body = await parse(ctx, CredsBody); if (!body) return;
+    }
+    if (openMissionFor(ctx.db, id.id)?.state === 'running') return ctx.send(409, { error: 'identidade em missão; pause a missão antes' });
     if (id.state === 'running' || id.state === 'banned' || id.discardedAt || id.controlled) return ctx.send(409, { error: `login indisponível em ${id.controlled ? 'controle humano' : id.state}` });
     if (!(await online(id))) return ctx.send(409, { error: 'emulador fora do adb: dê boot antes' });
     const prev = id.state;

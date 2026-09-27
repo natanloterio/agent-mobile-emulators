@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, setIdentityState, upsertIdentity, type IdentityRow } from '../src/db/identities.js';
+import { createMission } from '../src/db/missions.js';
 import type { ProbeResult } from '../src/device/probe.js';
 import { startServer } from '../src/server/api.js';
 import { createIdentityRoutes, normalizeHandle, type IdentityOps } from '../src/server/routes-identities.js';
@@ -336,5 +337,21 @@ describe('POST /identities/:id/login (integrador)', () => {
     const bad = await s.post('/identities/conta1/login', { username: '', password: SECRET });
     expect(bad.status).toBe(400); expect(JSON.stringify(bad.body)).not.toContain(SECRET);
     expect((await s.post('/identities/conta1/login', { username: 'u', password: 'p' })).status).toBe(409);
+  });
+  it('corpo vazio usa a credencial do cofre; sem credencial → 409', async () => {
+    const seen: { username: string; password: string }[] = [];
+    const creds = new Map([['conta1', { username: 'u1', password: 'p1-segredo' }]]);
+    const h = harness({ credentials: async (id) => creds.get(id) ?? null, login: async (_i, c) => { seen.push(c); return { outcome: 'logged-in', detail: 'ok' }; } });
+    const s = await serve(h.db, h.ops);
+    expect((await s.post('/identities/conta1/login', {})).status).toBe(200);
+    expect(seen).toEqual([{ username: 'u1', password: 'p1-segredo' }]);
+    creds.clear();
+    expect((await s.post('/identities/conta1/login', {})).status).toBe(409);
+  });
+  it('recusado com missão em execução na identidade', async () => {
+    const h = harness({ credentials: async () => ({ username: 'u', password: 'p' }), login: async () => ({ outcome: 'logged-in', detail: 'ok' }) });
+    createMission(h.db, 'conta1', 'm', 'pt');
+    const s = await serve(h.db, h.ops);
+    expect((await s.post('/identities/conta1/login', {})).status).toBe(409);
   });
 });

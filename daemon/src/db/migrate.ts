@@ -24,6 +24,16 @@ const COLUMNS: readonly { table: string; column: string; ddl: string }[] = [
   { table: 'identity', column: 'lock_pin', ddl: 'text' },
   // Runtime local do papel (Ollama ou LM Studio); null na nuvem.
   { table: 'provider_config', column: 'runtime', ddl: 'text' },
+  // Missões (spec missões): goal pattern='mission' com estado próprio; subtarefas são tasks numeradas.
+  { table: 'goal', column: 'mission_state', ddl: 'text' },
+  { table: 'goal', column: 'human_reason', ddl: 'text' },
+  { table: 'goal', column: 'stalled', ddl: 'integer not null default 0' },
+  { table: 'goal', column: 'identity_id', ddl: 'text' },
+  { table: 'goal', column: 'lang', ddl: 'text' },
+  { table: 'task', column: 'seq', ddl: 'integer' },
+  { table: 'task', column: 'objective', ddl: 'text' },
+  { table: 'task', column: 'success_criteria', ddl: 'text' },
+  { table: 'task', column: 'report_json', ddl: 'text' },
 ];
 
 export function applyMigrations(db: DatabaseSync): void {

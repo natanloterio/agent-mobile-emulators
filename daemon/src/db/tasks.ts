@@ -37,8 +37,8 @@ export function finishGoal(db: DatabaseSync, goalId: string): GoalState {
   return state;
 }
 
-export function setTaskState(db: DatabaseSync, taskId: string, state: 'todo' | 'running' | 'done' | 'failed' | 'needs-human'): void {
-  db.prepare("update task set state=?, finished_at=case when ? in ('done','failed','needs-human') then datetime('now') else finished_at end where id=?").run(state, state, taskId);
+export function setTaskState(db: DatabaseSync, taskId: string, state: 'todo' | 'running' | 'done' | 'failed' | 'needs-human' | 'interrupted'): void {
+  db.prepare("update task set state=?, finished_at=case when ? in ('done','failed','needs-human','interrupted') then datetime('now') else finished_at end where id=?").run(state, state, taskId);
 }
 
 /** Intenção write-ahead: a linha existe ANTES da tool rodar (spec §4.3, recuperação de crash). */

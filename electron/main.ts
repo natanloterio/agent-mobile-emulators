@@ -1,9 +1,11 @@
 import { app, BrowserWindow, ipcMain, Menu, safeStorage } from 'electron';
+import { access, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectSnapshots, ensureDaemon, post, request, waitForInfo, type DaemonInfo } from './daemon-bridge.js';
 import { createDaemonGate } from './daemon-gate.js';
-import { createCredentialVault } from './credentials.js';
+import { assertId, createCredentialVault } from './credentials.js';
+import { migrateLegacyCredentials, parseCredentialsResponse } from './credentials-migrate.js';
 import { createGopBuffer } from './gop-buffer.js';
 import { loginViaDaemon } from './login.js';
 import { apiRoute } from './api-route.js';
@@ -74,20 +76,29 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('enxame:setProvider', (_e, role: string, patch: unknown) => gate.use((info) => request(info, 'PUT', providerRoute(role, 'put'), patch)));
   ipcMain.handle('enxame:testProvider', (_e, role: string) => gate.use((info) => request(info, 'POST', providerRoute(role, 'test'))));
-  // Credenciais (spec login determinístico): a senha só entra pelo `set` e só sai decifrada para o daemon.
-  const vault = createCredentialVault({ safeStorage, file: path.join(app.getPath('userData'), 'credentials.json') });
-  ipcMain.handle('enxame:credentials:available', () => vault.available());
-  ipcMain.handle('enxame:credentials:status', () => vault.status());
-  ipcMain.handle('enxame:credentials:set', (_e, id: string, username: string, password: string) => vault.set(id, username, password));
-  ipcMain.handle('enxame:credentials:clear', (_e, id: string) => vault.clear(id));
-  ipcMain.handle('enxame:login', (_e, id: string) =>
-    loginViaDaemon(id, { get: vault.get, post: (p, body) => gate.use((info) => request(info, 'POST', p, body)) }));
+  // Credenciais no cofre do daemon (spec missões §Cofre): o main só repassa; nenhuma resposta traz senha.
+  const legacyFile = path.join(app.getPath('userData'), 'credentials.json');
+  const legacy = createCredentialVault({ safeStorage, file: legacyFile });
+  const daemon = (method: 'GET' | 'PUT' | 'POST' | 'DELETE', p: string, body?: unknown) => gate.use((info) => request(info, method, p, body));
+  // Roda só depois do gate.set (abaixo): antes disso o daemon ainda não respondeu e a migração falharia sem nova tentativa.
+  const migrateCredentials = () => migrateLegacyCredentials({
+    legacy, post: (p, body) => daemon('POST', p, body),
+    exists: () => access(legacyFile).then(() => true, () => false), remove: () => unlink(legacyFile),
+  }).then((r) => { if (r.migrated) console.log(`[enxame] ${r.migrated} credencial(is) migrada(s) para o cofre do daemon`); })
+    .catch((e: unknown) => console.error('[enxame] migração de credenciais falhou; o arquivo antigo foi mantido:', (e as Error).message));
+  const credentials = async () => parseCredentialsResponse(await daemon('GET', '/credentials'));
+  ipcMain.handle('enxame:credentials:available', async () => (await credentials()).available);
+  ipcMain.handle('enxame:credentials:status', async () => (await credentials()).entries);
+  ipcMain.handle('enxame:credentials:set', (_e, id: string, username: string, password: string) => { assertId(id); return daemon('PUT', `/identities/${id}/credentials`, { username, password }); });
+  ipcMain.handle('enxame:credentials:clear', (_e, id: string) => { assertId(id); return daemon('DELETE', `/identities/${id}/credentials`); });
+  ipcMain.handle('enxame:login', (_e, id: string) => loginViaDaemon(id, { post: (p, body) => daemon('POST', p, body) }));
   ipcMain.handle('enxame:getProviderModels', (_e, role: string) => gate.use((info) => request(info, 'GET', providerRoute(role, 'models'))));
 
   const projectRoot = path.join(here, '..');
   ensureDaemon(projectRoot);
   waitForInfo().then((info) => {
     gate.set(info);
+    void migrateCredentials();
     const broadcast = (ch: string, d: unknown) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send(ch, d); };
     connectSnapshots(info, {
       onSnapshot: (data) => { lastSnapshot = data; broadcast('enxame:snapshot', data); },

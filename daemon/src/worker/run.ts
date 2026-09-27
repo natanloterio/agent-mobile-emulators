@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { CONFIG } from '../config.js';
 import { setIdentityState, type IdentityRow } from '../db/identities.js';
+import { setSubtaskReport, type SubtaskReport } from '../db/missions.js';
 import { createGoalAndTask, createTask, finishGoal, ledgerHas, ledgerPut, markDegraded, setEarlyStop, setTaskState, startTask, writeIntent } from '../db/tasks.js';
 import { providerLabel, readProviderConfig, type ProviderConfig, type ProviderRow } from '../provider/config.js';
 import { isLocalInfraError, ProviderError } from '../provider/errors.js';
@@ -11,13 +12,17 @@ import { createOllamaSupervisor, type OllamaSupervisor } from '../provider/ollam
 import { createQualityFloor } from '../provider/quality.js';
 import { connectMcp } from '../device/mcp.js';
 import { detectLoggedOut, detectPlatformBlock } from '../screen/checks.js';
+import { detectHumanCheck } from '../screen/human-check.js';
 import { parseScreen, type ScreenState, type ScreenWindow } from '../screen/parse.js';
 import { createPacer, type Pacer, type PacingConfig } from '../swarm/pacing.js';
 import { buildToolApproval } from './gate.js';
+import { MISSION_ESCALATION_NOTE, MISSION_SYSTEM_PROMPT, pickMissionTools } from './mission-prompt.js';
+import { missionOutcome } from './mission-outcome.js';
+import { maskOut, missionTools, type MissionRunCtx } from './mission-tools.js';
 import { ESCALATION_NOTE, SYSTEM_PROMPT, taskInstruction } from './prompt.js';
 import { isScreenTool, pruneScreens } from './prune.js';
 import { readUsage, recordStep, textOf, type StepLike } from './record.js';
-import { ACTION_TOOL, pickWorkerTools } from './tools.js';
+import { ACTION_TOOL, pickWorkerTools, toolPrefix } from './tools.js';
 import { humanStopped, settleIdentity } from './stop.js';
 
 export interface RunTaskOpts {
@@ -31,6 +36,8 @@ export interface RunTaskOpts {
   readonly goalId?: string; readonly taskId?: string; readonly instruction?: string;
   /** Pacing entre passos e teto de ações/hora (spec §4.3). Ausente = sem pacing (CLI/bench medem o worker cru). */
   readonly pacing?: PacingConfig;
+  /** Modo missão (spec missões): sem gate, prompt e tools próprios, detecção de humano em qualquer app. A identidade fica com o loop. */
+  readonly mission?: MissionRunCtx;
 }
 export interface RunTaskResult {
   /** `interrupted` = pausa ou controle humano no meio (spec inc. 5 §3.2): tarefa volta a todo. */
@@ -39,6 +46,8 @@ export interface RunTaskResult {
   readonly platformBlock: string | null; readonly summary: string;
   readonly degraded: boolean; readonly escalatedAtStep: number | null; readonly provider: string; readonly genMs: number; readonly invalidCalls: number;
   readonly earlyStopRemaining: number;
+  /** Modo missão: relatório gravado na subtarefa e motivo quando precisa de humano. Fora de missão, sempre null. */
+  readonly report: SubtaskReport | null; readonly humanReason: string | null;
 }
 /** Dependências injetáveis para teste: conexão MCP, geração, modelos (worker/esc), supervisor do Ollama e fábrica. */
 export interface RunTaskDeps {
@@ -68,6 +77,7 @@ export function classifyMcpError(e: unknown): Halt {
 interface WrapCtx {
   readonly db: DatabaseSync; readonly taskId: string; readonly pending: Map<string, number>;
   readonly onScreen: (s: ScreenState | null) => void; readonly onHalt: (h: Halt) => void;
+  readonly mask?: (s: string) => string;
 }
 
 /** Linhas de controle de paginação que não devem chegar ao modelo (ele não pagina; o wrapper pagina). */
@@ -123,15 +133,16 @@ function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
         // Screenshot não é lido pelo parser e custa tokens; neste incremento a leitura é só de árvore.
         const effectiveInput = isScreenTool(name) ? { ...(input as object), include_screenshot: false } : input;
         const out = await base.execute!(effectiveInput, opts);
-        if (isErrorResult(out)) throw new Error(textOf(out) || `${name}: isError`);
+        if (isErrorResult(out)) { const msg = textOf(out) || `${name}: isError`; throw new Error(ctx.mask ? ctx.mask(msg) : msg); }
         if (isScreenTool(name)) {
           const all = await readAllPages(out, (i) => base.execute!(i, opts), effectiveInput);
           ctx.onScreen(all.screen);
+          const text = ctx.mask ? ctx.mask(all.text) : all.text;
           // Preserva o shape MCP: o toModelOutput do @ai-sdk/mcp exige `content: [...]` (string lança TypeError).
-          return typeof out === 'object' && out !== null ? { ...(out as object), content: [{ type: 'text', text: all.text }] } : all.text;
+          return typeof out === 'object' && out !== null ? { ...(out as object), content: [{ type: 'text', text }] } : text;
         }
         if (ACTION_TOOL.test(name)) ctx.onScreen(null); // a tela mudou; o gate nega até nova leitura
-        return out;
+        return ctx.mask ? maskOut(out, ctx.mask) : out;
       } catch (e) {
         // Texto de item raramente é o nó clicável (o contêiner é): o mesmo nó, já aprovado pelo gate, recebe um toque por coordenada.
         const tap = CLICK_NODE.test(name) ? tools[name.replace(CLICK_NODE, 'tap_node')] as (Tool & { execute?: (i: unknown, o: unknown) => Promise<unknown> }) | undefined : undefined;
@@ -139,9 +150,13 @@ function wrapTools(tools: ToolSet, ctx: WrapCtx): ToolSet {
           const out = await tap.execute({ node_id: (input as { node_id?: unknown })?.node_id }, opts);
           if (isErrorResult(out)) throw new Error(textOf(out) || `${name}: tap_node de reserva falhou`);
           ctx.onScreen(null);
-          return withNote(out, NOT_CLICKABLE_NOTE);
+          const noted = withNote(out, NOT_CLICKABLE_NOTE);
+          return ctx.mask ? maskOut(noted, ctx.mask) : noted;
         }
-        const h = classifyMcpError(e); if (h) ctx.onHalt(h); throw e;
+        // A mensagem crua pode ecoar o input da tool (ex.: um segredo digitado); mascarada antes do halt (achado
+        // residual: só o erro que sobe ao modelo era mascarado, não o halt que vira resumo/motivo de pausa da missão).
+        const h = classifyMcpError(e); if (h) ctx.onHalt(ctx.mask ? { ...h, text: ctx.mask(h.text) } : h);
+        throw ctx.mask ? new Error(ctx.mask(String((e as Error)?.message ?? e))) : e;
       }
     };
     return [name, { ...base, execute } as Tool];
@@ -162,7 +177,12 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
   const budget = o.stepBudget ?? Number(process.env.ENXAME_STEP_BUDGET ?? CONFIG.worker.stepBudget);
   const cfg = o.providers ?? readProviderConfig(db);
   const { taskId, ownGoalId } = openTask(db, identity.id, o);
-  setIdentityState(db, identity.id, 'running', { lastError: null });
+  const mission = o.mission ?? null;
+  // Em missão, todo halt/summary vindo de erro cru passa por aqui antes de virar pausa/relatório; fora, é identidade.
+  const maskHalt = (text: string): string => (mission ? mission.mask.mask(text) : text);
+  // Em missão o loop é dono do estado da identidade (spec missões §Loop).
+  if (!mission) setIdentityState(db, identity.id, 'running', { lastError: null });
+  let report: SubtaskReport | null = null;
   // Parada por kill switch OU por pausa/controle humano desta identidade (lido do banco a cada passo).
   const stopped = () => o.isKilled() || humanStopped(db, identity.id);
   const pacer = depsIn.pacer ?? (o.pacing ? createPacer(db, identity.id, o.pacing, { shouldStop: stopped }) : null);
@@ -175,6 +195,14 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
   const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
   const finish = (outcome: RunTaskResult['outcome'], summary: string): RunTaskResult => {
     const h = halt as Halt;
+    const base = { taskId, outcome, costUsd, usage, platformBlock: h?.kind === 'platform-block' ? h.text : null, summary,
+      degraded, escalatedAtStep, provider: providerLabel(cfg.worker), genMs: genMsTotal, invalidCalls: floor.count() };
+    if (mission) {
+      const m = missionOutcome({ outcome, report, halt: h, summary, budgetHit: stepsUsed >= budget });
+      if (m.report) setSubtaskReport(db, taskId, m.report);
+      setTaskState(db, taskId, m.state);
+      return { ...base, earlyStopRemaining: 0, report: m.report, humanReason: m.humanReason };
+    }
     if (outcome === 'interrupted') settleIdentity(db, identity.id); // o humano manda: flags e estado dele ficam
     else {
       // infra-local (Ollama) não é problema do device: identidade volta a idle e a tarefa fica para repetir (spec §7).
@@ -188,8 +216,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     if (ownGoalId) finishGoal(db, ownGoalId);
     const earlyStopRemaining = outcome === 'done' ? Math.max(0, budget - stepsUsed) : 0;
     setEarlyStop(db, taskId, earlyStopRemaining);
-    return { taskId, outcome, costUsd, usage, platformBlock: h?.kind === 'platform-block' ? h.text : null, summary,
-      degraded, escalatedAtStep, provider: providerLabel(cfg.worker), genMs: genMsTotal, invalidCalls: floor.count(), earlyStopRemaining };
+    return { ...base, earlyStopRemaining, report: null, humanReason: null };
   };
 
   /** Um segmento = um generateText sobre `messages` com um papel do registro (spec §5). */
@@ -198,11 +225,12 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     return deps.generate({
       model, tools, messages,
       // ai@7 rejeita role:'system' em messages; o system vai em instructions.
-      instructions: SYSTEM_PROMPT,
+      instructions: mission ? MISSION_SYSTEM_PROMPT : SYSTEM_PROMPT,
       // Anthropic: uma tool por passo + cache 1h no nível da chamada; local: nada (o openai-compatible ignoraria).
       providerOptions: providerOptionsFor(row) as never,
-      toolApproval: buildToolApproval(slug, () => lastScreen, 'read-only') as never,
-      stopWhen: [stepCountIs(steps), stopIfHalted, () => floor.tripped() && row.role === 'worker'],
+      // Missão roda sem gate (decisão do spec missões); objetivos comuns continuam somente-leitura.
+      ...(mission ? {} : { toolApproval: buildToolApproval(slug, () => lastScreen, 'read-only') as never }),
+      stopWhen: [stepCountIs(steps), stopIfHalted, () => report !== null, () => floor.tripped() && row.role === 'worker'],
       // Pacing antes de cada passo (spec §4.3). Parada durante a espera: o passo roda sem tools (não age) e o stopWhen encerra.
       prepareStep: async ({ messages: m }) => {
         const go = pacer ? await pacer.beforeStep() : 'go';
@@ -228,9 +256,15 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
 
     client = await deps.connect(`http://127.0.0.1:${identity.mcpHostPort}/mcp`, identity.mcpToken);
     const slug = identity.deviceSlug || null;
-    const mcpTools = wrapTools(pickWorkerTools(await client.tools(), slug), {
-      db, taskId, pending,
-      onScreen: (s) => { lastScreen = s; const b = s ? detectPlatformBlock(s) ?? detectLoggedOut(s) : null; if (b) halt = { kind: 'platform-block', text: b }; },
+    const raw = await client.tools();
+    const mcpTools = wrapTools(mission ? pickMissionTools(raw, slug) : pickWorkerTools(raw, slug), {
+      db, taskId, pending, mask: mission?.mask.mask,
+      onScreen: (s) => {
+        lastScreen = s;
+        // detectHumanCheck já mascara o rótulo antes do corte de 200; o pós-mask antigo virou redundante e saiu.
+        const b = s ? (mission ? detectHumanCheck(s, mission.mask.mask) : detectPlatformBlock(s) ?? detectLoggedOut(s)) : null;
+        if (b) halt = { kind: 'platform-block', text: b };
+      },
       onHalt: (h) => { halt = h; },
     });
     const ledgerTool = tool({
@@ -238,42 +272,72 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       inputSchema: z.object({ item_key: z.string().min(3), author: z.string(), excerpt: z.string().max(300), draft_reply: z.string().max(500) }),
       execute: async (i) => { const already = ledgerHas(db, identity.id, i.item_key); if (!already) ledgerPut(db, identity.id, i.item_key, i.item_key.split(':')[0] || 'item', `@${i.author}: ${i.excerpt} → rascunho: ${i.draft_reply}`, taskId); return { already }; },
     });
-    const tools: ToolSet = { ...mcpTools, ledger_record: ledgerTool };
+    // type_secret digita pela tool crua do MCP: o texto não passa pelo wrapper, então não vira step.
+    const typeRaw = raw[`${toolPrefix(slug)}type_append_text`] as (Tool & { execute?: (i: unknown, o: unknown) => Promise<unknown> }) | undefined;
+    const extra: ToolSet = mission ? missionTools({
+      ...mission, db,
+      typeText: async (nodeId, text) => {
+        if (!typeRaw?.execute) throw new Error('type_append_text ausente no MCP');
+        let out: unknown;
+        try {
+          out = await typeRaw.execute({ node_id: nodeId, text }, { toolCallId: `secret-${nodeId}`, messages: [] });
+        } catch (e) {
+          // O erro cru do MCP pode ecoar os parâmetros (a senha); nunca sobe como veio, nem vira halt cru (achado
+          // residual: o halt ia sem máscara até o resumo/motivo de pausa). Infra ainda pausa a missão.
+          const h = classifyMcpError(e); if (h) halt = { ...h, text: maskHalt(h.text) };
+          throw new Error('type_append_text falhou no device');
+        }
+        if (isErrorResult(out)) throw new Error('type_append_text falhou no device');
+      },
+      onFinish: (r) => { report = r; },
+      onHuman: (reason) => { halt = { kind: 'platform-block', text: reason }; },
+      onVaultError: (text) => { halt = { kind: 'infra', text }; },
+    }) : { ledger_record: ledgerTool };
+    const tools: ToolSet = { ...mcpTools, ...extra };
     const stopIfHalted: StopCondition<ToolSet> = () => halt !== null || stopped();
-    const messages: ModelMessage[] = [{ role: 'user', content: taskInstruction(o.instruction ?? o.goalText) }];
+    const messages: ModelMessage[] = [{ role: 'user', content: mission ? (o.instruction ?? o.goalText) : taskInstruction(o.instruction ?? o.goalText) }];
 
     let result = await segment(cfg.worker, model, tools, messages, stopIfHalted, slug, budget);
 
     const remaining = budget - stepsUsed;
-    if (floor.tripped() && !halt && !stopped() && remaining > 0) {
+    if (floor.tripped() && !halt && !stopped() && remaining > 0 && report === null) {
       const canEscalate = cfg.esc.mode === 'nuvem' && !!o.apiKey;
       if (!canEscalate) return finish('quality-floor', `piso de qualidade: ${floor.count()} tool calls inválidas com ${providerLabel(cfg.worker)}; sem escalonamento na nuvem`);
       degraded = true; escalatedAtStep = stepsUsed; markDegraded(db, taskId, stepsUsed);
       const escModel = depsIn.escModel ?? deps.buildModel(cfg.esc, { anthropicApiKey: o.apiKey });
       // O SDK descarta dos response.messages os passos com tool call inválida; a nota conta ao esc o que aconteceu.
-      const continued: ModelMessage[] = [...messages, ...result.response.messages, { role: 'user', content: ESCALATION_NOTE(floor.count(), cfg.worker.model) }];
+      const note = mission ? MISSION_ESCALATION_NOTE(floor.count(), cfg.worker.model) : ESCALATION_NOTE(floor.count(), cfg.worker.model);
+      const continued: ModelMessage[] = [...messages, ...result.response.messages, { role: 'user', content: note }];
       result = await segment(cfg.esc, escModel, tools, continued, stopIfHalted, slug, remaining);
     }
 
     const h = halt as Halt;
     if (h?.kind === 'platform-block') return finish('platform-block', result.text);
-    if (h) return finish('infra', result.text);
+    // Em missão o motivo da parada (device, cofre) vira o resumo mostrado ao pausar; maskHalt é reforço (h.text já
+    // vem mascarado da origem: onHalt/typeText/onScreen).
+    if (h) return finish('infra', mission ? maskHalt(h.text) : result.text);
     if (o.isKilled()) return finish('killed', result.text);
     if (humanStopped(db, identity.id)) return finish('interrupted', result.text);
     return finish(stepsUsed >= budget ? 'budget' : 'done', result.text);
   } catch (e) {
     // Erro fora das tools (ex.: chave da Anthropic inválida) é falha da tarefa, não do device.
     const h = halt as Halt;
-    if (h?.kind === 'platform-block') return finish('platform-block', String((e as Error).message ?? e));
-    if (h) return finish('infra', String((e as Error).message ?? e));
+    if (h?.kind === 'platform-block') return finish('platform-block', maskHalt(String((e as Error).message ?? e)));
+    if (h) return finish('infra', maskHalt(String((e as Error).message ?? e)));
     if (ProviderError.isInstance(e)) {
-      // Chave ausente é falha da tarefa, não do device: identidade volta a idle (spec inc. 3 §4.4).
-      if (e.kind === 'auth') return finish('failed', e.message);
-      halt = { kind: e.kind, text: e.message }; return finish('infra', e.message);
+      // Chave ausente é falha da tarefa, não do device: identidade volta a idle (spec inc. 3 §4.4). Em missão, pausa a missão.
+      if (e.kind === 'auth') { if (mission) { const text = maskHalt(e.message); halt = { kind: 'auth', text }; return finish('infra', text); } return finish('failed', e.message); }
+      const text = maskHalt(e.message); halt = { kind: e.kind, text }; return finish('infra', text);
     }
     // Ollama caiu/recusou/OOM no meio da tarefa: infra-local → tarefa volta a todo, identidade idle (spec §7).
-    if (activeMode === 'local' && isLocalInfraError(e)) { const text = String((e as Error).message ?? e).slice(0, 200); halt = { kind: 'infra-local', text }; return finish('infra', text); }
-    return finish('failed', String((e as Error).message ?? e));
+    if (activeMode === 'local' && isLocalInfraError(e)) { const text = maskHalt(String((e as Error).message ?? e).slice(0, 200)); halt = { kind: 'infra-local', text }; return finish('infra', text); }
+    // Missão: infra ANTES do loop (connect, client.tools(), ollama.ensure) também interrompe a subtarefa, nunca falha (spec missões §Erros).
+    if (mission) {
+      const mc = classifyMcpError(e);
+      if (mc) { const text = maskHalt(mc.text); halt = { ...mc, text }; return finish('infra', text); }
+      if (isLocalInfraError(e)) { const text = maskHalt(String((e as Error).message ?? e).slice(0, 200)); halt = { kind: 'infra-local', text }; return finish('infra', text); }
+    }
+    return finish('failed', maskHalt(String((e as Error).message ?? e)));
   } finally {
     await client?.close().catch(() => undefined);
   }
