@@ -14,6 +14,7 @@
 .mission__id { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
 .mission__id[aria-disabled='true'] { opacity: .45; cursor: not-allowed; }
 .mission__id input { accent-color: currentColor; }
+.mission__id--all { border-bottom: 1px solid var(--color-grey-2); border-radius: 10px 10px 0 0; font-weight: 600; }
 .newgoal__modes { display: inline-flex; gap: 6px; }
 @media (max-width: 480px) { .mission__mem { grid-template-columns: 1fr; } }
 

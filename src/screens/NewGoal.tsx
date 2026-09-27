@@ -23,8 +23,11 @@ interface NewGoalProps {
   readonly onReset: () => void;
   readonly onLaunch: () => void;
   /** Só no vivo: alterna Objetivo | Missão (spec missões §Interface). */
-  readonly mission?: { readonly options: readonly MissionIdentityOption[]; readonly req: RequestStatus; readonly onStart: (identityId: string, text: string) => void };
+  readonly mission?: { readonly options: readonly MissionIdentityOption[]; readonly req: RequestStatus; readonly onStart: (identityIds: readonly string[], text: string) => void };
 }
+
+/** Objetivo (líder + fan-out) oculto por enquanto: no vivo a tela só oferece Missão. O código do Objetivo fica para voltar. */
+const GOAL_MODE_VISIBLE = false;
 
 function TaskRow({ t }: { readonly t: PlanTaskVM }) {
   return (
@@ -81,7 +84,8 @@ function PlanView({ plan, launchReq, onReset, onLaunch }: { readonly plan: PlanV
 export function NewGoal({ goalText, planStage, plan, planReq, launchReq, isMobile, onSetGoal, onDecompose, onReset, onLaunch, mission }: NewGoalProps) {
   const i18n = useI18n();
   const { t } = i18n;
-  const [mode, setMode] = useState<'goal' | 'mission'>('goal');
+  const [mode, setMode] = useState<'goal' | 'mission'>(GOAL_MODE_VISIBLE ? 'goal' : 'mission');
+  const missionOnly = !!mission && !GOAL_MODE_VISIBLE;
   const decomposing = planStage === 1 || planReq.busy;
   const shownPlan = useMemo(() => (plan ? localizePlanVM(plan, i18n) : null), [plan, i18n]);
   // O objetivo padrão chega em português quando o composer estava vazio: mostra no idioma da tela.
@@ -89,11 +93,11 @@ export function NewGoal({ goalText, planStage, plan, planReq, launchReq, isMobil
   return (
     <div className="screen newgoal">
       <header className="screen__title">
-        <Heading size={isMobile ? 'h3' : 'h2'}>{t('goal.title')}</Heading>
-        <p className="screen__lede">{t('goal.lede')}</p>
+        <Heading size={isMobile ? 'h3' : 'h2'}>{missionOnly ? t('mission.title') : t('goal.title')}</Heading>
+        {!missionOnly && <p className="screen__lede">{t('goal.lede')}</p>}
       </header>
 
-      {mission && (
+      {mission && !missionOnly && (
         <div className="newgoal__modes" role="tablist">
           <Button variant={mode === 'goal' ? 'primary' : 'ghost'} size="sm" onClick={() => setMode('goal')}>{t('mission.mode.goal')}</Button>
           <Button variant={mode === 'mission' ? 'primary' : 'ghost'} size="sm" onClick={() => setMode('mission')}>{t('mission.mode.mission')}</Button>

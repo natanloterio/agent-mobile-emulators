@@ -150,7 +150,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
             onDecompose={() => (isLive ? void goal.decompose(state.goalText || DEFAULT_GOAL_TEXT) : actions.decompose())}
             onReset={actions.resetPlan}
             onLaunch={() => (isLive ? state.plan && void goal.launch(state.plan) : actions.launch(fleetSize))}
-            mission={isLive ? { options, req: requestOf(state, MISSION_START_KEY), onStart: (id, text) => void mission.start(id, text).then((ok) => { if (ok) actions.go('cockpit'); }) } : undefined}
+            mission={isLive ? { options, req: requestOf(state, MISSION_START_KEY), onStart: (ids, text) => void mission.start(ids, text).then((ok) => { if (ok) actions.go('cockpit'); }) } : undefined}
           />
         );
       }
