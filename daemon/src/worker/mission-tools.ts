@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 import { listMemory, memoryGet, memoryPut, type SubtaskReport } from '../db/missions.js';
-import type { Vault } from '../vault/vault.js';
+import { VaultError, type Vault } from '../vault/vault.js';
 
 /** Troca valores de segredo por `•••` em qualquer texto que volte ao modelo ou vá para o banco. */
 export interface SecretMask {
@@ -88,6 +88,17 @@ export interface MissionToolCtx extends MissionRunCtx {
   readonly typeText: (nodeId: string, text: string) => Promise<void>;
   readonly onFinish: (r: SubtaskReport) => void;
   readonly onHuman: (reason: string) => void;
+  /** Cofre indisponível (chaveiro travado/chave perdida): não é erro da tool, a subtarefa para e a missão pausa. */
+  readonly onVaultError: (msg: string) => void;
+}
+
+/** Repassa o VaultError ao run (que interrompe a subtarefa) e relança; outros erros seguem como erro de tool. */
+async function vaultCall<T>(ctx: MissionToolCtx, f: () => Promise<T>): Promise<T> {
+  try { return await f(); }
+  catch (e) {
+    if (e instanceof VaultError) ctx.onVaultError(`cofre: ${e.message}`);
+    throw e;
+  }
 }
 
 const KEY = z.string().regex(/^[A-Za-z0-9_.-]{1,80}$/, 'chave: letras, dígitos, ponto, _ e -, até 80');
@@ -114,7 +125,7 @@ export function missionTools(ctx: MissionToolCtx): ToolSet {
         if (memoryGet(ctx.db, ctx.missionId, key)?.secret) return { key, created: false };
         const value = generatePassword();
         const id = secretEntryId(ctx.missionId, key);
-        await ctx.vault.put(id, value);
+        await vaultCall(ctx, () => ctx.vault.put(id, value));
         memoryPut(ctx.db, ctx.missionId, key, id, true);
         ctx.mask.add(value);
         return { key, created: true };
@@ -126,7 +137,7 @@ export function missionTools(ctx: MissionToolCtx): ToolSet {
       inputSchema: z.object({ node_id: z.string().min(1).max(40), key: KEY }),
       execute: async ({ node_id, key }) => {
         const ref = memoryGet(ctx.db, ctx.missionId, key);
-        const value = ref?.secret ? await ctx.vault.get(ref.value) : null;
+        const value = ref?.secret ? await vaultCall(ctx, () => ctx.vault.get(ref.value)) : null;
         if (!value) throw new Error(`segredo desconhecido: ${key} (crie com secret_new)`);
         ctx.mask.add(value);
         await ctx.typeText(node_id, value);

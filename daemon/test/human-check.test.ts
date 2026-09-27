@@ -9,7 +9,11 @@ const screen = (pkg: string, labels: readonly string[]) => parseScreen(
 describe('detectHumanCheck (modo missão)', () => {
   it('captcha em qualquer app (navegador) → motivo', () => {
     expect(detectHumanCheck(screen('com.android.chrome', ['Criar conta', "I'm not a robot"]))).toMatch(/not a robot/);
-    expect(detectHumanCheck(screen('com.android.chrome', ['reCAPTCHA']))).toMatch(/reCAPTCHA/);
+    expect(detectHumanCheck(screen('com.android.chrome', ['Select all images with traffic lights']))).toMatch(/traffic lights/);
+  });
+  it('selo invisível do reCAPTCHA v3 (sem desafio) NÃO para', () => {
+    expect(detectHumanCheck(screen('com.android.chrome', ['Criar conta', 'protected by reCAPTCHA']))).toBeNull();
+    expect(detectHumanCheck(screen('com.android.chrome', ['reCAPTCHA · Privacy - Terms']))).toBeNull();
   });
   it('desafios do Instagram continuam parando', () => {
     expect(detectHumanCheck(screen('com.instagram.android', ['Choose a way to confirm your account']))).toBeTruthy();

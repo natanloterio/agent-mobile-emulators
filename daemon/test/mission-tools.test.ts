@@ -45,6 +45,7 @@ function setup() {
     },
     onFinish: (r) => finished.push(r),
     onHuman: (r) => human.push(r),
+    onVaultError: () => {},
   });
   return { db, missionId, vault, mask, typed, finished, human, tools };
 }
