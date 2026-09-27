@@ -98,11 +98,18 @@ export interface MissionView {
 }
 /** Limites de passos configuráveis na tela (spec limites §UI); ausente em daemon antigo. */
 export interface StepBudgets { readonly goal: number | null; readonly mission: number | null }
+/** Paralelismo local configurável na tela (spec paralelismo §UI); ausente em daemon antigo. */
+export interface LocalParallelStatus {
+  readonly wanted: number;
+  readonly applied: { readonly ollama: number | null; readonly lmstudio: number | null };
+  readonly pending: boolean;
+}
 export interface FleetSnapshot {
   readonly identities: readonly LiveIdentity[]; readonly providers?: Readonly<Record<LiveRoleKey, LiveProvider>>; readonly killed: boolean; readonly updatedAt: string;
   readonly goal?: GoalSummary | null; readonly host?: HostMetrics | null;
   readonly missions?: readonly MissionView[];
   readonly stepBudgets?: StepBudgets;
+  readonly localParallel?: LocalParallelStatus;
 }
 /** Poster (último screencap PNG, base64) de uma identidade; casado por id (spec inc. 4 §4.3). */
 export interface LiveFrame { readonly id: string; readonly at: string; readonly png: string }

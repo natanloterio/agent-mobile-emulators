@@ -74,6 +74,21 @@ export function addTaskCost(db: DatabaseSync, taskId: string, usd: number): void
   db.prepare('update goal set cost_usd = cost_usd + ? where id = (select goal_id from task where id=?)').run(usd, taskId);
 }
 
+/**
+ * Frota ociosa (spec paralelismo §Ocioso): nenhuma tarefa de objetivo 'todo'/'running' de um goal ainda 'running',
+ * e nenhuma subtarefa de missão 'running' — as duas moram na mesma tabela `task`. `startGoal` cria as tarefas do
+ * fan-out/sharding em 'todo' e só vira 'running' depois do stagger de cada identidade: uma tarefa 'todo' de um
+ * goal 'running' está prestes a rodar a qualquer momento, então também conta como ocupada (senão o apply troca o
+ * Ollama/LM Studio bem no meio do início do objetivo). Só com isto tudo vazio a troca de paralelismo mexe de verdade.
+ */
+export function isFleetIdle(db: DatabaseSync): boolean {
+  const row = db.prepare(`
+    select count(*) as n from task t join goal g on g.id = t.goal_id
+    where g.state = 'running' and t.state in ('running', 'todo')
+  `).get() as { n: number };
+  return row.n === 0;
+}
+
 export function ledgerHas(db: DatabaseSync, identityId: string, key: string): boolean {
   return !!db.prepare('select 1 from ledger where identity_id=? and item_key=?').get(identityId, key);
 }

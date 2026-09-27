@@ -4,6 +4,7 @@ import { listIdentities, type IdentityRow, type ProbeSignalsRow } from '../db/id
 import { openMissionFor } from '../db/missions.js';
 import { readStepBudgets, type StepBudgets } from '../db/settings.js';
 import { readProviderConfig, type ProviderRow, type RoleKey } from '../provider/config.js';
+import type { LocalParallelStatus } from '../provider/local-parallel.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import type { VideoState } from '../device/video.js';
 import { missionViews, type MissionView } from './snapshot-missions.js';
@@ -55,11 +56,16 @@ export interface FleetSnapshot {
   readonly missions: readonly MissionView[];
   /** Limites de passos configuráveis (spec limites §UI): valor atual do banco, lido a cada snapshot. */
   readonly stepBudgets: StepBudgets;
+  /** Paralelismo local configurável (spec paralelismo §UI): pedido, o que cada runtime confirma e se falta aplicar. */
+  readonly localParallel: LocalParallelStatus;
 }
 export interface SnapshotSources {
   readonly videoState?: (id: string) => VideoState;
   readonly host?: () => HostMetrics | null;
+  readonly localParallel?: () => LocalParallelStatus;
 }
+
+const DEFAULT_LOCAL_PARALLEL: LocalParallelStatus = { wanted: 1, applied: { ollama: null, lmstudio: null }, pending: false };
 
 const DAY_MS = 86_400_000;
 
@@ -138,5 +144,7 @@ export function buildSnapshot(db: DatabaseSync, killed: boolean, sources?: Snaps
   const providers = Object.fromEntries((Object.keys(cfg) as RoleKey[]).map((k) => [k, { ...cfg[k], lastTest: tests[k] ?? null }])) as Record<RoleKey, ProviderSnapshot>;
   let host: HostMetrics | null = null;
   try { host = src.host?.() ?? null; } catch { host = null; }
-  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db), stepBudgets };
+  let localParallel = DEFAULT_LOCAL_PARALLEL;
+  try { localParallel = src.localParallel?.() ?? DEFAULT_LOCAL_PARALLEL; } catch { localParallel = DEFAULT_LOCAL_PARALLEL; }
+  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db), stepBudgets, localParallel };
 }

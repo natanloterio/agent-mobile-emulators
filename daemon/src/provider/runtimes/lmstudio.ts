@@ -18,6 +18,8 @@ export interface LmStudioDeps {
   readonly exec?: Exec; readonly fetch?: typeof fetch; readonly sleep?: (ms: number) => Promise<void>;
   /** Caminho do `lms`; null = não instalado. Default: `~/.lmstudio/bin/lms` ou `lms` no PATH. */
   readonly lmsPath?: string | null;
+  /** Paralelismo pedido na tela (spec paralelismo §UI): `ensure()` carrega um modelo novo já com `--parallel`. */
+  readonly parallel?: () => number;
 }
 
 const defaultExec: Exec = (file, args, { timeoutMs }) => new Promise((resolve) => {
@@ -63,6 +65,12 @@ export interface LmStudio {
   ensure(endpoint: string, model: string): Promise<RuntimeStatus>;
   /** Tira o modelo da memória (`lms unload`); não carregado ou sem CLI: nada a fazer. */
   unload(endpoint: string, model: string): Promise<void>;
+  /**
+   * Paralelismo (spec paralelismo §Ocioso): recarrega (unload + load --parallel) o modelo carregado só se o
+   * `parallel` real relatado por `lms ps --json` for um número e diferir do pedido; desconhecido (sem CLI, campo
+   * ausente/null ou nada carregado) não mexe, devolve `null`. Chamado pelo `applyLocalParallel`, nunca pelo `ensure()`.
+   */
+  reloadIfParallelDiffers(endpoint: string, wanted: number): Promise<number | null>;
   stop(): void;
 }
 
@@ -70,6 +78,7 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
   const exec = deps.exec ?? defaultExec; const f = deps.fetch ?? fetch;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const lms = deps.lmsPath === undefined ? findLms() : deps.lmsPath;
+  const getParallel = deps.parallel ?? (() => 1);
   let startedByUs = false;
 
   const v0 = async (endpoint: string): Promise<V0 | null> => {
@@ -89,6 +98,16 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
     try { loaded = JSON.parse(r.stdout.slice(Math.max(0, r.stdout.indexOf('[')))) as typeof loaded; } catch { /* saída ilegível */ }
     const ctx = loaded.find((m) => m.identifier === model || m.modelKey === model)?.contextLength;
     return typeof ctx === 'number' ? ctx : null;
+  };
+
+  /** Paralelismo real do modelo carregado (`lms ps --json`, campo `parallel`); null = desconhecido (sem CLI, saída ilegível ou campo ausente/null). */
+  const loadedParallel = async (model: string): Promise<number | null> => {
+    if (!lms) return null;
+    const r = await exec(lms, ['ps', '--json'], { timeoutMs: LIST_TIMEOUT_MS });
+    let loaded: { modelKey?: string; identifier?: string; parallel?: number | null }[] = [];
+    try { loaded = JSON.parse(r.stdout.slice(Math.max(0, r.stdout.indexOf('[')))) as typeof loaded; } catch { /* saída ilegível */ }
+    const p = loaded.find((m) => m.identifier === model || m.modelKey === model)?.parallel;
+    return typeof p === 'number' ? p : null;
   };
 
   /** Abaixo do contexto configurado os passos longos seriam truncados (spec local: contexto configurável). */
@@ -129,7 +148,7 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
     if (!found) throw new ProviderError('infra-local', `modelo ${model} não está baixado no LM Studio; baixe com: lms get ${model}`);
     if (found.state !== 'loaded') {
       if (!lms) throw new ProviderError('infra-local', `modelo ${model} não está carregado e o CLI \`lms\` não foi encontrado: carregue-o no LM Studio`);
-      const r = await exec(lms, ['load', model, '--context-length', CONTEXT_LENGTH, '-y'], { timeoutMs: LOAD_TIMEOUT_MS });
+      const r = await exec(lms, ['load', model, '--context-length', CONTEXT_LENGTH, '--parallel', String(getParallel()), '-y'], { timeoutMs: LOAD_TIMEOUT_MS });
       if (r.code !== 0) throw new ProviderError('infra-local', `lms load ${model} falhou: ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
     } else if (lms) {
       // Já carregado com contexto menor que o configurado: recarrega (spec local: contexto configurável).
@@ -150,8 +169,26 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
     if (r.code !== 0) throw new Error(`lms unload ${model}: ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
   };
 
+  const reloadIfParallelDiffers = async (endpoint: string, wanted: number): Promise<number | null> => {
+    if (!lms) return null;
+    const api = await v0(endpoint);
+    const found = (api?.data ?? []).find((m) => m.state === 'loaded');
+    if (!found) return null; // nada carregado: nada a fazer aqui
+    const current = await loadedParallel(found.id);
+    if (current === null) return null; // desconhecido: não mexe
+    if (current === wanted) return current;
+    await exec(lms, ['unload', found.id], { timeoutMs: LIST_TIMEOUT_MS });
+    const r = await exec(lms, ['load', found.id, '--context-length', CONTEXT_LENGTH, '--parallel', String(wanted), '-y'], { timeoutMs: LOAD_TIMEOUT_MS });
+    if (r.code !== 0) {
+      // Descarregou para trocar o paralelismo e o load de volta falhou: modelo fica descarregado — loga alto, não quebra o apply.
+      console.error(`[lmstudio] lms load ${found.id} --parallel ${wanted} falhou depois do unload (modelo fica descarregado): ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
+      return null;
+    }
+    return wanted;
+  };
+
   return {
-    list, ensure, unload,
+    list, ensure, unload, reloadIfParallelDiffers,
     // Kill switch / saída: só desliga o servidor se foi o daemon que o ligou (nunca o LM Studio aberto pelo usuário).
     stop: () => { if (startedByUs && lms) { startedByUs = false; void exec(lms, ['server', 'stop'], { timeoutMs: 10_000 }); } },
   };

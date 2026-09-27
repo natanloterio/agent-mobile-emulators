@@ -33,4 +33,10 @@ describe('apiRoute', () => {
     expect(() => apiRoute('POST', '/settings/budgets')).toThrow();
     expect(() => apiRoute('GET', '/settings/budgets/x')).toThrow();
   });
+  it('paralelismo local: GET e PUT em /settings/local entram no canal genérico', () => {
+    expect(apiRoute('GET', '/settings/local')).toEqual({ method: 'GET', path: '/settings/local' });
+    expect(apiRoute('put', '/settings/local').method).toBe('PUT');
+    expect(() => apiRoute('POST', '/settings/local')).toThrow();
+    expect(() => apiRoute('GET', '/settings/local/x')).toThrow();
+  });
 });

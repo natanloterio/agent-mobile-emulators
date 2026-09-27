@@ -28,4 +28,16 @@ describe('settingsActions', () => {
     expect(await a.saveBudgets({ goal: 0 })).toBe(false);
     expect(actions).toContainEqual({ type: 'requestError', key: 'budgets', message: expect.stringContaining('obrigatório') });
   });
+  it('saveLocalParallel manda PUT /settings/local com { parallel }; devolve true no sucesso', async () => {
+    const t = mk();
+    expect(await t.a.saveLocalParallel(4)).toBe(true);
+    expect(t.calls).toEqual([{ method: 'PUT', path: '/settings/local', body: { parallel: 4 } }]);
+    expect(t.actions).toContainEqual({ type: 'request', key: 'localParallel', phase: 'ok' });
+  });
+  it('saveLocalParallel sem bridge: erro "daemon não conectado" e devolve false', async () => {
+    const actions: unknown[] = [];
+    const a = createSettingsActions({ dispatch: (x) => actions.push(x), getBridge: () => undefined });
+    expect(await a.saveLocalParallel(4)).toBe(false);
+    expect(actions).toContainEqual({ type: 'requestError', key: 'localParallel', message: expect.stringMatching(/./) });
+  });
 });
