@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { parseEnv } from 'node:util';
 import WebSocket from 'ws';
 import { dispatchWsMessage, type WsHandlers } from './ws-dispatch.js';
 
@@ -15,15 +16,32 @@ function readInfo(): Info | null {
 }
 function alive(pid: number): boolean { try { process.kill(pid, 0); return true; } catch { return false; } }
 
+export interface DaemonSpawn { readonly cmd: string; readonly args: string[]; readonly cwd: string; readonly env: NodeJS.ProcessEnv }
+
 /**
- * Sobe o daemon com o Node do sistema (o do Electron é 20.x, sem node:sqlite) se não houver um vivo.
- * `windowsHide`: no Windows, sem ele o daemon abre uma janela de console, herdada por adb/nvidia-smi a cada amostra.
+ * O daemon roda no próprio binário do Electron (ELECTRON_RUN_AS_NODE; Electron 44 = Node 24, com node:sqlite).
+ * Empacotado, o código está em `<resources>/app.asar/dist-daemon`; em desenvolvimento, no projeto, com o `.env` do
+ * projeto somado ao ambiente (o ambiente vence).
  */
-export function ensureDaemon(projectRoot: string): ChildProcess | null {
+export function daemonSpawnSpec(o: {
+  readonly isPackaged: boolean; readonly appPath: string; readonly resourcesPath: string; readonly execPath: string;
+  readonly env: NodeJS.ProcessEnv; readonly dotenv: string | null;
+}): DaemonSpawn {
+  const fromFile = !o.isPackaged && o.dotenv ? parseEnv(o.dotenv) : {};
+  return {
+    cmd: o.execPath,
+    args: [path.join(o.appPath, 'dist-daemon', 'index.js')],
+    cwd: o.isPackaged ? o.resourcesPath : o.appPath,
+    env: { ...fromFile, ...o.env, ELECTRON_RUN_AS_NODE: '1' },
+  };
+}
+
+/** Sobe o daemon se não houver um vivo. `windowsHide`: no Windows, sem ele o daemon abre uma janela de console. */
+export function ensureDaemon(spec: DaemonSpawn): ChildProcess | null {
   const info = readInfo();
   if (info && alive(info.pid)) return null;
-  const child = spawn('node', ['--env-file-if-exists=.env', 'dist-daemon/index.js'], { cwd: projectRoot, stdio: 'inherit', env: process.env, windowsHide: true });
-  // Sem `node` no PATH o spawn emite 'error'; sem este ouvinte o main cairia. O waitForInfo expira e a tela mostra o erro.
+  const child = spawn(spec.cmd, spec.args, { cwd: spec.cwd, stdio: 'inherit', env: spec.env, windowsHide: true });
+  // Sem este ouvinte um erro de spawn derrubaria o main; o waitForInfo expira e a tela mostra o erro.
   child.on('error', (e) => console.error('[enxame] não deu para subir o daemon:', e.message));
   return child;
 }

@@ -1,9 +1,10 @@
 import { app, BrowserWindow, ipcMain, Menu, safeStorage } from 'electron';
+import { existsSync, readFileSync } from 'node:fs';
 import { access, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { connectSnapshots, ensureDaemon, post, request, waitForInfo, type DaemonInfo } from './daemon-bridge.js';
+import { connectSnapshots, daemonSpawnSpec, ensureDaemon, post, request, waitForInfo, type DaemonInfo } from './daemon-bridge.js';
 import { createDaemonGate } from './daemon-gate.js';
 import { assertId, createCredentialVault } from './credentials.js';
 import { migrateLegacyCredentials, parseCredentialsResponse } from './credentials-migrate.js';
@@ -112,7 +113,11 @@ app.whenReady().then(() => {
   let daemonStart: Promise<void> | null = null;
   const startDaemon = (): Promise<void> => {
     daemonStart ??= (async () => {
-      ensureDaemon(projectRoot);
+      const dotenvPath = path.join(projectRoot, '.env');
+      ensureDaemon(daemonSpawnSpec({
+        isPackaged: app.isPackaged, appPath: app.getAppPath(), resourcesPath: process.resourcesPath, execPath: process.execPath,
+        env: process.env, dotenv: !app.isPackaged && existsSync(dotenvPath) ? readFileSync(dotenvPath, 'utf8') : null,
+      }));
       const info = await waitForInfo();
       gate.set(info);
       void migrateCredentials();
