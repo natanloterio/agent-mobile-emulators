@@ -24,7 +24,11 @@
     "test": "vitest run",
     "test:integration": "cross-env ENXAME_INTEGRATION=1 vitest run --project daemon",
     "real:run": "npm run daemon:build && node --env-file-if-exists=.env dist-daemon/cli/run-real.js",
-    "bench": "npm run daemon:build && node --env-file-if-exists=.env dist-daemon/cli/bench.js"
+    "bench": "npm run daemon:build && node --env-file-if-exists=.env dist-daemon/cli/bench.js",
+    "dist:linux": "npm run build && npm run daemon:build && electron-builder --linux --x64 --publish never",
+    "dist:mac": "npm run build && npm run daemon:build && electron-builder --mac --publish never",
+    "dist:win": "npm run build && npm run daemon:build && electron-builder --win --x64 --publish never",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.65",
@@ -48,6 +52,8 @@
     "concurrently": "^9.1.0",
     "cross-env": "^10.1.0",
     "electron": "44.4.5",
+    "electron-builder": "^26.15.3",
+    "playwright": "1.63.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
     "vitest": "^5.0.2",
@@ -55,5 +61,20 @@
   },
   "engines": {
     "node": ">=24"
+  },
+  "build": {
+    "appId": "me.pitaia.enxame",
+    "productName": "Enxame",
+    "copyright": "Copyright (C) 2026 Natan Loterio",
+    "directories": { "output": "release" },
+    "files": ["dist/**", "dist-electron/**", "dist-daemon/**", "daemon/vendor/**", "package.json", "!**/*.test.*", "!**/*.map"],
+    "asarUnpack": ["daemon/vendor/**"],
+    "extraFiles": [{ "from": "LICENSE", "to": "LICENSE" }, { "from": "NOTICE", "to": "NOTICE" }],
+    "npmRebuild": false,
+    "linux": { "target": ["AppImage", "deb"], "category": "Development", "maintainer": "Natan Loterio <natan@gaiahub.ai>", "executableName": "enxame" },
+    "deb": { "packageName": "enxame", "artifactName": "enxame_${version}_${arch}.${ext}" },
+    "mac": { "target": ["dmg"], "category": "public.app-category.developer-tools", "identity": "-" },
+    "win": { "target": ["nsis"] },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true }
   }
 }
