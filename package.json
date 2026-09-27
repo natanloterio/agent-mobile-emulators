@@ -2,8 +2,14 @@
   "name": "agent-mobile-emulators",
   "productName": "Enxame",
   "version": "0.1.0",
-  "private": true,
   "description": "Cockpit para um enxame de emuladores Android dirigidos por agentes",
+  "license": "AGPL-3.0-only",
+  "author": "Natan Loterio <natan@gaiahub.ai>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/natanloterio/agent-mobile-emulators.git"
+  },
+  "homepage": "https://github.com/natanloterio/agent-mobile-emulators",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {

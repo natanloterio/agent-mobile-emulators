@@ -4,7 +4,7 @@ import { CONFIG, loadEnv } from './config.js';
 import { createAdb } from './device/adb.js';
 import { createDeviceInput } from './device/input.js';
 import { openDb } from './db/open.js';
-import { getIdentity, listIdentities, upsertIdentity, type IdentityRow } from './db/identities.js';
+import { getIdentity, listIdentities, type IdentityRow } from './db/identities.js';
 import { isFleetIdle } from './db/tasks.js';
 import { readLocalParallel, readStepBudgets } from './db/settings.js';
 import { createScreenCapture } from './device/screen.js';
@@ -88,20 +88,6 @@ const localParallelController = createLocalParallelController({
 const emulators = createEmulatorSupervisor();
 const host = createHostMetrics({ gpu: createGpuSampler() });
 const disk = createDiskUsage();
-
-// Identidade 0: o emulador já provisionado. Token, estado, handle e portas vêm do banco quando existem (as portas podem
-// ter sido re-alocadas por lease); num banco novo o token é gerado e a sonda o aplica no device por broadcast.
-const existing = getIdentity(db, 'conta1');
-const seed = {
-  // AVD próprio da conta1, independente de `CONFIG.avd.base` (a base de clonagem pode ser trocada por ENXAME_AVD_BASE).
-  id: 'conta1', name: 'conta1', handle: '@p1t41a.meta.test', avdName: 'mcp_test_playstore', serial: 'emulator-5554',
-  consolePort: 5554, mcpHostPort: 8080, mcpToken: randomUUID(), deviceSlug: 'conta1',
-  appPackage: CONFIG.targetApp.package, appVersionName: CONFIG.targetApp.versionName, state: 'logged-in' as const,
-};
-upsertIdentity(db, existing ? {
-  ...seed, avdName: existing.avdName, handle: existing.handle, serial: existing.serial, consolePort: existing.consolePort, mcpHostPort: existing.mcpHostPort,
-  mcpToken: existing.mcpToken, state: existing.state,
-} : seed);
 
 const liveTargets = () => listIdentities(db).filter((i) => !i.discardedAt).map(({ id, serial }) => ({ id, serial }));
 const targets = liveTargets();

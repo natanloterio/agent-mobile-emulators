@@ -4,7 +4,7 @@ import { liveLogFor, mergeLive } from './merge';
 
 const live = {
   killed: false, updatedAt: 'x',
-  identities: [{ id: 'conta1', name: 'conta1', handle: '@p1t41a.meta.test', state: 'needs-human', task: 'Levantar comentários', steps: 12, budget: 30, costUsd: 0.07, error: 'checkpoint', lastTools: [] }],
+  identities: [{ id: 'conta1', name: 'conta1', handle: '@conta.demo', state: 'needs-human', task: 'Levantar comentários', steps: 12, budget: 30, costUsd: 0.07, error: 'checkpoint', lastTools: [] }],
 };
 
 describe('mergeLive', () => {
@@ -14,7 +14,7 @@ describe('mergeLive', () => {
   it('modo vivo mostra só as identidades vivas (nada do demo) e traduz needs-human → needs', () => {
     const out = mergeLive(IDENTITIES, live);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ handle: '@p1t41a.meta.test', state: 'needs', steps: 12, budget: 30, error: 'checkpoint' });
+    expect(out[0]).toMatchObject({ handle: '@conta.demo', state: 'needs', steps: 12, budget: 30, error: 'checkpoint' });
     expect(out[0].live).toBe(live.identities[0]);
     expect(IDENTITIES[0].handle).toBe('@aurora.moda');
   });
