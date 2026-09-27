@@ -152,6 +152,22 @@ describe('paralelismo local (restartIfParallelDiffers)', () => {
     const sup = createOllamaSupervisor({ fetch: (async () => { throw new Error('x'); }) as never, findProcesses: () => [] });
     expect(await sup.restartIfParallelDiffers(4)).toBeNull();
   });
+  it('child null mas há um órfão nosso (marcador de contexto) rodando: adota antes de concluir "externo"', async () => {
+    const killed: number[] = []; const spawned: { env: NodeJS.ProcessEnv }[] = [];
+    let calls = 0;
+    const sup = createOllamaSupervisor({
+      fetch: (async () => { calls++; return calls < 3 ? refused() : tags('m'); }) as never, sleep: async () => {}, timeoutMs: 20_000, logPath: '/dev/null', openLog: () => 'x',
+      findProcesses: () => [{ pid: 321, env: `OLLAMA_HOST=127.0.0.1:11434\0OLLAMA_CONTEXT_LENGTH=${CONFIG.local.contextLength}\0OLLAMA_NUM_PARALLEL=1\0` }],
+      kill: (pid) => killed.push(pid),
+      spawn: (cmd, args, opts) => { spawned.push({ env: opts.env }); return { pid: 999, kill: () => true, on: () => undefined }; },
+    });
+    // Nenhum ensure() rodou nesta subida (child ainda null) — mesmo assim adota o órfão e troca o paralelismo.
+    const applied = await sup.restartIfParallelDiffers(4);
+    expect(applied).toBe(4);
+    expect(killed).toEqual([321]); // matou o órfão adotado via killFn (pid do /proc), não um child.kill próprio
+    expect(spawned[0]?.env.OLLAMA_HOST).toBe('127.0.0.1:11434');
+    expect(spawned[0]?.env.OLLAMA_NUM_PARALLEL).toBe('4');
+  });
   it('valor real do processo desconhecido (não achado no /proc): não mexe, devolve null', async () => {
     const h = harness([refused, refused, () => tags('m')]);
     await h.sup.ensure('http://127.0.0.1:11434/v1', 'm'); // findProcesses: () => [] no harness → desconhecido

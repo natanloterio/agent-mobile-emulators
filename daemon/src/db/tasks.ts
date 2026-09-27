@@ -75,11 +75,17 @@ export function addTaskCost(db: DatabaseSync, taskId: string, usd: number): void
 }
 
 /**
- * Frota ociosa (spec paralelismo §Ocioso): nenhuma tarefa de objetivo ou subtarefa de missão rodando — as duas
- * moram na mesma tabela `task`. Só nesse instante a troca de paralelismo local mexe no Ollama/LM Studio.
+ * Frota ociosa (spec paralelismo §Ocioso): nenhuma tarefa de objetivo 'todo'/'running' de um goal ainda 'running',
+ * e nenhuma subtarefa de missão 'running' — as duas moram na mesma tabela `task`. `startGoal` cria as tarefas do
+ * fan-out/sharding em 'todo' e só vira 'running' depois do stagger de cada identidade: uma tarefa 'todo' de um
+ * goal 'running' está prestes a rodar a qualquer momento, então também conta como ocupada (senão o apply troca o
+ * Ollama/LM Studio bem no meio do início do objetivo). Só com isto tudo vazio a troca de paralelismo mexe de verdade.
  */
 export function isFleetIdle(db: DatabaseSync): boolean {
-  const row = db.prepare("select count(*) as n from task where state='running'").get() as { n: number };
+  const row = db.prepare(`
+    select count(*) as n from task t join goal g on g.id = t.goal_id
+    where g.state = 'running' and t.state in ('running', 'todo')
+  `).get() as { n: number };
   return row.n === 0;
 }
 

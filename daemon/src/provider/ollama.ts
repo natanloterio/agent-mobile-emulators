@@ -8,8 +8,11 @@ import { ProviderError } from './errors.js';
 /** Loopback nas formas usadas por `OLLAMA_HOST`/endpoint: IPv4, IPv6 (com ou sem colchetes) e `localhost`, com porta opcional. */
 export const isLoopbackHost = (host: string): boolean => /^(?:127\.0\.0\.1|localhost|\[::1\]|::1)(?::\d+)?$/i.test(host);
 
-/** Spec §4.3: contexto configurável (`CONFIG.local.contextLength`, padrão 65536), modelo fica quente entre passos, um worker por vez neste incremento. */
-export const OLLAMA_ENV = { OLLAMA_CONTEXT_LENGTH: String(CONFIG.local.contextLength), OLLAMA_KEEP_ALIVE: '30m', OLLAMA_NUM_PARALLEL: '1' } as const;
+/**
+ * Spec §4.3: contexto configurável (`CONFIG.local.contextLength`, padrão 65536), modelo fica quente entre passos.
+ * `OLLAMA_NUM_PARALLEL` não mora aqui: vem de `deps.parallel()` (spec paralelismo §UI), sobrescrito no env do spawn.
+ */
+export const OLLAMA_ENV = { OLLAMA_CONTEXT_LENGTH: String(CONFIG.local.contextLength), OLLAMA_KEEP_ALIVE: '30m' } as const;
 /**
  * Marcador que identifica um `ollama serve` subido por este daemon (sobrevive a SIGKILL do pai). Um órfão de antes de
  * trocar `ENXAME_LOCAL_CONTEXT` (ou de antes deste incremento, com o antigo 32768 fixo) carrega o valor VELHO no env
@@ -170,6 +173,16 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
       throw new ProviderError('infra-local', `Ollama não subiu em ${Math.round(timeoutMs / 1000)} s; veja ${logPath}`);
     },
     restartIfParallelDiffers: async (wanted) => {
+      if (child === null) {
+        // Órfão nosso de uma subida anterior do daemon pode estar rodando mesmo sem nenhum ensure() nesta subida
+        // (ex.: PUT /settings/local antes de qualquer tarefa) — mesma adoção por marcador do ensure(), mas sem um
+        // endpoint à mão: aceita qualquer órfão com o marcador e lê o host de verdade do próprio env dele.
+        const own = findProcesses().find((p) => p.env.includes(CONTEXT_MARKER));
+        if (own) {
+          const hostMatch = /(?:^|\0)OLLAMA_HOST=([^\0]*)/.exec(own.env);
+          child = adopt(own.pid); adopted = true; lastHost = hostMatch?.[1] || '127.0.0.1:11434';
+        }
+      }
       if (child === null || child.pid == null || !lastHost) return null;
       const pid = child.pid;
       const own = findProcesses().find((p) => p.pid === pid);

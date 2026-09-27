@@ -4,6 +4,7 @@ import { openDb } from '../src/db/open.js';
 import { createLocalParallelController } from '../src/provider/local-parallel.js';
 import { startServer } from '../src/server/api.js';
 import { localParallelRoutes } from '../src/server/routes-local-parallel.js';
+import { createRuntimeLock } from '../src/swarm/runtime-lock.js';
 
 let stop: (() => Promise<void>) | null = null;
 afterEach(async () => { await stop?.(); stop = null; });
@@ -13,7 +14,7 @@ async function mk(o: { idle?: boolean; ollama?: number | null; lmstudio?: number
   const db = openDb(':memory:');
   const ollamaCalls: number[] = []; const lmstudioCalls: number[] = [];
   const controller = createLocalParallelController({
-    db, isIdle: () => o.idle ?? true, lmstudioEndpoint: 'http://127.0.0.1:1234/v1',
+    db, isIdle: () => o.idle ?? true, lmstudioEndpoint: 'http://127.0.0.1:1234/v1', lock: createRuntimeLock(),
     ollama: { restartIfParallelDiffers: async (w) => { ollamaCalls.push(w); return o.ollama === undefined ? w : o.ollama; } },
     lmstudio: { reloadIfParallelDiffers: async (_e, w) => { lmstudioCalls.push(w); return o.lmstudio === undefined ? w : o.lmstudio; } },
   });
@@ -58,7 +59,7 @@ describe('rota de paralelismo local (GET/PUT /settings/local)', () => {
   it('PUT ok dispara broadcast do snapshot', async () => {
     const db = openDb(':memory:');
     const controller = createLocalParallelController({
-      db, isIdle: () => true, lmstudioEndpoint: 'http://127.0.0.1:1234/v1',
+      db, isIdle: () => true, lmstudioEndpoint: 'http://127.0.0.1:1234/v1', lock: createRuntimeLock(),
       ollama: { restartIfParallelDiffers: async (w) => w }, lmstudio: { reloadIfParallelDiffers: async (_e, w) => w },
     });
     const s = await startServer({

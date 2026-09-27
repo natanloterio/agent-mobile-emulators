@@ -179,7 +179,12 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
     if (current === wanted) return current;
     await exec(lms, ['unload', found.id], { timeoutMs: LIST_TIMEOUT_MS });
     const r = await exec(lms, ['load', found.id, '--context-length', CONTEXT_LENGTH, '--parallel', String(wanted), '-y'], { timeoutMs: LOAD_TIMEOUT_MS });
-    return r.code === 0 ? wanted : null;
+    if (r.code !== 0) {
+      // Descarregou para trocar o paralelismo e o load de volta falhou: modelo fica descarregado — loga alto, não quebra o apply.
+      console.error(`[lmstudio] lms load ${found.id} --parallel ${wanted} falhou depois do unload (modelo fica descarregado): ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
+      return null;
+    }
+    return wanted;
   };
 
   return {

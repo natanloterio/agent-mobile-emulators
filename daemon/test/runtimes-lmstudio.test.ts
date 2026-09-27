@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { createLmStudio, findLms, parseLmsLs } from '../src/provider/runtimes/lmstudio.js';
 
@@ -134,6 +134,19 @@ describe('reloadIfParallelDiffers (spec paralelismo — troca efetiva gerida pel
     const lm = createLmStudio({ exec: f.exec, fetch: f.fetch, lmsPath: f.lmsPath, sleep: async () => {} });
     expect(await lm.reloadIfParallelDiffers('http://127.0.0.1:1234/v1', 4)).toBe(4);
     expect(f.calls).toEqual(expect.arrayContaining(['unload llama-3.2-3b-instruct', `load llama-3.2-3b-instruct --context-length ${CONFIG.local.contextLength} --parallel 4 -y`]));
+  });
+  it('load falha depois do unload: modelo fica descarregado, loga claro e devolve null (mantém o comportamento)', async () => {
+    const f = fakes({ loaded: ['llama-3.2-3b-instruct'], parallel: 1 });
+    const failingExec: typeof f.exec = async (file, args, opts) => {
+      if (args[0] === 'load') return { stdout: '', stderr: 'falhou de propósito', code: 1 };
+      return f.exec(file, args, opts);
+    };
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const lm = createLmStudio({ exec: failingExec, fetch: f.fetch, lmsPath: f.lmsPath, sleep: async () => {} });
+    expect(await lm.reloadIfParallelDiffers('http://127.0.0.1:1234/v1', 4)).toBeNull();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][0]).toMatch(/llama-3\.2-3b-instruct.*--parallel 4.*falhou/);
+    spy.mockRestore();
   });
   it('sem o CLI lms: não recarrega, devolve null', async () => {
     const f = fakes({ loaded: ['llama-3.2-3b-instruct'], parallel: 1 });

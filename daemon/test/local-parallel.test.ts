@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/db/open.js';
 import { writeLocalParallel } from '../src/db/settings.js';
 import { createLocalParallelController } from '../src/provider/local-parallel.js';
+import { createRuntimeLock } from '../src/swarm/runtime-lock.js';
+import { singleFlightOllama } from '../src/swarm/single-flight.js';
+import type { OllamaStatus, OllamaSupervisor } from '../src/provider/ollama.js';
+
+const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function mk(o: { idle?: boolean; ollama?: (w: number) => Promise<number | null>; lmstudio?: (e: string, w: number) => Promise<number | null> } = {}) {
   const db = openDb(':memory:');
@@ -10,6 +15,7 @@ function mk(o: { idle?: boolean; ollama?: (w: number) => Promise<number | null>;
     db,
     isIdle: () => o.idle ?? true,
     lmstudioEndpoint: 'http://127.0.0.1:1234/v1',
+    lock: createRuntimeLock(),
     ollama: { restartIfParallelDiffers: async (w) => { ollamaCalls.push(w); return o.ollama ? o.ollama(w) : w; } },
     lmstudio: { reloadIfParallelDiffers: async (e, w) => { lmstudioCalls.push({ endpoint: e, wanted: w }); return o.lmstudio ? o.lmstudio(e, w) : w; } },
   });
@@ -41,7 +47,7 @@ describe('createLocalParallelController', () => {
     const db = openDb(':memory:');
     let idle = false;
     const ctl = createLocalParallelController({
-      db, isIdle: () => idle, lmstudioEndpoint: 'http://127.0.0.1:1234/v1',
+      db, isIdle: () => idle, lmstudioEndpoint: 'http://127.0.0.1:1234/v1', lock: createRuntimeLock(),
       ollama: { restartIfParallelDiffers: async (w) => w }, lmstudio: { reloadIfParallelDiffers: async (_e, w) => w },
     });
     writeLocalParallel(db, 5);
@@ -62,5 +68,61 @@ describe('createLocalParallelController', () => {
     await ctl.apply();
     expect(ctl.status().applied.ollama).toBeNull();
     expect(ctl.status().applied.lmstudio).toBe(1);
+  });
+});
+
+describe('createLocalParallelController — corrida com ensure() (revisão: trava compartilhada)', () => {
+  it('duas apply() concorrentes colapsam: só um restart roda, a outra só fica pendente', async () => {
+    const db = openDb(':memory:');
+    let ollamaCalls = 0;
+    const ctl = createLocalParallelController({
+      db, isIdle: () => true, lmstudioEndpoint: 'http://127.0.0.1:1234/v1', lock: createRuntimeLock(),
+      ollama: { restartIfParallelDiffers: async (w) => { ollamaCalls++; await wait(15); return w; } },
+      lmstudio: { reloadIfParallelDiffers: async (_e, w) => w },
+    });
+    writeLocalParallel(db, 4);
+    const a = ctl.apply(); const b = ctl.apply(); // sobrepostas, sem esperar a primeira
+    await Promise.all([a, b]);
+    expect(ollamaCalls).toBe(1);
+    expect(ctl.status()).toEqual({ wanted: 4, applied: { ollama: 4, lmstudio: 4 }, pending: false });
+  });
+  it('tarefa vira "running" entre a checagem de fora e a de dentro da trava: não restarta, fica pendente', async () => {
+    const db = openDb(':memory:');
+    let idleCalls = 0;
+    let ollamaCalls = 0;
+    const ctl = createLocalParallelController({
+      db,
+      // 1ª chamada (checagem barata, fora da trava): ociosa. 2ª chamada (checagem de novo, já dentro da trava): ocupada —
+      // simula uma tarefa que começou a rodar bem nesse intervalo.
+      isIdle: () => { idleCalls++; return idleCalls === 1; },
+      lmstudioEndpoint: 'http://127.0.0.1:1234/v1', lock: createRuntimeLock(),
+      ollama: { restartIfParallelDiffers: async (w) => { ollamaCalls++; return w; } },
+      lmstudio: { reloadIfParallelDiffers: async (_e, w) => w },
+    });
+    writeLocalParallel(db, 4);
+    await ctl.apply();
+    expect(ollamaCalls).toBe(0);
+    expect(ctl.status().pending).toBe(true);
+  });
+  it('ensure() (via singleFlightOllama, mesma trava) espera o apply() em restart terminar antes de rodar', async () => {
+    const db = openDb(':memory:');
+    const lock = createRuntimeLock();
+    const events: string[] = [];
+    const ctl = createLocalParallelController({
+      db, isIdle: () => true, lmstudioEndpoint: 'http://127.0.0.1:1234/v1', lock,
+      ollama: { restartIfParallelDiffers: async (w) => { events.push('restart-start'); await wait(20); events.push('restart-end'); return w; } },
+      lmstudio: { reloadIfParallelDiffers: async (_e, w) => w },
+    });
+    writeLocalParallel(db, 4);
+    const fakeSup: OllamaSupervisor = {
+      ensure: async () => { events.push('ensure-run'); return { running: true, spawnedByUs: true, adopted: false, pid: 1, models: ['m'] } as OllamaStatus; },
+      unload: async () => {}, stop: () => {}, status: () => null, restartIfParallelDiffers: async () => null,
+    };
+    const ollamaWithSingleFlight = singleFlightOllama(fakeSup, lock);
+    const applyDone = ctl.apply();
+    await wait(1); // dá tempo do apply já estar segurando a trava, em pleno "restart"
+    const ensureDone = ollamaWithSingleFlight.ensure('http://127.0.0.1:11434/v1', 'm');
+    await Promise.all([applyDone, ensureDone]);
+    expect(events).toEqual(['restart-start', 'restart-end', 'ensure-run']);
   });
 });

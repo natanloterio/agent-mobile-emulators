@@ -46,6 +46,7 @@ import { createSecretMask, loadMissionSecrets } from './worker/mission-tools.js'
 import { markNotesRead, unreadNotes } from './db/mission-notes.js';
 import { subtaskSeq } from './db/missions.js';
 import { startGoal, type WorkerJob } from './swarm/scheduler.js';
+import { createRuntimeLock } from './swarm/runtime-lock.js';
 import { singleFlightOllama } from './swarm/single-flight.js';
 import { createIdentityRoutes } from './server/routes-identities.js';
 import { runTask } from './worker/run.js';
@@ -67,11 +68,15 @@ const lmStudio = createLmStudio({ parallel: () => readLocalParallel(db) });
 // Single-flight: workers do enxame pedem o Ollama quase juntos; só um `ollama serve` sobe.
 // Runtimes locais (Ollama e LM Studio) atrás da mesma cara; single-flight: workers pedem o runtime quase juntos.
 const localRuntimes = createLocalRuntimes({ ollama: ollamaSupervisor, lmstudio: lmStudio });
-const ollama = singleFlightOllama(localRuntimes);
-// Troca efetiva de paralelismo (spec paralelismo §Ocioso): só com a frota ociosa, no PUT /settings/local e no
+// Trava única entre todo ensure() (via single-flight) e a troca de paralelismo (spec paralelismo §Ocioso): os dois
+// mexem no mesmo processo/modelo e nunca podem correr ao mesmo tempo — um espera a vez do outro.
+const runtimeLock = createRuntimeLock();
+const ollama = singleFlightOllama(localRuntimes, runtimeLock);
+// Troca efetiva de paralelismo: só com a frota ociosa (recheca dentro da trava), no PUT /settings/local e no
 // fim de cada tarefa/subtarefa (via onFleetChange, abaixo) se ficou pendente.
 const localParallelController = createLocalParallelController({
   db, ollama: ollamaSupervisor, lmstudio: lmStudio, lmstudioEndpoint: LOCAL_ENDPOINTS.lmstudio, isIdle: () => isFleetIdle(db),
+  lock: runtimeLock,
 });
 
 // Emuladores que o daemon subiu (boot pela UI); só esses morrem no SIGINT — nunca um aberto por fora (spec inc. 5 §2).
