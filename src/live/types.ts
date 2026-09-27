@@ -34,6 +34,8 @@ export interface GpuBreakdown { readonly totalMiB: number; readonly usedMiB: num
 export interface HostMetrics {
   readonly ramUsedGiB: number; readonly ramTotalGiB: number; readonly cpuPct: number; readonly threads: number;
   readonly vramUsedMiB: number | null; readonly vramTotalMiB: number | null; readonly at: string;
+  /** SO/arquitetura do host (`process.platform`/`process.arch`); ausente num daemon antigo = Linux. */
+  readonly platform?: string; readonly arch?: string;
   /** Ocupação real da GPU por consumidor; ausente/null = sem medida (a tela cai na estimativa do design). */
   readonly gpu?: GpuBreakdown | null;
 }

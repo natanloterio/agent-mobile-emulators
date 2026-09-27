@@ -1,19 +1,21 @@
+import type { HostOs } from '../lib/platformMeters';
 import type { Meter } from '../lib/resources';
 import type { Screen } from '../types/fleet';
 import { useI18n } from '../i18n/I18nProvider';
 import { LanguageSelect } from './LanguageSelect';
 import { Logo } from './Logo';
-import { Meters } from './Meters';
 import { activeNavKey, NAV_ITEMS } from './navigation';
+import { HostResources } from './resources/HostResources';
 
 interface SidebarProps {
   readonly screen: Screen;
   readonly needsCount: number;
   readonly meters: readonly Meter[];
+  readonly host: { readonly os: HostOs; readonly appleSilicon: boolean };
   readonly onNavigate: (screen: Screen) => void;
 }
 
-export function Sidebar({ screen, needsCount, meters, onNavigate }: SidebarProps) {
+export function Sidebar({ screen, needsCount, meters, host, onNavigate }: SidebarProps) {
   const active = activeNavKey(screen);
   const { t } = useI18n();
   return (
@@ -33,7 +35,7 @@ export function Sidebar({ screen, needsCount, meters, onNavigate }: SidebarProps
         ))}
       </nav>
       <div className="sidebar__foot">
-        <Meters meters={meters} />
+        <HostResources meters={meters} host={host} />
         <LanguageSelect />
       </div>
     </aside>

@@ -7,6 +7,7 @@ import { currentGoalText, DEFAULT_GOAL_TEXT, PAST_GOALS } from './data/goals';
 import { useI18n } from './i18n/I18nProvider';
 import { gpuBar } from './lib/gpuBar';
 import { kvCacheLeftGiB, liveVram, vramEmulatorShare } from './lib/resources';
+import { vramMeasured } from './lib/platformMeters';
 import { useIsMobile } from './lib/useIsMobile';
 import { liveRoles } from './live/merge';
 import { useLiveFleet } from './live/useLiveFleet';
@@ -182,6 +183,7 @@ export function App() {
             vramEmuShare={vram?.emuShare ?? vramEmulatorShare(fleetSize)}
             vramTotal={vram?.total ?? '32 GB'}
             gpu={isLive ? gpuBar(live?.host?.gpu, i18n) : null}
+            showVram={!isLive || vramMeasured(live?.host)}
             isMobile={isMobile}
             onPickMode={actions.pickMode}
             onTest={actions.testConnection}
@@ -206,7 +208,7 @@ export function App() {
       {isMobile ? (
         <MobileTopbar meters={view.meters} />
       ) : (
-        <Sidebar screen={state.screen} needsCount={view.needsCount} meters={view.meters} onNavigate={actions.go} />
+        <Sidebar screen={state.screen} needsCount={view.needsCount} meters={view.meters} host={view.host} onNavigate={actions.go} />
       )}
       <main className="main">
         {view.killed && (

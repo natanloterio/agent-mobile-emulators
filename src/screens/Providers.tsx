@@ -20,6 +20,8 @@ interface ProvidersProps {
   readonly vramTotal: string;
   /** Ocupação real da GPU (vivo com `host.gpu`); null mantém o quadro estimado. */
   readonly gpu: GpuBarView | null;
+  /** Falso quando o host não mede VRAM (macOS ou sem NVIDIA): o quadro some em vez de mostrar a estimativa do design. */
+  readonly showVram: boolean;
   readonly isMobile: boolean;
   readonly onPickMode: (role: RoleKey, mode: ProviderMode) => void;
   readonly onTest: (role: RoleKey) => void;
@@ -31,7 +33,7 @@ interface ProvidersProps {
 
 const MODES: readonly ProviderMode[] = ['nuvem', 'local'];
 
-export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, gpu, isMobile, onPickMode, onTest, onSetField, onLoadModels, budgets }: ProvidersProps) {
+export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, gpu, showVram, isMobile, onPickMode, onTest, onSetField, onLoadModels, budgets }: ProvidersProps) {
   // Recarrega a lista de modelos quando a tela abre e quando algum papel troca de modo.
   const { t } = useI18n();
   const modeKey = roles.map((r) => `${r.key}:${r.mode}`).join('|');
@@ -106,7 +108,7 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, g
 
       {budgets && <BudgetsCard {...budgets} />}
 
-      <VramPanel gpu={gpu} fleetSize={fleetSize} kvLeft={kvLeft} vramEmuShare={vramEmuShare} vramTotal={vramTotal} />
+      <VramPanel gpu={gpu} showVram={showVram} fleetSize={fleetSize} kvLeft={kvLeft} vramEmuShare={vramEmuShare} vramTotal={vramTotal} />
     </div>
   );
 }

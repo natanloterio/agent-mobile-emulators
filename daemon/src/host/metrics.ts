@@ -10,6 +10,12 @@ export interface HostMetricsDeps {
   /** Saída crua de `nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits`. */
   readonly nvidiaSmi?: () => Promise<string>;
   readonly threads?: () => number;
+  /** SO do host; fora do Linux não há /proc e RAM/CPU vêm do módulo `os`. */
+  readonly platform?: NodeJS.Platform;
+  readonly arch?: string;
+  readonly cpus?: () => readonly Pick<os.CpuInfo, 'times'>[];
+  readonly totalMem?: () => number;
+  readonly freeMem?: () => number;
   /** Fatias da VRAM por consumidor (host/gpu.ts); ausente = só o total. */
   readonly gpu?: (total: { usedMiB: number; totalMiB: number }) => Promise<Omit<GpuBreakdown, 'at'> | null>;
   /** Intervalo mínimo entre medições por processo (spawna nvidia-smi e às vezes lms). */
@@ -51,6 +57,15 @@ export function parseProcStat(text: string): CpuTimes | null {
   return { idle: f[3] + (f[4] ?? 0), total };
 }
 
+/** Tempos somados de todos os núcleos (`os.cpus()`): o equivalente portátil da linha `cpu` de /proc/stat. */
+export function cpuTimesFromOs(cpus: readonly Pick<os.CpuInfo, 'times'>[]): CpuTimes | null {
+  if (cpus.length === 0) return null;
+  return cpus.reduce((acc, { times: t }) => ({
+    idle: acc.idle + t.idle,
+    total: acc.total + t.user + t.nice + t.sys + t.idle + t.irq,
+  }), { idle: 0, total: 0 });
+}
+
 export function cpuPctBetween(a: CpuTimes, b: CpuTimes): number {
   const dt = b.total - a.total;
   if (dt <= 0) return 0;
@@ -89,6 +104,12 @@ export function createHostMetrics(deps: HostMetricsDeps = {}): HostMetricsSample
   const readFile = deps.readFile ?? ((p: string) => readFileSync(p, 'utf8'));
   const nvidiaSmi = deps.nvidiaSmi ?? defaultNvidiaSmi;
   const threads = deps.threads ?? (() => os.cpus().length);
+  const platform = deps.platform ?? process.platform;
+  const arch = deps.arch ?? process.arch;
+  const hasProc = platform === 'linux';
+  const cpus = deps.cpus ?? (() => os.cpus());
+  const totalMem = deps.totalMem ?? (() => os.totalmem());
+  const freeMem = deps.freeMem ?? (() => os.freemem());
   const now = deps.now ?? (() => new Date());
   const setIv = deps.setInterval ?? ((fn, ms) => setInterval(fn, ms));
   const clearIv = deps.clearInterval ?? ((t) => clearInterval(t));
@@ -99,17 +120,19 @@ export function createHostMetrics(deps: HostMetricsDeps = {}): HostMetricsSample
   let gpu: GpuBreakdown | null = null; let gpuAt = Number.NEGATIVE_INFINITY;
   const gpuEvery = deps.gpuEveryMs ?? 10_000;
 
+  const osRam = () => ({ total: totalMem() / 1024 / KIB_PER_GIB, used: (totalMem() - freeMem()) / 1024 / KIB_PER_GIB });
   const ram = () => {
+    if (!hasProc) return osRam();
     const mem = parseMeminfo(readFile('/proc/meminfo'));
     // Sem /proc/meminfo legível: `os` (freemem subestima o disponível, mas é melhor que nada).
-    return mem ? { total: mem.totalKiB / KIB_PER_GIB, used: (mem.totalKiB - mem.availableKiB) / KIB_PER_GIB }
-      : { total: os.totalmem() / 1024 / KIB_PER_GIB, used: (os.totalmem() - os.freemem()) / 1024 / KIB_PER_GIB };
+    return mem ? { total: mem.totalKiB / KIB_PER_GIB, used: (mem.totalKiB - mem.availableKiB) / KIB_PER_GIB } : osRam();
   };
+  const cpuTimes = () => (hasProc ? parseProcStat(readFile('/proc/stat')) : cpuTimesFromOs(cpus()));
   const vram = async () => { try { return parseNvidiaSmi(await nvidiaSmi()); } catch { return null; } };
 
   const sample = async (): Promise<HostMetrics> => {
     const r = ram();
-    const cpu = parseProcStat(readFile('/proc/stat'));
+    const cpu = cpuTimes();
     const cpuPct = cpu && prevCpu ? cpuPctBetween(prevCpu, cpu) : 0;
     if (cpu) prevCpu = cpu;
     const v = await vram();
@@ -121,6 +144,7 @@ export function createHostMetrics(deps: HostMetricsDeps = {}): HostMetricsSample
     last = {
       ramUsedGiB: round(r.used, 2), ramTotalGiB: round(r.total, 2), cpuPct, threads: threads(),
       vramUsedMiB: v?.usedMiB ?? null, vramTotalMiB: v?.totalMiB ?? null, at: now().toISOString(),
+      platform, arch,
       ...(deps.gpu ? { gpu: v ? gpu : null } : {}),
     };
     return last;

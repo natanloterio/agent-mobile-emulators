@@ -29,6 +29,14 @@ describe('buildFleetView', () => {
     expect(buildFleetView(createInitialState(), snap({ identities: [] }), {}, true).empty).toBe('empty');
     expect(buildFleetView(createInitialState(), null, {}, true).meters.map((m) => m.value)).toEqual(['—', '—', '—']);
   });
+  it('sistema do host: demo e vivo sem snapshot = Linux; vivo segue o snapshot', () => {
+    expect(buildFleetView(createInitialState(), null, {}, false).host).toEqual({ os: 'linux', appleSilicon: false });
+    expect(buildFleetView(createInitialState(), null, {}, true).host).toEqual({ os: 'linux', appleSilicon: false });
+    const mac = buildFleetView(createInitialState(), snap({ host: hostMetrics({ platform: 'darwin', arch: 'arm64' }) }), {}, true);
+    expect(mac.host).toEqual({ os: 'mac', appleSilicon: true });
+    const win = buildFleetView(createInitialState(), snap({ host: hostMetrics({ platform: 'win32', arch: 'x64' }) }), {}, true);
+    expect(win.host).toEqual({ os: 'windows', appleSilicon: false });
+  });
   it('snapshot sem bridge (improvável) também conta como vivo', () => {
     expect(buildFleetView(createInitialState(), snap(), {}, false).isLive).toBe(true);
   });

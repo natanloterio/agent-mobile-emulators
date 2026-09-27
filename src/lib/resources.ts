@@ -1,6 +1,7 @@
 import { PT, type I18n } from '../i18n/translate';
 import type { HostMetrics } from '../live/types';
 import { pct } from './format';
+import { metersFor } from './platformMeters';
 
 // Constantes medidas nesta máquina em 2026-09-26 (spec §3). Mudam com o host.
 export const HOST = {
@@ -45,21 +46,11 @@ export function vramEmulatorShare(fleetSize: number, vramTotalGB: number = HOST.
   return pct(Math.min(100, ((fleetSize * HOST.vramPerEmulatorGB) / vramTotalGB) * 100));
 }
 
-const NO_METER = (label: string): Meter => ({ label, value: '—', pct: '0%' });
 const MiB_PER_GiB = 1024;
 
-/** Medidores do host no modo vivo (spec inc. 5 §3.1: `os`, `/proc/stat`, `nvidia-smi`); sem medida → "—". */
+/** Medidores do host no modo vivo (spec inc. 5 §3.1), por SO: só o que o host consegue medir (platformMeters). */
 export function liveHostMeters(h: HostMetrics | null | undefined, i18n: I18n = PT): readonly Meter[] {
-  const ptDecimal = (v: number) => i18n.fmt.decimal(v);
-  if (!h) return [NO_METER('RAM'), NO_METER('CPU'), NO_METER('VRAM')];
-  const vram = h.vramUsedMiB !== null && h.vramTotalMiB
-    ? { label: 'VRAM', value: `${ptDecimal(h.vramUsedMiB / MiB_PER_GiB)} / ${ptDecimal(h.vramTotalMiB / MiB_PER_GiB)} GB`, pct: pct((h.vramUsedMiB / h.vramTotalMiB) * 100) }
-    : NO_METER('VRAM');
-  return [
-    { label: 'RAM', value: `${ptDecimal(h.ramUsedGiB)} / ${ptDecimal(h.ramTotalGiB)} GiB`, pct: pct(h.ramTotalGiB ? (h.ramUsedGiB / h.ramTotalGiB) * 100 : 0) },
-    { label: 'CPU', value: i18n.t('shell.meters.cpuValue', { pct: `${Math.round(h.cpuPct)}%`, threads: h.threads }), pct: pct(Math.min(100, h.cpuPct)) },
-    vram,
-  ];
+  return metersFor(h, i18n);
 }
 
 export interface LiveVram { readonly kvLeft: string; readonly total: string; readonly emuShare: string }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createHostMetrics, cpuPctBetween, isRelevantChange, parseMeminfo, parseNvidiaSmi, parseProcStat } from '../src/host/metrics.js';
+import { createHostMetrics, cpuPctBetween, cpuTimesFromOs, isRelevantChange, parseMeminfo, parseNvidiaSmi, parseProcStat } from '../src/host/metrics.js';
 import type { HostMetrics } from '../src/server/snapshot.js';
 
 const MEMINFO = 'MemTotal:       131072000 kB\nMemFree:         2000000 kB\nMemAvailable:   104857600 kB\nBuffers: 1 kB\n';
@@ -25,7 +25,7 @@ describe('parsers do host', () => {
     expect(parseNvidiaSmi('')).toBeNull();
   });
   it('mudança relevante: RAM ≥ 0,5 GiB, CPU ≥ 5 pontos, VRAM ≥ 256 MiB', () => {
-    const a: HostMetrics = { ramUsedGiB: 10, ramTotalGiB: 125, cpuPct: 10, threads: 32, vramUsedMiB: 1000, vramTotalMiB: 32000, at: 'x' };
+    const a: HostMetrics = { ramUsedGiB: 10, ramTotalGiB: 125, cpuPct: 10, threads: 32, vramUsedMiB: 1000, vramTotalMiB: 32000, at: 'x', platform: 'linux', arch: 'x64' };
     expect(isRelevantChange(null, a)).toBe(true);
     expect(isRelevantChange(a, { ...a, at: 'y', ramUsedGiB: 10.2, cpuPct: 12 })).toBe(false);
     expect(isRelevantChange(a, { ...a, ramUsedGiB: 10.6 })).toBe(true);
@@ -42,7 +42,7 @@ describe('createHostMetrics', () => {
     const m = createHostMetrics({
       readFile: (p) => { const f = files[p]; if (!f) throw new Error(`ENOENT ${p}`); return f(); },
       nvidiaSmi: opts.smi ?? (async () => '16126, 32607\n'),
-      threads: () => 32, now: () => new Date('2026-09-26T12:00:00Z'),
+      threads: () => 32, now: () => new Date('2026-09-26T12:00:00Z'), platform: 'linux', arch: 'x64',
     });
     return { m, setStat: (s: string) => { statText = s; } };
   }
@@ -52,7 +52,7 @@ describe('createHostMetrics', () => {
     await m.sample();
     setStat(stat(600, 1400));
     const got = await m.sample();
-    expect(got).toEqual({ ramUsedGiB: 25, ramTotalGiB: 125, cpuPct: 50, threads: 32, vramUsedMiB: 16126, vramTotalMiB: 32607, at: '2026-09-26T12:00:00.000Z' });
+    expect(got).toEqual({ ramUsedGiB: 25, ramTotalGiB: 125, cpuPct: 50, threads: 32, vramUsedMiB: 16126, vramTotalMiB: 32607, at: '2026-09-26T12:00:00.000Z', platform: 'linux', arch: 'x64' });
     expect(m.read()).toEqual(got);
   });
   it('nvidia-smi ausente/erro → VRAM null, resto segue', async () => {
@@ -102,5 +102,36 @@ describe('fatias da GPU no coletor (integrador)', () => {
     expect(a.gpu).toMatchObject({ usedMiB: 500, totalMiB: 1000, slices });
     t = 2_000; await h.sample(); expect(calls).toBe(1);
     t = 12_000; await h.sample(); expect(calls).toBe(2);
+  });
+});
+
+const cpu = (user: number, idle: number) => ({ model: 'x', speed: 1, times: { user, nice: 0, sys: 0, idle, irq: 0 } });
+
+describe('host fora do Linux (sem /proc)', () => {
+  it('cpuTimesFromOs soma os núcleos; ocioso = idle', () => {
+    expect(cpuTimesFromOs([cpu(100, 400), cpu(50, 450)])).toEqual({ idle: 850, total: 1000 });
+    expect(cpuTimesFromOs([])).toBeNull();
+  });
+  it('macOS/Windows: nunca lê /proc; RAM via os e CPU via os.cpus()', async () => {
+    let cpus = [cpu(100, 900)];
+    const read: string[] = [];
+    const m = createHostMetrics({
+      platform: 'darwin', arch: 'arm64',
+      readFile: (p) => { read.push(p); throw new Error(`ENOENT ${p}`); },
+      cpus: () => cpus, totalMem: () => 16 * 1024 ** 3, freeMem: () => 4 * 1024 ** 3,
+      nvidiaSmi: async () => { throw new Error('ENOENT nvidia-smi'); }, threads: () => 8,
+    });
+    const first = await m.sample();
+    expect(first).toMatchObject({ platform: 'darwin', arch: 'arm64', ramTotalGiB: 16, ramUsedGiB: 12, cpuPct: 0, vramUsedMiB: null, vramTotalMiB: null });
+    cpus = [cpu(600, 1400)];
+    expect((await m.sample()).cpuPct).toBe(50);
+    expect(read).toEqual([]);
+  });
+  it('Linux segue lendo /proc e informa a plataforma', async () => {
+    const m = createHostMetrics({
+      platform: 'linux', arch: 'x64',
+      readFile: (p) => (p === '/proc/meminfo' ? MEMINFO : stat(1, 1)), nvidiaSmi: async () => '', threads: () => 4,
+    });
+    expect(await m.sample()).toMatchObject({ platform: 'linux', arch: 'x64', ramTotalGiB: 125 });
   });
 });
