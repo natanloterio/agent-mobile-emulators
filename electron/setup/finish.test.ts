@@ -11,7 +11,7 @@ function deps() {
   return {
     log, writes,
     d: {
-      paths: resolveSetupPaths({}, '/home/u'),
+      paths: resolveSetupPaths({}, '/home/u', null, 'linux-x64'),
       writeSetup: async (f: SetupFileT) => { writes.push(f); log.push(`write completed=${f.completedAt !== null}`); },
       startDaemon: async () => { log.push('start'); },
       daemon: async (method: 'PUT', p: string, body: unknown) => { log.push(`${method} ${p} ${JSON.stringify(body)}`); return null; },

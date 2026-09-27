@@ -15,7 +15,7 @@ function mk(over: Partial<SetupIpcDeps> = {}) {
   const deps: SetupIpcDeps = {
     handle: (ch, fn) => handlers.set(ch, fn),
     send: (ch, d) => sent.push([ch, d]),
-    paths: resolveSetupPaths({}, '/home/u'),
+    paths: resolveSetupPaths({}, '/home/u', null, 'linux-x64'),
     status: async () => ({ completed: false, supported: true }),
     probe: async () => ({ report, ollamaBin: 'ollama' }),
     runners: () => runners,

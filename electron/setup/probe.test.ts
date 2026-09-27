@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveSetupPaths } from './paths.js';
 import type { HardwareDeps } from './hardware.js';
@@ -28,7 +29,11 @@ const allInstalled = fake({
     [`${paths.imageDir}/source.properties`]: 'Pkg.Revision=14\n',
   },
   exec: { 'java -version': 'openjdk version "21.0.4" 2024-07-16\nOpenJDK Runtime Environment\n', 'ollama --version': 'Warning: could not connect to a running Ollama instance\nWarning: client version is 0.12.3\n' },
-  dirs: { '/home/u/.ollama/models/manifests/registry.ollama.ai/library': ['gpt-oss'], '/home/u/.ollama/models/manifests/registry.ollama.ai/library/gpt-oss': ['20b'] },
+  // listLocalModels usa o `path` do host (não o `p` por plataforma de paths.ts), então as chaves têm de casar com ele.
+  dirs: {
+    [path.join(paths.ollamaModels, 'manifests', 'registry.ollama.ai', 'library')]: ['gpt-oss'],
+    [path.join(paths.ollamaModels, 'manifests', 'registry.ollama.ai', 'library', 'gpt-oss')]: ['20b'],
+  },
 });
 
 describe('parsers', () => {
@@ -92,8 +97,8 @@ describe('probeDeps: Java do sdkmanager', () => {
 
 describe('listLocalModels', () => {
   it('nome:tag de cada manifesto, ordenado; diretório ausente = nenhum', async () => {
-    const lib = '/m/manifests/registry.ollama.ai/library';
-    const d = fake({ dirs: { [lib]: ['qwen3', 'gpt-oss'], [`${lib}/qwen3`]: ['14b', '32b'], [`${lib}/gpt-oss`]: ['20b'] } });
+    const lib = path.join('/m', 'manifests', 'registry.ollama.ai', 'library');
+    const d = fake({ dirs: { [lib]: ['qwen3', 'gpt-oss'], [path.join(lib, 'qwen3')]: ['14b', '32b'], [path.join(lib, 'gpt-oss')]: ['20b'] } });
     expect(await listLocalModels('/m', d)).toEqual(['gpt-oss:20b', 'qwen3:14b', 'qwen3:32b']);
     expect(await listLocalModels('/vazio', d)).toEqual([]);
   });

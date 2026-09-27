@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AdbError, createAdb, type Exec, type ExecBuffer } from '../src/device/adb.js';
+import { CONFIG } from '../src/config.js';
 
 function fakeExec(map: Record<string, { stdout?: string; code?: number; stderr?: string }>): { exec: Exec; calls: string[][] } {
   const calls: string[][] = [];
@@ -15,7 +16,7 @@ function fakeExec(map: Record<string, { stdout?: string; code?: number; stderr?:
 describe('adb isolado', () => {
   it('usa o binário do SDK e ANDROID_ADB_SERVER_PORT=5038 em toda chamada', async () => {
     const seen: NodeJS.ProcessEnv[] = [];
-    const exec: Exec = async (file, _a, env) => { seen.push(env); expect(file).toBe('/home/loterio/Android/Sdk/platform-tools/adb'); return { stdout: 'List of devices attached\nemulator-5554\tdevice\n', stderr: '', code: 0 }; };
+    const exec: Exec = async (file, _a, env) => { seen.push(env); expect(file).toBe(CONFIG.adbPath); return { stdout: 'List of devices attached\nemulator-5554\tdevice\n', stderr: '', code: 0 }; };
     const adb = createAdb({ exec });
     expect(await adb.devices()).toEqual(['emulator-5554']);
     expect(seen[0].ANDROID_ADB_SERVER_PORT).toBe('5038');
@@ -90,7 +91,7 @@ describe('adb — processo e forward (incremento 4)', () => {
     const seen: { file: string; args: readonly string[]; env: NodeJS.ProcessEnv }[] = [];
     const spawn = (file: string, args: readonly string[], opts: { env: NodeJS.ProcessEnv }) => { seen.push({ file, args, env: opts.env }); return { pid: 1, kill: () => true, on: () => undefined }; };
     createAdb({ spawn }).shellSpawn('emulator-5554', ['CLASSPATH=/a.jar', 'app_process', '/', 'X']);
-    expect(seen[0].file).toBe('/home/loterio/Android/Sdk/platform-tools/adb');
+    expect(seen[0].file).toBe(CONFIG.adbPath);
     expect(seen[0].args).toEqual(['-s', 'emulator-5554', 'shell', 'CLASSPATH=/a.jar', 'app_process', '/', 'X']);
     expect(seen[0].env.ANDROID_ADB_SERVER_PORT).toBe('5038');
   });
