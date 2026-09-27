@@ -29,6 +29,10 @@ export interface RunnerDeps {
   readonly exists: (p: string) => Promise<boolean>;
   readonly pull: (model: string, bin: string, progress: Progress) => Promise<void>;
   readonly log: (line: string) => void;
+  /** Espera entre tentativas do rename (testes injetam). */
+  readonly sleep?: (ms: number) => Promise<void>;
+  /** Ambiente de base dos processos; padrão `process.env`. */
+  readonly baseEnv?: NodeJS.ProcessEnv;
 }
 
 const toMb = (bytes: number) => bytes / 1e6;
@@ -41,14 +45,34 @@ export function parseSdkPercent(line: string): number | null {
 /** No Windows os caminhos usam `\`; nas demais plataformas, `/`. */
 const pathOf = (d: RunnerDeps) => (isWindows(d.paths.platform) ? path.win32 : path.posix);
 
-/** JAVA_HOME no JRE do Enxame quando ele existe; senão o Java que a pessoa já tem. */
+/**
+ * JAVA_HOME no JRE do Enxame quando ele existe; senão o Java que a pessoa já tem.
+ * No Windows a chave costuma ser `Path`: reusa a que existir, senão o filho recebe duas e uma delas some.
+ */
 async function sdkEnv(d: RunnerDeps): Promise<NodeJS.ProcessEnv> {
-  if (!(await d.exists(d.paths.javaBin))) return process.env;
+  const base = d.baseEnv ?? process.env;
+  if (!(await d.exists(d.paths.javaBin))) return base;
+  const key = Object.keys(base).find((k) => /^path$/i.test(k)) ?? 'PATH';
   return {
-    ...process.env,
+    ...base,
     JAVA_HOME: d.paths.javaHome,
-    PATH: `${pathOf(d).join(d.paths.javaHome, 'bin')}${isWindows(d.paths.platform) ? ';' : ':'}${process.env.PATH ?? ''}`,
+    [key]: `${pathOf(d).join(d.paths.javaHome, 'bin')}${isWindows(d.paths.platform) ? ';' : ':'}${base[key] ?? ''}`,
   };
+}
+
+const RENAME_TRIES = 5;
+const RENAME_WAIT_MS = 200;
+const TRANSIENT = new Set(['EPERM', 'EACCES', 'EBUSY']);
+
+/** Windows: antivírus/indexador segura a pasta recém-extraída por instantes; EPERM/EACCES/EBUSY repetem. */
+async function renameRetry(d: RunnerDeps, from: string, to: string): Promise<void> {
+  const sleep = d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  for (let i = 1; ; i++) {
+    try { await d.fs.rename(from, to); return; } catch (e) {
+      if (i >= RENAME_TRIES || !TRANSIENT.has(String((e as NodeJS.ErrnoException).code))) throw e;
+      await sleep(RENAME_WAIT_MS);
+    }
+  }
 }
 
 /** Aspas só quando o argumento tem espaço (os args aqui nunca trazem aspas). */
@@ -76,7 +100,7 @@ async function extractArchive(d: RunnerDeps, a: Pinned, file: string, dest: stri
     if (entries.length !== 1) throw new SetupError('process', 'o pacote do Java veio com um formato inesperado');
     const [inner] = entries;
     await d.fs.rm(dest, { recursive: true, force: true });
-    await d.fs.rename(pathOf(d).join(tmp, inner), dest);
+    await renameRetry(d, pathOf(d).join(tmp, inner), dest);
     await d.fs.rm(tmp, { recursive: true, force: true });
     return;
   }
@@ -107,7 +131,7 @@ async function installToolsZip(d: RunnerDeps, onBytes: (b: number) => void): Pro
   const latest = pathOf(d).join(d.paths.sdkRoot, 'cmdline-tools', 'latest');
   await d.fs.rm(latest, { recursive: true, force: true });
   await d.fs.mkdir(pathOf(d).dirname(latest), { recursive: true });
-  await d.fs.rename(pathOf(d).join(unzipDir, 'cmdline-tools'), latest);
+  await renameRetry(d, pathOf(d).join(unzipDir, 'cmdline-tools'), latest);
   if (!isWindows(d.paths.platform)) {
     const bin = pathOf(d).join(latest, 'bin');
     for (const f of await d.fs.readdir(bin)) await d.fs.chmod(pathOf(d).join(bin, f), 0o755);
@@ -147,10 +171,11 @@ async function installOllama(d: RunnerDeps, progress: Progress): Promise<void> {
     if (/zstd/i.test(String((e as Error).message))) throw new SetupError('process', 'o tar precisa do zstd para abrir o Ollama; rode no terminal: sudo apt install zstd', { cause: e });
     throw e;
   }
-  await d.fs.rm(file, { recursive: true, force: true });
+  // Confere antes de apagar o pacote: uma nova tentativa reaproveita o download (~1,4 GB).
   if (!(await d.exists(d.paths.ollamaBin))) {
     throw new SetupError('process', `o pacote do Ollama não trouxe ${pathOf(d).relative(d.paths.ollamaDir, d.paths.ollamaBin)}`);
   }
+  await d.fs.rm(file, { recursive: true, force: true });
   if (!isWindows(d.paths.platform)) await d.fs.chmod(d.paths.ollamaBin, 0o755);
   progress(a.sizeMb, a.sizeMb);
 }

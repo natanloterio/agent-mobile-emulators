@@ -17,6 +17,10 @@ interface DepsOpts {
   readonly env?: NodeJS.ProcessEnv;
   /** O que o `readdir` do diretório temporário do JRE (zip com strip) devolve; padrão uma pasta só. */
   readonly readdirJre?: readonly string[];
+  /** Ambiente de base do processo (padrão: o do teste). */
+  readonly baseEnv?: NodeJS.ProcessEnv;
+  /** Erros que o `rename` lança antes de conseguir, um por tentativa. */
+  readonly renameFails?: readonly Error[];
 }
 
 /** `exists` reflete um conjunto de arquivos que cresce conforme o `run`/`extractZip` falso "instala" cada coisa. */
@@ -26,6 +30,8 @@ function deps(platform: PlatformId, o: DepsOpts = {}) {
   const envs: (NodeJS.ProcessEnv | undefined)[] = [];
   const verbatims: (boolean | undefined)[] = [];
   const present = new Set<string>();
+  const sleeps: number[] = [];
+  const renameErrors = [...(o.renameFails ?? [])];
   if (o.javaHere) present.add(paths.javaBin);
   if (o.sdkmanagerHere) present.add(paths.sdkmanager);
   const d: RunnerDeps = {
@@ -49,15 +55,21 @@ function deps(platform: PlatformId, o: DepsOpts = {}) {
     fs: {
       rm: async (p) => { calls.push(`rm ${p}`); },
       mkdir: async () => undefined,
-      rename: async (a, b) => { calls.push(`mv ${a} ${b}`); if (b === paths.jreDir) present.add(paths.javaBin); },
+      rename: async (a, b) => {
+        calls.push(`mv ${a} ${b}`);
+        const err = renameErrors.shift(); if (err) throw err;
+        if (b === paths.jreDir) present.add(paths.javaBin);
+      },
       chmod: async () => undefined,
       readdir: async (p) => (p.includes('jre') ? (o.readdirJre ?? ['jdk-17.0.20.1+1-jre']) : ['sdkmanager', 'avdmanager']),
     },
     exists: async (p) => present.has(p),
     pull: async (model, bin, progress) => { calls.push(`pull ${model} ${bin}`); progress(10, 20); },
     log: () => undefined,
+    sleep: async (ms) => { sleeps.push(ms); },
+    ...(o.baseEnv ? { baseEnv: o.baseEnv } : {}),
   };
-  return { d, calls, envs, verbatims };
+  return { d, calls, envs, verbatims, sleeps };
 }
 
 /** Aspas só quando o argumento tem espaço — mesma regra de `q` em runners.ts. */
@@ -174,6 +186,42 @@ describe('Windows', () => {
   });
 });
 
+describe('Windows: PATH e rename', () => {
+  const eperm = () => Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' });
+  it('JAVA no PATH vai na chave que já existe (Path), sem criar uma segunda PATH', async () => {
+    const { d, envs } = deps('win32-x64', { javaHere: true, baseEnv: { Path: 'C:\\Windows', SystemRoot: 'C:\\Windows' } });
+    await createRunners('gpt-oss:20b', 'ollama', d).adb(() => {});
+    const env = envs.at(-1) ?? {};
+    expect(Object.keys(env).filter((k) => /^path$/i.test(k))).toEqual(['Path']);
+    expect(env.Path).toBe(`${d.paths.javaHome}\\bin;C:\\Windows`);
+    expect(env.JAVA_HOME).toBe(d.paths.javaHome);
+  });
+  it('sem nenhuma chave de PATH, cria PATH', async () => {
+    const { d, envs } = deps('win32-x64', { javaHere: true, baseEnv: { SystemRoot: 'C:\\Windows' } });
+    await createRunners('gpt-oss:20b', 'ollama', d).adb(() => {});
+    expect(envs.at(-1)?.PATH).toBe(`${d.paths.javaHome}\\bin;`);
+  });
+  it('rename com EPERM transitório (antivírus) tenta de novo a cada 200 ms', async () => {
+    const { d, calls, sleeps } = deps('win32-x64', { renameFails: [eperm()] });
+    await createRunners('gpt-oss:20b', 'ollama', d).sdk(() => {});
+    expect(calls.filter((c) => c.startsWith('mv ') && c.endsWith(` ${d.paths.jreDir}`))).toHaveLength(2);
+    expect(sleeps).toEqual([200]);
+  });
+  it('rename desiste depois de 5 tentativas; erro que não é transitório não repete', async () => {
+    const a = deps('win32-x64', { renameFails: Array.from({ length: 5 }, eperm) });
+    await expect(createRunners('gpt-oss:20b', 'ollama', a.d).sdk(() => {})).rejects.toMatchObject({ code: 'EPERM' });
+    expect(a.calls.filter((c) => c.startsWith('mv '))).toHaveLength(5);
+    const b = deps('win32-x64', { renameFails: [Object.assign(new Error('ENOENT'), { code: 'ENOENT' })] });
+    await expect(createRunners('gpt-oss:20b', 'ollama', b.d).sdk(() => {})).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(b.calls.filter((c) => c.startsWith('mv '))).toHaveLength(1);
+  });
+  it('rename das cmdline-tools também repete', async () => {
+    const { d, calls } = deps('win32-x64', { javaHere: true, renameFails: [eperm()] });
+    await createRunners('gpt-oss:20b', 'ollama', d).sdk(() => {});
+    expect(calls.filter((c) => c.startsWith('mv ') && c.endsWith('latest'))).toHaveLength(2);
+  });
+});
+
 describe('Windows: caminho do SDK com espaço', () => {
   const home = 'C:\\Users\\John Doe';
   const env = { LOCALAPPDATA: `${home}\\AppData\\Local` };
@@ -199,5 +247,11 @@ describe('pacote do Ollama sem o binário esperado', () => {
   it('falha com mensagem clara em vez de seguir', async () => {
     const { d } = deps('darwin-arm64', { ollamaBinAppears: false });
     await expect(createRunners('gpt-oss:20b', 'ollama', d).ollama(() => {})).rejects.toMatchObject({ kind: 'process', message: expect.stringContaining('não trouxe') });
+  });
+  it('mantém o arquivo baixado para a nova tentativa não baixar de novo', async () => {
+    const { d, calls } = deps('darwin-arm64', { ollamaBinAppears: false });
+    await createRunners('gpt-oss:20b', 'ollama', d).ollama(() => {}).catch(() => undefined);
+    const file = `${d.paths.downloadsDir}/${artifactsFor('darwin-arm64').ollama.file}`;
+    expect(calls).not.toContain(`rm ${file}`);
   });
 });
