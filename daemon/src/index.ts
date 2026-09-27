@@ -18,6 +18,7 @@ import { ensureUnlocked, isValidPin, setDevicePin } from './device/unlock.js';
 import { planGoal, type PlanDeps } from './leader/plan.js';
 import { leasePorts } from './fleet/ports.js';
 import { createHostMetrics } from './host/metrics.js';
+import { createGpuSampler } from './host/gpu.js';
 import { readProviderConfig } from './provider/config.js';
 import { createOllamaSupervisor } from './provider/ollama.js';
 import { createLmStudio } from './provider/runtimes/lmstudio.js';
@@ -47,7 +48,7 @@ const ollama = singleFlightOllama(localRuntimes);
 
 // Emuladores que o daemon subiu (boot pela UI); só esses morrem no SIGINT — nunca um aberto por fora (spec inc. 5 §2).
 const emulators = createEmulatorSupervisor();
-const host = createHostMetrics();
+const host = createHostMetrics({ gpu: createGpuSampler() });
 const disk = createDiskUsage();
 
 // Identidade 0: o emulador já provisionado. Token, estado, handle e portas vêm do banco quando existem (as portas podem
