@@ -15,6 +15,12 @@ export function pickBaseAvd(envBase: string | undefined, avdHome: string, exists
 }
 const AVD_HOME = process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd');
 
+/** Inteiro positivo de uma variável de ambiente; ausente, NaN, zero ou negativo → `fallback`. */
+export function positiveIntOr(raw: string | undefined, fallback: number): number {
+  const n = Math.floor(Number(raw));
+  return raw && Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** Resolve um arquivo de `daemon/vendor` tanto a partir de `daemon/src` (vitest) quanto de `dist-daemon` (build). */
 function resolveVendor(file: string): string {
@@ -35,7 +41,7 @@ export const CONFIG = {
   ports: { consoleFrom: 5554, consoleMax: 5584, mcpHostFrom: 8080 },
   worker: { stepBudget: 30, keepScreens: 2, qualityFloor: 3 },
   /** Missões (spec missões): orçamento de passos por subtarefa; a missão em si não tem teto. */
-  mission: { subtaskStepBudget: Number(process.env.ENXAME_MISSION_STEP_BUDGET ?? 60) },
+  mission: { subtaskStepBudget: positiveIntOr(process.env.ENXAME_MISSION_STEP_BUDGET, 60) },
   /** Enxame (spec §4.3 Pacing, inc. 5 §2): starts escalonados com jitter, atraso entre passos e teto de ações/hora por identidade. */
   swarm: { staggerMs: 8000, jitterMs: 3000, stepDelayMs: 1500, stepJitterMs: 1000, maxActionsPerHour: 120 },
   /** Ciclo de vida (spec inc. 5 §2): snapshot mais velho que isto exige confirmação humana para restaurar. */
