@@ -20,4 +20,9 @@ describe('Android SDK por sistema operacional', () => {
     });
     expect(sdkPaths({ ANDROID_HOME: 'D:\\sdk' }, 'win32', 'C:\\Users\\u')).toEqual({ adb: 'D:\\sdk\\platform-tools\\adb.exe', emulator: 'D:\\sdk\\emulator\\emulator.exe' });
   });
+  it('raiz preferida (setup.json) vem antes do ambiente, mantendo o .exe do Windows', () => {
+    expect(sdkRoot({ ANDROID_HOME: '/env' }, 'linux', '/home/u', '/setup/sdk')).toBe('/setup/sdk');
+    expect(sdkRoot({ ANDROID_HOME: '/env' }, 'linux', '/home/u', null)).toBe('/env');
+    expect(sdkPaths({}, 'win32', 'C:\\Users\\u', 'E:\\sdk')).toEqual({ adb: 'E:\\sdk\\platform-tools\\adb.exe', emulator: 'E:\\sdk\\emulator\\emulator.exe' });
+  });
 });

@@ -23,6 +23,8 @@ const POLL_MS = 250;
 export interface ChildLike { readonly pid?: number; kill(signal?: NodeJS.Signals): boolean; on(ev: 'exit' | 'error', cb: (e?: Error) => void): unknown }
 export interface OllamaProcess { readonly pid: number; readonly env: string }
 export interface OllamaDeps {
+  /** Binário do Ollama; ausente = `CONFIG.ollamaBin` (setup.json ou PATH). */
+  readonly bin?: string;
   readonly fetch?: typeof fetch;
   readonly spawn?: (cmd: string, args: readonly string[], opts: { env: NodeJS.ProcessEnv; stdio: unknown }) => ChildLike;
   readonly sleep?: (ms: number) => Promise<void>;
@@ -103,6 +105,7 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
   const findProcesses = deps.findProcesses ?? defaultFindProcesses;
   const killFn = deps.kill ?? ((pid: number, sig: NodeJS.Signals) => { try { process.kill(pid, sig); } catch { /* já morreu */ } });
   const spawnFn = deps.spawn ?? ((cmd, args, opts) => nodeSpawn(cmd, args, { env: opts.env, stdio: opts.stdio as never, detached: false }) as unknown as ChildLike);
+  const bin = deps.bin ?? CONFIG.ollamaBin;
   let child: ChildLike | null = null;
   let adopted = false;
   let last: OllamaStatus | null = null;
@@ -142,7 +145,7 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
       adopted = false;
       try {
         const log = openLog(logPath); logFd = log;
-        child = spawnFn('ollama', ['serve'], { env: { ...process.env, ...OLLAMA_ENV, OLLAMA_HOST: host }, stdio: ['ignore', log, log] });
+        child = spawnFn(bin, ['serve'], { env: { ...process.env, ...OLLAMA_ENV, OLLAMA_HOST: host }, stdio: ['ignore', log, log] });
       } catch (e) { spawnErr = e as Error; child = null; releaseLog(); }
       child?.on('exit', () => { child = null; releaseLog(); });
       child?.on('error', (e) => { spawnErr = e ?? new Error('spawn error'); child = null; releaseLog(); });

@@ -1,9 +1,9 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { sdkPaths } from './device/sdk.js';
+import { sdkPaths, sdkRoot } from './device/sdk.js';
 
 const DATA_DIR = process.env.ENXAME_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'enxame');
 
@@ -14,9 +14,35 @@ export function pickBaseAvd(envBase: string | undefined, avdHome: string, exists
   if (envBase) return envBase;
   return exists(path.join(avdHome, `${GOLDEN_AVD}.avd`)) ? GOLDEN_AVD : 'mcp_test_playstore';
 }
-/** adb e emulator do Android SDK (`ANDROID_HOME`/`ANDROID_SDK_ROOT` ou o local padrão do SO). */
-const SDK = sdkPaths(process.env, process.platform, os.homedir());
 const AVD_HOME = process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd');
+
+/** Caminhos que o onboarding (electron/setup) grava em `<dados>/setup.json`; o daemon só lê. */
+export interface SetupPaths { readonly sdkRoot: string | null; readonly ollamaBin: string | null }
+const NO_SETUP: SetupPaths = { sdkRoot: null, ollamaBin: null };
+const SetupFileSchema = z.object({ paths: z.object({ sdkRoot: z.string().min(1), ollamaBin: z.string().min(1).nullable() }) });
+
+/** Arquivo ausente, ilegível ou com outro formato: nenhum caminho (cai nos padrões). */
+export function readSetupPaths(file: string, read: (p: string) => string = (p) => readFileSync(p, 'utf8')): SetupPaths {
+  try {
+    const parsed = SetupFileSchema.safeParse(JSON.parse(read(file)));
+    return parsed.success ? parsed.data.paths : NO_SETUP;
+  } catch { return NO_SETUP; }
+}
+
+/** SDK do Android: setup.json primeiro, depois as regras por SO de `sdkRoot` (env, senão o padrão do Android Studio). */
+export function sdkRootFrom(setup: SetupPaths, env: NodeJS.ProcessEnv, home: string, platform: NodeJS.Platform = process.platform): string {
+  return sdkRoot(env, platform, home, setup.sdkRoot);
+}
+
+/** Binário do Ollama: `ENXAME_OLLAMA_BIN`, o que o onboarding instalou ou achou, senão o `ollama` do PATH. */
+export function ollamaBinFrom(setup: SetupPaths, env: NodeJS.ProcessEnv): string {
+  return env.ENXAME_OLLAMA_BIN || setup.ollamaBin || 'ollama';
+}
+
+const SETUP = readSetupPaths(path.join(DATA_DIR, 'setup.json'));
+const SDK_ROOT = sdkRootFrom(SETUP, process.env, os.homedir());
+/** adb e emulator do Android SDK (setup.json, `ANDROID_HOME`/`ANDROID_SDK_ROOT` ou o local padrão do SO; `.exe` no Windows). */
+const SDK = sdkPaths(process.env, process.platform, os.homedir(), SETUP.sdkRoot);
 
 /** Orçamento de passos de uma env var: `"0"` desliga (`null` = sem limite); inteiro positivo vale; ausente, vazio, NaN, negativo ou não inteiro caem no `fallback`. */
 export function stepBudgetFrom(raw: string | undefined, fallback: number): number | null {
@@ -46,7 +72,9 @@ export const CONFIG = {
   daemonInfoPath: path.join(DATA_DIR, 'daemon.json'),
   /** Cofre de segredos do daemon (spec missões §Cofre); a chave fica no chaveiro do SO. */
   vaultPath: path.join(DATA_DIR, 'vault.json'),
+  sdkRoot: SDK_ROOT,
   adbPath: SDK.adb,
+  ollamaBin: ollamaBinFrom(SETUP, process.env),
   adbServerPort: 5038,
   mcpAppPackage: 'com.danielealbano.androidremotecontrolmcp.gms.debug',
   targetApp: { package: 'com.instagram.android', versionName: '448.0.0.52.84' },
