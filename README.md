@@ -59,7 +59,7 @@ Download the installer for your system from the [releases page](https://github.c
 | Linux x64 | `Enxame-0.1.0.AppImage` or `enxame_0.1.0_amd64.deb` |
 | macOS Intel | `Enxame-0.1.0.dmg` |
 | macOS Apple Silicon | `Enxame-0.1.0-arm64.dmg` |
-| Windows x64 | `Enxame Setup 0.1.0.exe` |
+| Windows x64 | `Enxame.Setup.0.1.0.exe` |
 
 **Unsigned builds.** The 0.1.0 installers are not code-signed, so the OS will warn you on first open:
 - **macOS**: drag **Enxame** to **Applications** and try to open it once (macOS blocks it). Then open
