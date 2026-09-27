@@ -7,6 +7,7 @@ import { createGoalActions, type GoalActions } from './goalActions';
 import { createIdentityActions, type IdentityActions } from './identityActions';
 import { createMissionActions, type MissionActions } from './missionActions';
 import { createProviderActions } from './providerActions';
+import { createSettingsActions, type SettingsActions } from './settingsActions';
 import type { ProviderPatch } from '../live/types';
 import { useI18n } from '../i18n/I18nProvider';
 
@@ -55,6 +56,8 @@ export interface UseFleet {
   readonly credentials: CredentialActions;
   /** Missões (spec missões): iniciar e as transições pause/resume/continue/abandon. */
   readonly mission: MissionActions;
+  /** Limites dos agentes (spec limites §UI): grava no daemon, sem reiniciar. */
+  readonly settings: SettingsActions;
 }
 
 /** Bridge do preload; a presença de `api` marca o modo vivo. */
@@ -123,6 +126,7 @@ export function useFleet(): UseFleet {
       identity: createIdentityActions({ ...deps, confirm }),
       credentials: createCredentialActions({ ...deps, confirm }),
       mission: createMissionActions({ ...deps, confirm, getLocale: () => i18nRef.current.locale }),
+      settings: createSettingsActions(deps),
     };
   }, []);
 

@@ -27,4 +27,10 @@ describe('apiRoute', () => {
     expect(() => apiRoute('GET', '/credentials')).toThrow();
     expect(() => apiRoute('PUT', '/identities/conta1/credentials')).toThrow();
   });
+  it('limites dos agentes: GET e PUT em /settings/budgets entram no canal genérico', () => {
+    expect(apiRoute('GET', '/settings/budgets')).toEqual({ method: 'GET', path: '/settings/budgets' });
+    expect(apiRoute('put', '/settings/budgets').method).toBe('PUT');
+    expect(() => apiRoute('POST', '/settings/budgets')).toThrow();
+    expect(() => apiRoute('GET', '/settings/budgets/x')).toThrow();
+  });
 });

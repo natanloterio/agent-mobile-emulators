@@ -46,4 +46,7 @@ create table if not exists mission_memory (
   secret integer not null default 0, updated_at text not null default (datetime('now')),
   primary key (goal_id, key)
 );
+create table if not exists settings (
+  key text primary key, value text not null, updated_at text not null default (datetime('now'))
+);
 `;

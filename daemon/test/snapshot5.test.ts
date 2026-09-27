@@ -3,6 +3,7 @@ import { CONFIG } from '../src/config.js';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, setIdentityFlags, upsertIdentity } from '../src/db/identities.js';
 import { createMission } from '../src/db/missions.js';
+import { writeStepBudgets } from '../src/db/settings.js';
 import { createGoalAndTask, ledgerPut, setTaskState } from '../src/db/tasks.js';
 import { startServer } from '../src/server/api.js';
 import { buildSnapshot, isRestoreUnsafe, listGoals, sqliteUtcMs } from '../src/server/snapshot.js';
@@ -59,6 +60,16 @@ describe('snapshot do incremento 5', () => {
     expect(buildSnapshot(db, false).identities[0].budget).toBe(CONFIG.worker.stepBudget);
     createMission(db, 'conta1', 'objetivo da missão', 'pt');
     expect(buildSnapshot(db, false).identities[0].budget).toBe(CONFIG.mission.subtaskStepBudget);
+  });
+  it('budget vem do banco (spec limites §UI), não mais direto do CONFIG; topo do snapshot também traz stepBudgets', () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    writeStepBudgets(db, { goal: 12 });
+    const s1 = buildSnapshot(db, false);
+    expect(s1.stepBudgets).toEqual({ goal: 12, mission: CONFIG.mission.subtaskStepBudget });
+    expect(s1.identities[0].budget).toBe(12);
+    createMission(db, 'conta1', 'objetivo da missão', 'pt');
+    const s2 = buildSnapshot(db, false);
+    expect(s2.identities[0].budget).toBe(CONFIG.mission.subtaskStepBudget);
   });
 });
 
