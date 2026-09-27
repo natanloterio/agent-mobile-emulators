@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/db/open.js';
-import { getIdentity, setIdentityFlags, upsertIdentity } from '../src/db/identities.js';
+import { getIdentity, setIdentityFlags, setIdentityState, upsertIdentity } from '../src/db/identities.js';
 import { createMission, getMission, listSubtasks, setMissionState, setSubtaskReport } from '../src/db/missions.js';
 import { setTaskState } from '../src/db/tasks.js';
 import { runMission, type MissionDeps, type SubtaskJob } from '../src/mission/loop.js';
@@ -98,5 +98,14 @@ describe('runMission', () => {
     const r = await runMission(h.id, { ...h.deps, readScreen: async () => { throw new Error('MCP 8081 recusou'); } });
     expect(r).toBe('paused');
     expect(getMission(h.db, h.id)?.humanReason).toMatch(/device indisponível: MCP 8081 recusou/);
+  });
+  it('identidade já em needs-human (outro subsistema) → paused sem apagar motivo; planejador nunca chamado', async () => {
+    const h = harness([next('x')]);
+    setIdentityState(h.db, 'conta2', 'needs-human', { lastError: 'restauração falhou' });
+    const r = await runMission(h.id, h.deps);
+    expect(r).toBe('paused');
+    expect(getMission(h.db, h.id)?.humanReason).toContain('restauração falhou');
+    expect(getIdentity(h.db, 'conta2')).toMatchObject({ state: 'needs-human', lastError: 'restauração falhou' });
+    expect(h.inputs).toHaveLength(0);
   });
 });

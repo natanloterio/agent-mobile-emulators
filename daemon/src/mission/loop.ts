@@ -3,6 +3,7 @@ import { getIdentity, setIdentityState, type IdentityRow } from '../db/identitie
 import {
   addMissionCost, addSubtask, getMission, listMemory, listSubtasks, recalcStalled, setMissionState, type MissionRow, type MissionState,
 } from '../db/missions.js';
+import { setTaskState } from '../db/tasks.js';
 import { LANGS, type Lang } from '../leader/lang.js';
 import { summarizeScreen } from '../screen/human-check.js';
 import type { ScreenState } from '../screen/parse.js';
@@ -34,6 +35,8 @@ const asLang = (l: string): Lang => ((LANGS as readonly string[]).includes(l) ? 
 function stopReason(d: MissionDeps, i: IdentityRow | null): string | null {
   if (d.isKilled()) return PAUSE_REASON.kill;
   if (!i || i.discardedAt || i.state === 'banned') return PAUSE_REASON.gone;
+  // Outro subsistema (ex.: sonda de restauração/login) marcou needs-human: não sobrescrever rodando de novo.
+  if (i.state === 'needs-human') return `identidade precisa de humano: ${i.lastError ?? 'sem detalhe'}`.slice(0, 200);
   if (i.controlled) return PAUSE_REASON.control;
   if (i.paused) return PAUSE_REASON.paused;
   return null;
@@ -106,7 +109,7 @@ export async function runMission(missionId: string, d: MissionDeps): Promise<Mis
     let r: SubtaskResult;
     try { r = await d.runSubtask({ identity, missionId: m.id, taskId, instruction, shouldStop }); }
     catch (e) {
-      if (['running', 'todo'].includes(taskState(d.db, taskId))) d.db.prepare("update task set state='interrupted', finished_at=datetime('now') where id=?").run(taskId);
+      if (['running', 'todo'].includes(taskState(d.db, taskId))) setTaskState(d.db, taskId, 'interrupted');
       return leftRunning(d, m) ?? pause(d, m, `executor: ${msg(e)}`);
     }
     recalcStalled(d.db, m.id);
