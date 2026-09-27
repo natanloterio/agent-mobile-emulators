@@ -22,13 +22,15 @@ const STEPS: readonly { readonly title: MessageKey; readonly sub: MessageKey }[]
 export interface OnboardingProps {
   readonly bridge: SetupBridge;
   readonly onDone: (screen: 'cockpit' | 'ids') => void;
+  /** Presente só quando reaberto em Provedores: volta ao app sem aplicar nada. */
+  readonly onClose?: () => void;
 }
 
 /** Onboarding de primeira execução (spec onboarding, mockup design/onboarding.html). */
-export function Onboarding({ bridge, onDone }: OnboardingProps) {
+export function Onboarding({ bridge, onDone, onClose }: OnboardingProps) {
   const i18n = useI18n();
   const { t } = i18n;
-  const { state, actions } = useOnboarding(bridge);
+  const { state, actions } = useOnboarding(bridge, !onClose);
   const footer = footerView(state, i18n);
   // Só dá para voltar a passos anteriores; o passo 4 só chega pelo fim da instalação.
   const canJump = (i: number) => i < state.step && !state.installing && !state.finishing && state.step < 3;
@@ -68,6 +70,9 @@ export function Onboarding({ bridge, onDone }: OnboardingProps) {
         <footer className="onb__footer">
           <span className="onb__hint" role="status">{footer.hint}</span>
           <div className="onb__actions">
+            {onClose && state.step < 3 && (
+              <Button variant="ghost" disabled={state.installing || state.finishing} onClick={onClose}>{t('onboarding.nav.close')}</Button>
+            )}
             {footer.showBack && (
               <Button variant="secondary" disabled={footer.backDisabled} onClick={() => actions.go((state.step - 1) as Step)}>{t('onboarding.nav.back')}</Button>
             )}

@@ -16,6 +16,8 @@ export interface SetupIpcDeps {
   readonly finish: (req: FinishRequest, ollamaBin: string | null) => Promise<void>;
 }
 
+const UNSUPPORTED = 'plataforma sem suporte ao onboarding';
+
 /** Canais do onboarding. Tudo que vem do renderer passa por zod antes de virar comando, caminho ou chamada de rede. */
 export function registerSetupIpc(d: SetupIpcDeps): void {
   // O binário que o `finish` grava no setup.json: o achado na verificação, ou o nosso depois de instalar.
@@ -36,6 +38,7 @@ export function registerSetupIpc(d: SetupIpcDeps): void {
   });
   d.handle('enxame:setup:install', async (_e, raw) => {
     const req = InstallRequestSchema.parse(raw);
+    if (!(await d.status()).supported) throw new Error(UNSUPPORTED);
     if (running) throw new Error('instalação já em andamento');
     const log = (line: string) => d.send('enxame:setup:log', line);
     const bin = req.jobs.includes('ollama') ? d.paths.ollamaBin : (ollamaBin ?? d.paths.ollamaBin);
@@ -48,6 +51,7 @@ export function registerSetupIpc(d: SetupIpcDeps): void {
   d.handle('enxame:setup:testKey', async (_e, raw) => d.testKey(AnthropicKeySchema.parse(raw)));
   d.handle('enxame:setup:finish', async (_e, raw) => {
     const req = FinishRequestSchema.parse(raw);
+    if (!(await d.status()).supported) throw new Error(UNSUPPORTED);
     if (running) throw new Error('instalação em andamento');
     await d.finish(req, ollamaBin);
     finished = true;

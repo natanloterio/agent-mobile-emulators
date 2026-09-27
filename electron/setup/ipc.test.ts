@@ -32,14 +32,14 @@ describe('registerSetupIpc', () => {
   it('check devolve só o relatório; finish recebe o ollamaBin achado na verificação', async () => {
     const { call, finished } = mk();
     expect(await call('enxame:setup:check')).toEqual(report);
-    await call('enxame:setup:finish', { mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: KEY });
-    expect(finished).toEqual([[{ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: KEY }, 'ollama']]);
+    await call('enxame:setup:finish', { mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: KEY, applyRoles: true });
+    expect(finished).toEqual([[{ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: KEY, applyRoles: true }, 'ollama']]);
   });
   it('install valida o pedido, manda eventos e, com o Ollama instalado pelo Enxame, finish usa o binário dele', async () => {
     const { call, sent, finished } = mk();
     await call('enxame:setup:install', { jobs: ['ollama', 'model'], localModel: 'gpt-oss:20b' });
     expect(sent.filter(([ch]) => ch === 'enxame:setup:job').map(([, e]) => (e as { id: string; state: string }).state)).toContain('done');
-    await call('enxame:setup:finish', { mode: 'local', localModel: 'gpt-oss:20b', anthropicKey: null });
+    await call('enxame:setup:finish', { mode: 'local', localModel: 'gpt-oss:20b', anthropicKey: null, applyRoles: true });
     expect(finished[0][1]).toBe('/home/u/.local/share/enxame/tools/ollama/bin/ollama');
   });
   it('recusa pedido inválido e instalação em dobro', async () => {
@@ -60,7 +60,7 @@ describe('registerSetupIpc', () => {
   it('status fica completed depois de um finish bem-sucedido', async () => {
     const { call } = mk();
     expect(await call('enxame:setup:status')).toEqual({ completed: false, supported: true });
-    await call('enxame:setup:finish', { mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: null });
+    await call('enxame:setup:finish', { mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: null, applyRoles: true });
     expect(await call('enxame:setup:status')).toEqual({ completed: true, supported: true });
   });
   it('recusa finish com instalação em andamento', async () => {
@@ -68,8 +68,14 @@ describe('registerSetupIpc', () => {
     const slow: JobRunners = { sdk: async () => {}, adb: async () => {}, emu: async () => {}, img: () => new Promise<void>((r) => { release = r; }), ollama: async () => {}, model: async () => {} };
     const { call } = mk({ runners: () => slow });
     const install = call('enxame:setup:install', { jobs: ['img'], localModel: 'gpt-oss:20b' }) as Promise<void>;
-    await expect(call('enxame:setup:finish', { mode: 'local', localModel: 'gpt-oss:20b', anthropicKey: null })).rejects.toThrow(/instalação em andamento/);
+    await expect(call('enxame:setup:finish', { mode: 'local', localModel: 'gpt-oss:20b', anthropicKey: null, applyRoles: true })).rejects.toThrow(/instalação em andamento/);
     release();
     await install;
+  });
+  it('plataforma sem suporte: recusa install e finish', async () => {
+    const { call, finished } = mk({ status: async () => ({ completed: true, supported: false }) });
+    await expect(call('enxame:setup:install', { jobs: ['img'], localModel: 'gpt-oss:20b' })).rejects.toThrow('plataforma sem suporte ao onboarding');
+    await expect(call('enxame:setup:finish', { mode: 'nuvem', localModel: 'gpt-oss:20b', anthropicKey: null, applyRoles: true })).rejects.toThrow('plataforma sem suporte ao onboarding');
+    expect(finished).toEqual([]);
   });
 });
