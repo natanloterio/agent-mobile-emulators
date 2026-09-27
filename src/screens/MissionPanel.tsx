@@ -12,7 +12,7 @@ import './Mission.css';
 interface MissionPanelProps {
   readonly mission: MissionView; readonly busy: boolean; readonly error: string | null; readonly now: number;
   readonly onAction: (a: MissionAction) => void;
-  readonly onInstruct: (text: string, then?: MissionInstructThen) => void;
+  readonly onInstruct: (text: string, then?: MissionInstructThen) => Promise<boolean>;
 }
 
 /** Painel da missão no Device (spec missões §Interface): estado, humano, linha do tempo, memória e ações. */

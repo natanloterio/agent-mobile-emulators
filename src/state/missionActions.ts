@@ -11,7 +11,7 @@ export interface MissionActions {
   readonly start: (identityId: string, text: string) => Promise<boolean>;
   readonly act: (id: string, action: MissionAction, text?: string) => Promise<void>;
   /** Instrução do operador (spec instruções): texto aparado; vazio não chama o daemon. */
-  readonly instruct: (id: string, text: string, then?: MissionInstructThen) => Promise<void>;
+  readonly instruct: (id: string, text: string, then?: MissionInstructThen) => Promise<boolean>;
 }
 
 const MIN_CHARS = 3; // o daemon recusa menos que isso (GoalText)
@@ -33,8 +33,9 @@ export function createMissionActions(deps: ApiDeps & { readonly confirm: (m: str
     },
     instruct: async (id, raw, then) => {
       const text = raw.trim();
-      if (!text) return;
-      await track(deps, missionKey(id), (b) => b.api?.('POST', `/missions/${encodeURIComponent(id)}/instruct`, then ? { text, then } : { text }));
+      if (!text) return false;
+      const r = await track(deps, missionKey(id), (b) => b.api?.('POST', `/missions/${encodeURIComponent(id)}/instruct`, then ? { text, then } : { text }));
+      return r.ok;
     },
   };
 }

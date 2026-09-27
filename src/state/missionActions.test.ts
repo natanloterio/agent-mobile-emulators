@@ -29,10 +29,10 @@ describe('missionActions', () => {
   });
   it('instruct manda texto aparado para /missions/:id/instruct; vazio não chama o daemon', async () => {
     const t = mk();
-    await t.a.instruct('m1', '  use o YopMail  ');
+    expect(await t.a.instruct('m1', '  use o YopMail  ')).toBe(true);
     expect(t.calls).toEqual([{ method: 'POST', path: '/missions/m1/instruct', body: { text: 'use o YopMail' } }]);
     expect(t.actions).toContainEqual({ type: 'request', key: missionKey('m1'), phase: 'ok' });
-    await t.a.instruct('m1', '   ');
+    expect(await t.a.instruct('m1', '   ')).toBe(false);
     expect(t.calls).toHaveLength(1);
   });
   it('instruct com `then` manda junto no corpo', async () => {

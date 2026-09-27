@@ -39,7 +39,7 @@ interface DeviceProps {
   readonly missionError?: string | null;
   readonly now?: number;
   readonly onMission?: (a: MissionAction) => void;
-  readonly onInstruct?: (text: string, then?: MissionInstructThen) => void;
+  readonly onInstruct?: (text: string, then?: MissionInstructThen) => Promise<boolean>;
 }
 
 function NeedsCard({ error, busy, onResolve, onBan }: { readonly error: string; readonly busy: boolean; readonly onResolve: () => void; readonly onBan?: () => void }) {
@@ -124,7 +124,7 @@ export function Device(p: DeviceProps) {
           {p.mission && (
             <MissionPanel
               mission={p.mission} busy={!!p.missionBusy} error={p.missionError ?? null} now={p.now ?? Date.now()}
-              onAction={(a) => p.onMission?.(a)} onInstruct={(text, then) => p.onInstruct?.(text, then)}
+              onAction={(a) => p.onMission?.(a)} onInstruct={(text, then) => p.onInstruct?.(text, then) ?? Promise.resolve(false)}
             />
           )}
 

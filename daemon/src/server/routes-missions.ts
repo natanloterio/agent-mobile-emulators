@@ -39,6 +39,9 @@ export function missionRoutes(o: {
       if (!mission) { ctx.send(404, { error: 'missão desconhecida' }); return true; }
       if (!OPEN_MISSION_STATES.includes(mission.state)) { ctx.send(409, { error: 'missão já encerrada' }); return true; }
       const mask = await o.mask(id);
+      // A máscara lê o cofre (await): a missão pode ter sido encerrada nesse meio-tempo.
+      const now = getMission(ctx.db, id);
+      if (!now || !OPEN_MISSION_STATES.includes(now.state)) { ctx.send(409, { error: 'missão já encerrada' }); return true; }
       const noteId = addNote(ctx.db, id, mask(text));
       guard(() => {
         const missionState = body.data.then === 'continue' ? o.runner.continue(id) : body.data.then === 'resume' ? o.runner.resume(id) : mission.state;

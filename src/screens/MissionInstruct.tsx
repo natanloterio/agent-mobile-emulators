@@ -10,7 +10,7 @@ import './Mission.css';
 
 interface MissionInstructProps {
   readonly mission: MissionView; readonly busy: boolean; readonly error: string | null;
-  readonly onInstruct: (text: string, then?: MissionInstructThen) => void;
+  readonly onInstruct: (text: string, then?: MissionInstructThen) => Promise<boolean>;
   /** "Resolvi, continuar" (existente): some do bloco de ações e entra aqui, ao lado de "Enviar e continuar". */
   readonly onResolved: () => void;
 }
@@ -27,8 +27,8 @@ export function MissionInstruct({ mission: m, busy, error, onInstruct, onResolve
   const send = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    onInstruct(trimmed, then);
-    setText('');
+    // Só limpa quando o daemon aceitou: em erro o texto fica para reenviar.
+    void onInstruct(trimmed, then).then((ok) => { if (ok) setText(''); });
   };
 
   return (
