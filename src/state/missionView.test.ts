@@ -11,6 +11,7 @@ const base: MissionView = {
     { seq: 2, objective: 'cadastrar no Instagram', state: 'running', report: null, costUsd: 0 },
   ],
   memory: [{ key: 'email.address', value: 'x@y.z', secret: false }, { key: 'email.password', value: null, secret: true }],
+  notes: [],
 };
 const snap = (missions: MissionView[]) => ({ identities: [], killed: false, updatedAt: '', missions }) as FleetSnapshot;
 const pt = createI18n('pt'); const en = createI18n('en');

@@ -84,12 +84,15 @@ export interface MissionSubtaskView {
   readonly report: { readonly ok: boolean; readonly did: string; readonly blockers: string } | null;
   readonly costUsd: number;
 }
+/** Instrução do operador (spec instruções): `readSeq` nulo = ainda não lida (selo "aguardando"). */
+export interface MissionNoteView { readonly id: number; readonly text: string; readonly createdAt: string; readonly readSeq: number | null }
 export interface MissionView {
   readonly id: string; readonly identityId: string; readonly text: string; readonly state: MissionState; readonly humanReason: string | null;
   readonly stalled: boolean; readonly costUsd: number; readonly startedAt: string; readonly finishedAt: string | null;
   readonly current: { readonly seq: number; readonly objective: string } | null;
   readonly subtasks: readonly MissionSubtaskView[];
   readonly memory: readonly { readonly key: string; readonly value: string | null; readonly secret: boolean }[];
+  readonly notes: readonly MissionNoteView[];
 }
 /** Limites de passos configuráveis na tela (spec limites §UI); ausente em daemon antigo. */
 export interface StepBudgets { readonly goal: number | null; readonly mission: number | null }
