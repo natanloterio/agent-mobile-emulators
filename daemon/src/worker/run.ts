@@ -286,6 +286,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       },
       onFinish: (r) => { report = r; },
       onHuman: (reason) => { halt = { kind: 'platform-block', text: reason }; },
+      onVaultError: (text) => { halt = { kind: 'infra', text }; },
     }) : { ledger_record: ledgerTool };
     const tools: ToolSet = { ...mcpTools, ...extra };
     const stopIfHalted: StopCondition<ToolSet> = () => halt !== null || stopped();
@@ -307,7 +308,8 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
 
     const h = halt as Halt;
     if (h?.kind === 'platform-block') return finish('platform-block', result.text);
-    if (h) return finish('infra', result.text);
+    // Em missão o motivo da parada (device, cofre) vira o resumo: é o que a missão mostra ao pausar.
+    if (h) return finish('infra', mission ? h.text : result.text);
     if (o.isKilled()) return finish('killed', result.text);
     if (humanStopped(db, identity.id)) return finish('interrupted', result.text);
     return finish(stepsUsed >= budget ? 'budget' : 'done', result.text);

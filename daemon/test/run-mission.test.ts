@@ -5,6 +5,7 @@ import { addSubtask, createMission, listMemory, listSubtasks } from '../src/db/m
 import { ProviderError } from '../src/provider/errors.js';
 import { createSecretMask, secretEntryId } from '../src/worker/mission-tools.js';
 import { runTask, type RunTaskDeps } from '../src/worker/run.js';
+import { VaultError, type Vault } from '../src/vault/vault.js';
 import { memVault } from './fixtures/mem-vault.js';
 
 const row = { id: 'conta2', name: 'conta2', handle: 'sem conta', avdName: 'x', serial: 's', consolePort: 5556, mcpHostPort: 8081, mcpToken: 't', deviceSlug: 'conta2', appPackage: 'com.instagram.android', appVersionName: '1', state: 'running' as const };
@@ -51,11 +52,11 @@ function scripted(script: readonly (readonly [string, unknown])[]) {
   return { generate, seen, opts };
 }
 
-function setup() {
+function setup(vaultIn?: Vault) {
   const db = openDb(':memory:'); upsertIdentity(db, row);
   const missionId = createMission(db, 'conta2', 'missão', 'pt');
   const taskId = addSubtask(db, missionId, 'cadastrar', 'conta criada');
-  const vault = memVault(); const mask = createSecretMask();
+  const vault = vaultIn ?? memVault(); const mask = createSecretMask();
   const run = (deps: RunTaskDeps, stepBudget = 60) => runTask({
     db, identity: row, goalText: 'missão', goalId: missionId, taskId, instruction: 'Objetivo: cadastrar', apiKey: 'k',
     isKilled: () => false, onStep: () => {}, providers: PROVIDERS, stepBudget, mission: { missionId, vault, mask },
@@ -134,5 +135,21 @@ describe('runTask em modo missão', () => {
     const r = await s.run({ connect, generate: (async () => { throw new Error('não deveria chamar generate'); }) as unknown as RunTaskDeps['generate'] });
     expect(taskState(s.db, s.taskId)).toBe('interrupted');
     expect(r.report).toBeNull();
+  });
+  it('cofre travado no meio (secret_new) → interrupted com a mensagem do cofre, sem replanejar', async () => {
+    const locked: Vault = { ...memVault(), put: async () => { throw new VaultError('chaveiro travado'); }, get: async () => { throw new VaultError('chaveiro travado'); } };
+    const s = setup(locked); const mcp = fakeMcp();
+    const g = scripted([['secret_new', { key: 'email.password' }], [`${P}get_screen_state`, {}], ['finish_subtask', { ok: false, did: '', blockers: 'cofre' }]]);
+    const r = await s.run({ connect: mcp.connect, generate: g.generate });
+    expect(taskState(s.db, s.taskId)).toBe('interrupted');
+    expect(r.summary).toMatch(/chaveiro travado/);
+  });
+  it('cofre travado em type_secret → interrupted', async () => {
+    const vault = memVault(); const s = setup({ ...vault, get: async () => { throw new VaultError('chaveiro travado'); } });
+    const mcp = fakeMcp(); const key = 'email.password';
+    const g = scripted([['secret_new', { key }], ['type_secret', { node_id: 'node_0', key }]]);
+    await s.run({ connect: mcp.connect, generate: g.generate });
+    expect(taskState(s.db, s.taskId)).toBe('interrupted');
+    expect(mcp.typed).toEqual([]);
   });
 });
