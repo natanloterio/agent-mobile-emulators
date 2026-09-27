@@ -37,6 +37,13 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
     if (i.paused) return 'identidade pausada';
     return null;
   };
+  /** Guarda comum de retomar/continuar: loop antigo ainda parando, kill switch ou identidade bloqueada → 409. */
+  const assertCanRelaunch = (id: string, identityId: string) => {
+    if (loops.has(id)) throw new MissionError('a missão ainda está parando; tente em instantes', 409);
+    if (d.isKilled()) throw new MissionError('kill switch acionado: retome a frota antes', 409);
+    const block = identityBlock(identityId);
+    if (block) throw new MissionError(block, 409);
+  };
   const done = (_id: string, s: MissionState) => { d.onChange?.(); return s; };
 
   return {
@@ -60,10 +67,7 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
     resume: (id) => {
       const m = mission(id);
       if (m.state !== 'paused') throw new MissionError('só missão pausada pode ser retomada', 409);
-      if (loops.has(id)) throw new MissionError('a missão ainda está parando; tente em instantes', 409);
-      if (d.isKilled()) throw new MissionError('kill switch acionado: retome a frota antes', 409);
-      const block = identityBlock(m.identityId);
-      if (block) throw new MissionError(block, 409);
+      assertCanRelaunch(id, m.identityId);
       setMissionState(d.db, id, 'running');
       launch(id);
       return done(id, 'running');
@@ -71,10 +75,7 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
     continue: (id) => {
       const m = mission(id);
       if (m.state !== 'awaiting-human') throw new MissionError('a missão não está esperando humano', 409);
-      if (loops.has(id)) throw new MissionError('a missão ainda está parando; tente em instantes', 409);
-      if (d.isKilled()) throw new MissionError('kill switch acionado: retome a frota antes', 409);
-      const block = identityBlock(m.identityId);
-      if (block) throw new MissionError(block, 409);
+      assertCanRelaunch(id, m.identityId);
       setIdentityState(d.db, m.identityId, 'idle', { lastError: null });
       setMissionState(d.db, id, 'running');
       launch(id);
