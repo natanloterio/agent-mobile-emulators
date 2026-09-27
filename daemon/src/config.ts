@@ -51,7 +51,7 @@ export const CONFIG = {
   /** `ENXAME_STEP_BUDGET=0` desliga o orçamento (spec orçamento desligável): a tarefa roda até terminar, pausar ou o kill switch. */
   worker: { stepBudget: stepBudgetFrom(process.env.ENXAME_STEP_BUDGET, 30), keepScreens: 2, qualityFloor: 3 },
   /** Missões (spec missões): orçamento de passos por subtarefa; a missão em si não tem teto. `0` desliga o da subtarefa. */
-  mission: { subtaskStepBudget: stepBudgetFrom(process.env.ENXAME_MISSION_STEP_BUDGET, 60) },
+  mission: { subtaskStepBudget: stepBudgetFrom(process.env.ENXAME_MISSION_STEP_BUDGET, 60), keepScreens: 1 },
   /** Contexto dos modelos locais (Ollama, LM Studio) via `ENXAME_LOCAL_CONTEXT` (spec local: contexto configurável). */
   local: { contextLength: localContextFrom(process.env.ENXAME_LOCAL_CONTEXT) },
   /** Enxame (spec §4.3 Pacing, inc. 5 §2): starts escalonados com jitter, atraso entre passos e teto de ações/hora por identidade. */

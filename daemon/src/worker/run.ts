@@ -236,7 +236,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       // Pacing antes de cada passo (spec §4.3). Parada durante a espera: o passo roda sem tools (não age) e o stopWhen encerra.
       prepareStep: async ({ messages: m }) => {
         const go = pacer ? await pacer.beforeStep() : 'go';
-        return { messages: pruneScreens(m, CONFIG.worker.keepScreens), ...(go === 'stop' ? { activeTools: [] } : {}) };
+        return { messages: pruneScreens(m, mission ? CONFIG.mission.keepScreens : CONFIG.worker.keepScreens), ...(go === 'stop' ? { activeTools: [] } : {}) };
       },
       onLanguageModelCallEnd: (e) => { lastGenMs = Math.round((e as { performance?: { responseTimeMs?: number } }).performance?.responseTimeMs ?? 0); },
       onStepFinish: (step) => {

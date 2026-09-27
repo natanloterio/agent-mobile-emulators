@@ -4,6 +4,7 @@ import { getIdentity, upsertIdentity } from '../src/db/identities.js';
 import { addSubtask, createMission, listMemory, listSubtasks } from '../src/db/missions.js';
 import { ProviderError } from '../src/provider/errors.js';
 import { createSecretMask, secretEntryId } from '../src/worker/mission-tools.js';
+import { PRUNED_PLACEHOLDER } from '../src/worker/prune.js';
 import { runTask, type RunTaskDeps } from '../src/worker/run.js';
 import { VaultError, type Vault } from '../src/vault/vault.js';
 import { memVault } from './fixtures/mem-vault.js';
@@ -178,5 +179,18 @@ describe('runTask em modo missão', () => {
     const r = await s.run({ connect: mcp.connect, generate: scripted([[`${P}get_screen_state`, {}]]).generate });
     expect(r.humanReason).toMatch(/not a robot •••/);
     expect(JSON.stringify(s.db.prepare('select * from task').all())).not.toContain('Segr3do!Forte');
+  });
+  it('missão poda telas para CONFIG.mission.keepScreens (1): com 3 leituras, só a última fica completa', async () => {
+    const s = setup(); const mcp = fakeMcp();
+    let prepareStep: ((a: { messages: unknown[] }) => Promise<{ messages: unknown[] }>) | null = null;
+    const generate = (async (o: { prepareStep: (a: { messages: unknown[] }) => Promise<{ messages: unknown[] }> }) => {
+      prepareStep = o.prepareStep;
+      return { text: 'fim', totalUsage: { inputTokens: 1, outputTokens: 1 }, steps: [], response: { messages: [] } };
+    }) as unknown as RunTaskDeps['generate'];
+    await s.run({ connect: mcp.connect, generate });
+    const screenMsg = (id: string) => ({ role: 'tool', content: [{ type: 'tool-result', toolCallId: id, toolName: `${P}get_screen_state`, output: { type: 'text', value: `tela ${id}` } }] });
+    const { messages } = await prepareStep!({ messages: [screenMsg('a'), screenMsg('b'), screenMsg('c')] });
+    const texts = (messages as { content: { output: { value: string } }[] }[]).map((m) => m.content[0].output.value);
+    expect(texts).toEqual([PRUNED_PLACEHOLDER, PRUNED_PLACEHOLDER, 'tela c']);
   });
 });
