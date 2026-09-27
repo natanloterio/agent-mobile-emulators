@@ -39,4 +39,8 @@ describe('runProcess', () => {
     setTimeout(() => ev.emit('error', Object.assign(new Error('spawn tar ENOENT'), { code: 'ENOENT' })), 0);
     await expect(runProcess('tar', [], {}, () => child)).rejects.toMatchObject({ kind: 'process' });
   });
+  it('erro em stdout/stderr rejeita sem derrubar o main', async () => {
+    const { child } = fakeChild(({ out }) => setTimeout(() => out.emit('error', new Error('stream broke')), 5));
+    await expect(runProcess('cmd', [], {}, () => child)).rejects.toMatchObject({ kind: 'process', message: expect.stringContaining('stream broke') });
+  });
 });

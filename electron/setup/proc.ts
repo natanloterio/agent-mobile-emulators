@@ -16,8 +16,15 @@ const defaultSpawn: SpawnFn = (cmd, args, opts) => spawn(cmd, [...args], { env: 
 export function runProcess(cmd: string, args: readonly string[], o: ProcOpts = {}, spawnFn: SpawnFn = defaultSpawn): Promise<void> {
   return new Promise((resolve, reject) => {
     let tail: readonly string[] = [];
+    let settled = false;
+    const settle = (fn: (v?: void) => void, ...args: unknown[]) => {
+      if (!settled) {
+        settled = true;
+        fn(...(args as [void]));
+      }
+    };
     let child: ChildProcess;
-    try { child = spawnFn(cmd, args, { env: o.env ?? process.env }); } catch (e) { reject(toSetupError(e)); return; }
+    try { child = spawnFn(cmd, args, { env: o.env ?? process.env }); } catch (e) { settle(reject, toSetupError(e)); return; }
     const onChunk = (buf: Buffer | string) => {
       for (const raw of String(buf).split(/[\r\n]+/)) {
         const line = raw.trim();
@@ -26,12 +33,15 @@ export function runProcess(cmd: string, args: readonly string[], o: ProcOpts = {
         o.onLine?.(line);
       }
     };
+    const onStreamError = (e: unknown) => settle(reject, toSetupError(e));
     child.stdout?.on('data', onChunk);
+    child.stdout?.on('error', onStreamError);
     child.stderr?.on('data', onChunk);
-    child.on('error', (e) => reject(toSetupError(e)));
+    child.stderr?.on('error', onStreamError);
+    child.on('error', (e) => settle(reject, toSetupError(e)));
     child.on('close', (code: number | null) => {
-      if (code === 0) resolve();
-      else reject(toSetupError(new Error(`${path.basename(cmd)} saiu com código ${code}: ${tail.join(' | ')}`)));
+      if (code === 0) settle(resolve);
+      else settle(reject, toSetupError(new Error(`${path.basename(cmd)} saiu com código ${code}: ${tail.join(' | ')}`)));
     });
     child.stdin?.on('error', () => undefined); // processo que sai antes de ler o stdin (EPIPE)
     if (o.stdin) child.stdin?.write(o.stdin);
