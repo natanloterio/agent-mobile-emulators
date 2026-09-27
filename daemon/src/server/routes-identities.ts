@@ -35,6 +35,8 @@ export interface IdentityOps {
   readonly setPin?: (identity: IdentityRow, pin: string) => Promise<void>;
   /** PIN aplicado a identidade nova quando o corpo não traz um (ENXAME_DEFAULT_PIN). */
   readonly defaultPin?: string | null;
+  /** Login fixo do Instagram (fleet/login.ts) com as credenciais que o main do Electron decifrou. */
+  readonly login?: (identity: IdentityRow, creds: { username: string; password: string }) => Promise<{ outcome: 'logged-in' | 'already-logged-in' | 'needs-human'; detail: string }>;
   readonly now?: () => Date; readonly uuid?: () => string;
   readonly baseAvd?: string; readonly snapshotName?: string;
   readonly killSleep?: (ms: number) => Promise<void>;
@@ -53,6 +55,8 @@ export const normalizeHandle = (h: string): string | null => (HANDLE.test(h) ? `
 const PinSchema = z.string().regex(/^\d{4,16}$/, 'PIN: só dígitos, 4 a 16');
 const CreateBody = z.object({ name: z.string().regex(NAME, 'nome: [A-Za-z0-9_], até 32').optional(), handle: z.string().optional(), pin: PinSchema.optional() });
 const PinBody = z.object({ pin: PinSchema });
+// Mensagens de validação nunca repetem o valor recebido (a senha).
+const CredsBody = z.object({ username: z.string().trim().min(1, 'usuário obrigatório').max(100, 'usuário longo demais'), password: z.string().min(1, 'senha obrigatória').max(200, 'senha longa demais') });
 const BootBody = z.object({ window: z.boolean().optional() });
 const LoginBody = z.object({ handle: z.string() });
 const PauseBody = z.object({ paused: z.boolean() });
@@ -268,7 +272,33 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     done(ctx, id.id);
   };
 
-  const actions: Readonly<Record<string, Action>> = { pin, boot, 'login-done': loginDone, pause, resolve, ban, discard, restore, rebaseline };
+  /**
+   * Login pelo daemon (spec login-deterministico): uma tentativa, síncrona. A senha só existe nesta chamada: não vai para o banco,
+   * log nem resposta; erro de infra sai com a senha trocada por *** e o estado anterior restaurado.
+   */
+  const login: Action = async (ctx, id) => {
+    if (!ops.login) return ctx.send(404, { error: 'login pelo daemon indisponível' });
+    const body = await parse(ctx, CredsBody); if (!body) return;
+    if (id.state === 'running' || id.state === 'banned' || id.discardedAt || id.controlled) return ctx.send(409, { error: `login indisponível em ${id.controlled ? 'controle humano' : id.state}` });
+    if (!(await online(id))) return ctx.send(409, { error: 'emulador fora do adb: dê boot antes' });
+    const prev = id.state;
+    const scrub = (s: string) => s.split(body.password).join('***');
+    let r: { outcome: 'logged-in' | 'already-logged-in' | 'needs-human'; detail: string };
+    try { r = await ops.login(id, { username: body.username, password: body.password }); }
+    catch (e) { setIdentityState(ctx.db, id.id, prev); ctx.broadcast(); return ctx.send(502, { error: scrub(errMsg(e)) }); }
+    const detail = scrub(r.detail);
+    if (r.outcome === 'needs-human') setIdentityState(ctx.db, id.id, 'needs-human', { lastError: detail });
+    else {
+      const handle = id.handle === NO_ACCOUNT ? normalizeHandle(body.username) : null;
+      if (handle) setIdentityFlags(ctx.db, id.id, { handle });
+      try { await saveSnapshot(ops.adb, id.serial, snap); setIdentityState(ctx.db, id.id, 'logged-in', { lastError: null, snapshotTakenAt: now() }); }
+      catch (e) { setIdentityState(ctx.db, id.id, 'logged-in', { lastError: `snapshot após login falhou: ${errMsg(e)}` }); }
+    }
+    ctx.broadcast();
+    ctx.send(200, { outcome: r.outcome, detail });
+  };
+
+  const actions: Readonly<Record<string, Action>> = { login, pin, boot, 'login-done': loginDone, pause, resolve, ban, discard, restore, rebaseline };
 
   const route: Route = async (ctx) => {
     if (ctx.method !== 'POST') return false;
