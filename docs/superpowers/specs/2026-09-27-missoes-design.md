@@ -105,7 +105,7 @@ O usuário resolve pelo "Assumir controle", devolve ao agente e toca **Resolvi, 
 
 ## Promoção ao concluir
 
-Convenção genérica: se a memória tem `account.<pacote>.username` e o segredo `account.<pacote>.password`, ao `done`:
+Convenção genérica: se a memória tem `account.<pacote>.username` e o segredo `account.<pacote>.password`, com `<pacote>` = app alvo da identidade (o cofre guarda uma credencial de login por identidade), ao `done`:
 
 - vira a credencial da identidade no cofre;
 - se `<pacote>` é o `app_package` da identidade e o handle é "sem conta", o handle vira `@username`, a identidade vai a `logged-in` e o snapshot é salvo (como no "Login feito").
