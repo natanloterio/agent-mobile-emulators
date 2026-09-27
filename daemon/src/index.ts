@@ -22,6 +22,7 @@ import { leasePorts } from './fleet/ports.js';
 import { createHostMetrics } from './host/metrics.js';
 import { createGpuSampler } from './host/gpu.js';
 import { readProviderConfig } from './provider/config.js';
+import { createApiKeyStore } from './provider/api-key.js';
 import { createOllamaSupervisor } from './provider/ollama.js';
 import { createLmStudio } from './provider/runtimes/lmstudio.js';
 import { createLocalRuntimes } from './provider/runtimes/local.js';
@@ -31,6 +32,7 @@ import { planNext } from './mission/planner.js';
 import { promoteAccounts } from './mission/promote.js';
 import { readScreenOnce } from './mission/screen-io.js';
 import { startServer } from './server/api.js';
+import { anthropicKeyRoutes } from './server/routes-anthropic-key.js';
 import { controlRoutes } from './server/routes-control.js';
 import { credentialRoutes } from './server/routes-credentials.js';
 import { goalsRoutes } from './server/routes-goals.js';
@@ -48,7 +50,6 @@ import { createIdentityRoutes } from './server/routes-identities.js';
 import { runTask } from './worker/run.js';
 
 const env = loadEnv();
-if (!env.anthropicApiKey) console.log('[enxame-daemon] sem ANTHROPIC_API_KEY: papéis na nuvem ficam indisponíveis; use modelos locais em Provedores');
 mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath);
 // Nada em voo é retomado sozinho depois de uma queda (spec §4.3).
@@ -57,6 +58,10 @@ if (reconciled.tasks + reconciled.goals + reconciled.identities + reconciled.sub
 const adb = createAdb();
 // Cofre do daemon (spec missões §Cofre): senhas geradas por missões e credenciais de login; chave no chaveiro do SO.
 const vault = createVault({ file: CONFIG.vaultPath, keys: keyringKeySource() });
+// Chave da Anthropic: ambiente vence; sem ele, a que o onboarding gravou no cofre (spec onboarding).
+const apiKeys = createApiKeyStore({ envKey: env.anthropicApiKey, vault });
+await apiKeys.load().catch((e: unknown) => console.warn('[enxame-daemon] chave da Anthropic do cofre ilegível:', (e as Error).message));
+if (!apiKeys.current()) console.log('[enxame-daemon] sem chave da Anthropic: papéis na nuvem ficam indisponíveis; use modelos locais em Provedores');
 // Supervisor do Ollama: só mata o processo que ele mesmo subiu (spec §4.3).
 // Single-flight: workers do enxame pedem o Ollama quase juntos; só um `ollama serve` sobe.
 // Runtimes locais (Ollama e LM Studio) atrás da mesma cara; single-flight: workers pedem o runtime quase juntos.
@@ -117,11 +122,11 @@ const identityRoutes = createIdentityRoutes({
 
 // Enxame (spec inc. 5 §3.2): líder planeja sobre a frota; scheduler roda um worker por identidade pronta, com pacing.
 const ensureReady = (id: IdentityRow) => ensureIdentityReady(db, id, { adb });
-const planDeps: PlanDeps = { db, ensureReady, apiKey: env.anthropicApiKey, ollama };
+const planDeps = (): PlanDeps => ({ db, ensureReady, apiKey: apiKeys.current(), ollama });
 // Limite lido do banco no início de cada tarefa (spec limites §UI): a tela muda o valor sem reiniciar o daemon.
 const runWorker = (j: WorkerJob) => runTask({
   db, identity: j.identity, goalText: j.goalText, goalId: j.goalId, taskId: j.taskId, instruction: j.instruction,
-  apiKey: env.anthropicApiKey, isKilled: () => server.isKilled(), onStep: () => server.broadcast(), pacing: CONFIG.swarm,
+  apiKey: apiKeys.current(), isKilled: () => server.isKilled(), onStep: () => server.broadcast(), pacing: CONFIG.swarm,
   stepBudget: readStepBudgets(db).goal,
 }, { ollama });
 
@@ -129,7 +134,7 @@ const runWorker = (j: WorkerJob) => runTask({
 const missionMask = async (missionId: string) => createSecretMask(await loadMissionSecrets(db, vault, missionId)).mask;
 const missions = createMissionRunner({
   db, isKilled: () => server.isKilled(), onChange: () => server.broadcast(),
-  plan: (input) => planNext(input, { providers: readProviderConfig(db), apiKey: env.anthropicApiKey, ollama }),
+  plan: (input) => planNext(input, { providers: readProviderConfig(db), apiKey: apiKeys.current(), ollama }),
   readScreen: (identity) => readScreenOnce(db, identity, { ensureReady: (d, i) => ensureIdentityReady(d, i, { adb }) }),
   mask: missionMask,
   runSubtask: async (j) => {
@@ -144,7 +149,7 @@ const missions = createMissionRunner({
     };
     const r = await runTask({
       db, identity: j.identity, goalText: j.instruction, goalId: j.missionId, taskId: j.taskId, instruction: j.instruction,
-      apiKey: env.anthropicApiKey, isKilled: j.shouldStop, onStep: () => server.broadcast(),
+      apiKey: apiKeys.current(), isKilled: j.shouldStop, onStep: () => server.broadcast(),
       stepBudget: readStepBudgets(db).mission, pacing: CONFIG.swarm, mission: { missionId: j.missionId, vault, mask, takeNotes },
     }, { ollama });
     return { humanReason: r.humanReason, summary: r.platformBlock ?? r.summary };
@@ -162,7 +167,7 @@ const server = await startServer({
   onKill: () => { ollama.stop(); server.broadcast(); },
   // Kill switch já é recusado na rota (409). Plano do cliente é re-sondado no start de cada identidade.
   onGoal: async (text, planIn) => {
-    const plan = planIn ? { ...planIn, text } : await planGoal(text, planDeps);
+    const plan = planIn ? { ...planIn, text } : await planGoal(text, planDeps());
     server.broadcast();
     const started = startGoal(plan, { db, isKilled: () => server.isKilled(), runWorker, ensureReady, onChange: () => server.broadcast() });
     return { goalId: started.goalId, done: started.done };
@@ -170,8 +175,8 @@ const server = await startServer({
   // Rotas das frentes do incremento 5: objetivos, ciclo de vida da identidade, controle humano (input via `adb shell input`);
   // missões e credenciais do cofre (spec missões) não usam o lock de objetivo.
   routes: [
-    goalsRoutes({ plan: (text, lang) => planGoal(text, planDeps, lang) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) }),
-    missionRoutes({ runner: missions, mask: missionMask }), credentialRoutes({ vault }), settingsRoutes(),
+    goalsRoutes({ plan: (text, lang) => planGoal(text, planDeps(), lang) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) }),
+    missionRoutes({ runner: missions, mask: missionMask }), credentialRoutes({ vault }), settingsRoutes(), anthropicKeyRoutes({ store: apiKeys }),
   ],
   onProviderTest: async (role) => {
     const model = readProviderConfig(db)[role].model;
@@ -180,7 +185,7 @@ const server = await startServer({
     if (!id) return fail('nenhuma identidade livre para o tool-call canônico (todas rodando, pausadas, controladas ou sem conta)');
     const probe = await ensureIdentityReady(db, id, { adb }); server.broadcast();
     if (!probe.ready) return fail(`${id.name} não pronta: ${probe.details.join('; ')}`);
-    const t = await testProvider(db, readProviderConfig(db)[role], getIdentity(db, id.id)!, { anthropicApiKey: env.anthropicApiKey }, { ollama });
+    const t = await testProvider(db, readProviderConfig(db)[role], getIdentity(db, id.id)!, { anthropicApiKey: apiKeys.current() }, { ollama });
     server.broadcast(); return t;
   },
 });
