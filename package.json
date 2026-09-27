@@ -71,9 +71,10 @@
     "asarUnpack": ["daemon/vendor/**"],
     "extraFiles": [{ "from": "LICENSE", "to": "LICENSE" }, { "from": "NOTICE", "to": "NOTICE" }],
     "npmRebuild": false,
+    "afterPack": "scripts/adhoc-sign.cjs",
     "linux": { "target": ["AppImage", "deb"], "category": "Development", "maintainer": "Natan Loterio <natan@gaiahub.ai>", "executableName": "enxame" },
     "deb": { "packageName": "enxame", "artifactName": "enxame_${version}_${arch}.${ext}" },
-    "mac": { "target": ["dmg"], "category": "public.app-category.developer-tools", "identity": "-" },
+    "mac": { "target": ["dmg"], "category": "public.app-category.developer-tools", "identity": null, "hardenedRuntime": false },
     "win": { "target": ["nsis"] },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true }
   }
