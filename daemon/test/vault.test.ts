@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { secretToolKeySource } from '../src/vault/keyring.js';
+import { keyringKeySource } from '../src/vault/keyring.js';
 import { createVault, VaultError, type KeySource } from '../src/vault/vault.js';
 
 const memKeys = (): KeySource & { stored: Buffer | null } => {
@@ -33,10 +33,10 @@ describe('cofre do daemon', () => {
   });
   it('chaveiro indisponível → VaultError e available() explica, sem gravar nada', async () => {
     const file = tmpFile();
-    const broken: KeySource = { load: async () => { throw new VaultError('secret-tool ausente: instale libsecret-tools'); }, store: async () => { throw new VaultError('x'); } };
+    const broken: KeySource = { load: async () => { throw new VaultError('chaveiro do sistema indisponível: travado'); }, store: async () => { throw new VaultError('x'); } };
     const v = createVault({ file, keys: broken });
     await expect(v.put('a', 'b')).rejects.toBeInstanceOf(VaultError);
-    expect(await v.available()).toEqual({ ok: false, reason: 'secret-tool ausente: instale libsecret-tools' });
+    expect(await v.available()).toEqual({ ok: false, reason: 'chaveiro do sistema indisponível: travado' });
   });
   it('arquivo com entradas mas chave sumiu do chaveiro → VaultError (não cria chave nova por cima)', async () => {
     const file = tmpFile(); const keys = memKeys();
@@ -44,18 +44,24 @@ describe('cofre do daemon', () => {
     keys.stored = null;
     await expect(createVault({ file, keys }).get('a')).rejects.toThrow(/chave do cofre/);
   });
-  it('secretToolKeySource: lookup vazio → null; store manda a chave em base64 pelo stdin', async () => {
-    const calls: { args: string[]; input?: string }[] = [];
-    const run = async (args: string[], input?: string) => { calls.push({ args, input }); return args[0] === 'lookup' ? { code: 1, stdout: '' } : { code: 0, stdout: '' }; };
-    const ks = secretToolKeySource(run);
+  it('keyringKeySource: sem entrada → null; store guarda a chave em base64 e load a devolve', async () => {
+    let saved: string | null = null;
+    const ks = keyringKeySource(() => ({ getPassword: () => saved, setPassword: (p: string) => { saved = p; } }));
     expect(await ks.load()).toBeNull();
     await ks.store(Buffer.alloc(32, 7));
-    expect(calls[1].args).toEqual(['store', '--label=Enxame vault', 'service', 'enxame', 'key', 'vault']);
-    expect(Buffer.from(calls[1].input ?? '', 'base64')).toEqual(Buffer.alloc(32, 7));
+    expect(Buffer.from(saved ?? '', 'base64')).toEqual(Buffer.alloc(32, 7));
+    expect(await ks.load()).toEqual(Buffer.alloc(32, 7));
   });
-  it('secretToolKeySource: binário ausente → VaultError', async () => {
-    const run = async () => { const e = new Error('spawn secret-tool ENOENT') as Error & { code: string }; e.code = 'ENOENT'; throw e; };
-    await expect(secretToolKeySource(run).load()).rejects.toThrow(/secret-tool ausente/);
+  it('keyringKeySource: chaveiro travado/inacessível ou biblioteca nativa ausente → VaultError', async () => {
+    const locked = keyringKeySource(() => ({ getPassword: () => { throw new Error('Platform secure storage failure: locked'); }, setPassword: () => { throw new Error('locked'); } }));
+    await expect(locked.load()).rejects.toThrow(/chaveiro do sistema indisponível/);
+    await expect(locked.store(Buffer.alloc(32))).rejects.toBeInstanceOf(VaultError);
+    const noNative = keyringKeySource(() => { throw new Error('Cannot find native binding'); });
+    await expect(noNative.load()).rejects.toBeInstanceOf(VaultError);
+  });
+  it('keyringKeySource: valor no chaveiro com tamanho errado → VaultError', async () => {
+    const ks = keyringKeySource(() => ({ getPassword: () => Buffer.alloc(16).toString('base64'), setPassword: () => undefined }));
+    await expect(ks.load()).rejects.toThrow(/tamanho errado/);
   });
   it('readFile com erro de permissão → put rejeita, nada gravado', async () => {
     const file = tmpFile(); const keys = memKeys();

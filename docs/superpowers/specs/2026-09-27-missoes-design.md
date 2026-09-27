@@ -99,7 +99,7 @@ O usuário resolve pelo "Assumir controle", devolve ao agente e toca **Resolvi, 
 ## Cofre do daemon
 
 - Arquivo `~/.local/share/enxame/vault.json` (0600): `{ version: 1, entries: { [entryId]: { iv, tag, data } } }`, AES-256-GCM.
-- Chave de 32 bytes guardada no chaveiro do SO via `secret-tool` (libsecret; atributos `service=enxame key=vault`); criada no primeiro uso. Sem `secret-tool` ou sem chaveiro destravado → o cofre recusa, `secret_new` falha e a missão vai para `paused` com o motivo.
+- Chave de 32 bytes guardada no chaveiro nativo do SO via `@napi-rs/keyring` (serviço `enxame`, conta `vault`): Credential Manager no Windows, Keychain no macOS, Secret Service no Linux (preso ao Secret Service; o keyutils do kernel perderia a chave no reboot). Criada no primeiro uso. Chaveiro travado/inacessível ou sem binário nativo para a plataforma → o cofre recusa, `secret_new` falha e a missão vai para `paused` com o motivo; o daemon sobe mesmo assim.
 - Credenciais de identidade: o Electron passa a ler e gravar credenciais pelo daemon (`GET /identities/credentials` só com usernames; `PUT`/`DELETE /identities/:id/credentials`), migrando o `credentials.json` existente na primeira execução (decifra com `safeStorage`, grava no cofre do daemon, apaga o arquivo antigo). `POST /identities/:id/login` passa a aceitar corpo vazio e usar a credencial do cofre.
 - A senha nunca aparece em resposta de API, snapshot, `step`, log ou mensagem ao modelo.
 

@@ -35,7 +35,7 @@ import { credentialRoutes } from './server/routes-credentials.js';
 import { goalsRoutes } from './server/routes-goals.js';
 import { missionRoutes } from './server/routes-missions.js';
 import { getCredential } from './vault/credentials.js';
-import { secretToolKeySource } from './vault/keyring.js';
+import { keyringKeySource } from './vault/keyring.js';
 import { createVault } from './vault/vault.js';
 import { createSecretMask, loadMissionSecrets } from './worker/mission-tools.js';
 import { startGoal, type WorkerJob } from './swarm/scheduler.js';
@@ -52,7 +52,7 @@ const reconciled = reconcileOnStart(db);
 if (reconciled.tasks + reconciled.goals + reconciled.identities + reconciled.subtasks > 0) console.log('[enxame-daemon] reconciliação na subida:', reconciled);
 const adb = createAdb();
 // Cofre do daemon (spec missões §Cofre): senhas geradas por missões e credenciais de login; chave no chaveiro do SO.
-const vault = createVault({ file: CONFIG.vaultPath, keys: secretToolKeySource() });
+const vault = createVault({ file: CONFIG.vaultPath, keys: keyringKeySource() });
 // Supervisor do Ollama: só mata o processo que ele mesmo subiu (spec §4.3).
 // Single-flight: workers do enxame pedem o Ollama quase juntos; só um `ollama serve` sobe.
 // Runtimes locais (Ollama e LM Studio) atrás da mesma cara; single-flight: workers pedem o runtime quase juntos.
