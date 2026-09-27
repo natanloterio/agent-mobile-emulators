@@ -8,10 +8,10 @@ import {
 } from './view';
 
 const dep = (id: DepStatus['id'], state: DepStatus['state'], over: Partial<DepStatus> = {}): DepStatus => ({ id, state, version: null, sizeMb: null, fix: null, ...over });
-const rtx = { name: 'RTX 4090', totalGiB: 24 };
+const rtx = { name: 'RTX 4090', totalGiB: 24, unified: false };
 const hw = { ramGiB: 64, threads: 32, cpuModel: 'Ryzen', gpu: rtx, diskFreeGiB: 412 };
 const partial: SetupReport = {
-  deps: [dep('node', 'ok'), dep('sdk', 'ok'), dep('adb', 'ok'), dep('emu', 'ok'), dep('img', 'todo', { sizeMb: 1600 }), dep('kvm', 'ok'), dep('ollama', 'ok'), dep('keyring', 'ok')],
+  deps: [dep('sdk', 'ok'), dep('adb', 'ok'), dep('emu', 'ok'), dep('img', 'todo', { sizeMb: 1600 }), dep('kvm', 'ok'), dep('ollama', 'ok'), dep('keyring', 'ok')],
   hardware: hw, localModels: ['qwen3:14b'],
 };
 const model = (id: string) => LOCAL_MODELS.find((m) => m.id === id)!;
@@ -20,8 +20,8 @@ const st = (over: Partial<OnboardingState>): OnboardingState => ({ ...INITIAL_ST
 describe('depRows', () => {
   it('insere o modelo logo depois do Ollama, com o tamanho do catálogo quando falta', () => {
     const rows = depRows(partial, 'misto', 'gpt-oss:20b');
-    expect(rows.map((r) => r.id)).toEqual(['node', 'sdk', 'adb', 'emu', 'img', 'kvm', 'ollama', 'model', 'keyring']);
-    expect(rows[7]).toMatchObject({ id: 'model', state: 'todo', sizeMb: 14000 });
+    expect(rows.map((r) => r.id)).toEqual(['sdk', 'adb', 'emu', 'img', 'kvm', 'ollama', 'model', 'keyring']);
+    expect(rows[6]).toMatchObject({ id: 'model', state: 'todo', sizeMb: 14000 });
   });
   it('modelo já baixado fica ok', () => {
     expect(depRows(partial, 'local', 'qwen3:14b').find((r) => r.id === 'model')).toMatchObject({ state: 'ok', version: 'qwen3:14b' });
@@ -35,7 +35,7 @@ describe('depRows', () => {
 describe('summarize e jobsToInstall', () => {
   it('conta estados e soma o download', () => {
     const rows = depRows(partial, 'misto', 'gpt-oss:20b');
-    expect(summarize(rows)).toEqual({ total: 9, ok: 7, todo: 2, user: 0, downloadMb: 15600 });
+    expect(summarize(rows)).toEqual({ total: 8, ok: 6, todo: 2, user: 0, downloadMb: 15600 });
     expect(jobsToInstall(rows)).toEqual(['img', 'model']);
   });
 });
@@ -49,14 +49,14 @@ describe('hardware', () => {
   it('encaixe do modelo na placa', () => {
     expect(modelFit(model('gpt-oss:20b'), rtx)).toBe('fits');
     expect(modelFit(model('qwen3:32b'), rtx)).toBe('too-big');
-    expect(modelFit(model('qwen3:32b'), { name: 'x', totalGiB: 26 })).toBe('tight');
+    expect(modelFit(model('qwen3:32b'), { name: 'x', totalGiB: 26, unified: false })).toBe('tight');
     expect(modelFit(model('gpt-oss:20b'), null)).toBe('cpu');
   });
   it('padrões: com GPU misto e o recomendado; sem GPU só nuvem; placa pequena pega o maior que cabe', () => {
     expect(defaultMode(rtx)).toBe('misto');
     expect(defaultMode(null)).toBe('nuvem');
     expect(defaultModel(rtx)).toBe('gpt-oss:20b');
-    expect(defaultModel({ name: 'x', totalGiB: 16 })).toBe('qwen3:14b');
+    expect(defaultModel({ name: 'x', totalGiB: 16, unified: false })).toBe('qwen3:14b');
     expect(defaultModel(null)).toBe('gpt-oss:20b');
   });
   it('barra de VRAM', () => {

@@ -1,17 +1,17 @@
 import { z } from 'zod';
 
 /** Mesmo formato de electron/setup/types.ts; o renderer valida o que chega do main. */
-export const DEP_IDS = ['node', 'sdk', 'adb', 'emu', 'img', 'kvm', 'ollama', 'keyring'] as const;
+export const DEP_IDS = ['sdk', 'adb', 'emu', 'img', 'kvm', 'ollama', 'keyring'] as const;
 export const JOB_IDS = ['sdk', 'adb', 'emu', 'img', 'ollama', 'model'] as const;
 const ERROR_KINDS = ['disk-full', 'network', 'checksum', 'process'] as const;
 
 export const DepStatusSchema = z.object({
   id: z.enum(DEP_IDS), state: z.enum(['ok', 'todo', 'user']), version: z.string().nullable(), sizeMb: z.number().nullable(),
-  fix: z.enum(['node-missing', 'kvm-group', 'kvm-bios', 'keyring-locked']).nullable(),
+  fix: z.enum(['kvm-group', 'kvm-bios', 'hvf-off', 'whpx-off', 'keyring-locked']).nullable(),
 });
 export const HardwareSchema = z.object({
   ramGiB: z.number(), threads: z.number().int(), cpuModel: z.string(),
-  gpu: z.object({ name: z.string(), totalGiB: z.number() }).nullable(), diskFreeGiB: z.number(),
+  gpu: z.object({ name: z.string(), totalGiB: z.number(), unified: z.boolean() }).nullable(), diskFreeGiB: z.number(),
 });
 export const SetupReportSchema = z.object({ deps: z.array(DepStatusSchema), hardware: HardwareSchema, localModels: z.array(z.string()) });
 export const JobEventSchema = z.object({
