@@ -22,6 +22,8 @@
 .onb__actions .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .onb-head { display: flex; flex-direction: column; gap: 14px; }
+/* Pílula do título do tamanho do texto, não da coluna. */
+.onb-head .heading { align-self: flex-start; }
 .onb-lede { max-width: 62ch; font-size: 18px; line-height: 1.45; color: var(--color-dark-2); }
 .onb-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-dark-2); }
 .onb-label--dark { color: var(--color-grey-2); }
