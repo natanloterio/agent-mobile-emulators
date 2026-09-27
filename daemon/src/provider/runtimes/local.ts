@@ -6,7 +6,7 @@ import type { RuntimeListing, RuntimeStatus } from './types.js';
 
 export interface LocalRuntimesDeps {
   readonly ollama: OllamaSupervisor;
-  readonly lmstudio: Pick<LmStudio, 'ensure' | 'stop' | 'list'>;
+  readonly lmstudio: Pick<LmStudio, 'ensure' | 'stop' | 'list' | 'unload'>;
   readonly listOllama?: (endpoint: string) => Promise<RuntimeListing>;
 }
 
@@ -16,6 +16,7 @@ export interface LocalRuntimesDeps {
  */
 export interface LocalRuntimes extends OllamaSupervisor {
   ensure(endpoint: string, model: string, runtime?: LocalRuntimeKind | null): Promise<RuntimeStatus>;
+  unload(endpoint: string, model: string, runtime?: LocalRuntimeKind | null): Promise<void>;
   listAll(current?: { runtime?: LocalRuntimeKind | null; endpoint?: string }): Promise<readonly RuntimeListing[]>;
 }
 
@@ -25,6 +26,8 @@ export function createLocalRuntimes(d: LocalRuntimesDeps): LocalRuntimes {
     ...d.ollama,
     ensure: (endpoint, model, runtime) => ((runtime ?? runtimeForEndpoint(endpoint)) === 'lmstudio'
       ? d.lmstudio.ensure(endpoint, model) : d.ollama.ensure(endpoint, model)),
+    unload: (endpoint, model, runtime) => ((runtime ?? runtimeForEndpoint(endpoint)) === 'lmstudio'
+      ? d.lmstudio.unload(endpoint, model) : d.ollama.unload(endpoint, model)),
     stop: () => { d.ollama.stop(); d.lmstudio.stop(); },
     listAll: async (current) => {
       const ep = (k: LocalRuntimeKind) => (current?.runtime === k && current.endpoint ? current.endpoint : LOCAL_ENDPOINTS[k]);

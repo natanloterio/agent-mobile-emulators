@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { Heading } from '../components/Heading';
 import { useI18n } from '../i18n/I18nProvider';
+import type { GpuBarView } from '../lib/gpuBar';
 import type { ProviderPatch } from '../live/types';
 import type { RoleVM } from '../state/selectors';
 import type { ProviderMode, RoleKey } from '../types/fleet';
 import { shouldSubmitEndpoint } from './endpointSubmit';
 import { cardError, localSelect, modelChoice, roleRuntime, runtimeLines } from './localModels';
+import { VramPanel } from './VramPanel';
 import './Providers.css';
 
 interface ProvidersProps {
@@ -15,6 +17,8 @@ interface ProvidersProps {
   readonly vramEmuShare: string;
   /** VRAM total medida pelo host (vivo) ou a do design. */
   readonly vramTotal: string;
+  /** Ocupação real da GPU (vivo com `host.gpu`); null mantém o quadro estimado. */
+  readonly gpu: GpuBarView | null;
   readonly isMobile: boolean;
   readonly onPickMode: (role: RoleKey, mode: ProviderMode) => void;
   readonly onTest: (role: RoleKey) => void;
@@ -24,14 +28,10 @@ interface ProvidersProps {
 
 const MODES: readonly ProviderMode[] = ['nuvem', 'local'];
 
-/** Marcador que não aparece em texto: separa o valor em negrito do resto da frase traduzida. */
-const SLOT = '\u0000';
-
-export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, isMobile, onPickMode, onTest, onSetField, onLoadModels }: ProvidersProps) {
+export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, gpu, isMobile, onPickMode, onTest, onSetField, onLoadModels }: ProvidersProps) {
   // Recarrega a lista de modelos quando a tela abre e quando algum papel troca de modo.
   const { t } = useI18n();
   const modeKey = roles.map((r) => `${r.key}:${r.mode}`).join('|');
-  const [kvBefore, kvAfter = ''] = t('providers.vram.kvLeft', { kv: SLOT, n: fleetSize }).split(SLOT);
   useEffect(() => { roles.forEach((r) => onLoadModels(r.key)); }, [modeKey]);
 
   return (
@@ -101,20 +101,7 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, i
         ))}
       </div>
 
-      <div className="card card--grey vram">
-        <div className="row-between">
-          <Heading size="h4" variant="black">{t('providers.vram.title', { total: vramTotal })}</Heading>
-          <span className="muted-15">{kvBefore}<b>{kvLeft}</b>{kvAfter}</span>
-        </div>
-        <div className="vram__stack" aria-label={t('providers.vram.aria')}>
-          <div className="vram__seg vram__seg--emu" style={{ width: vramEmuShare }}>{t('providers.vram.emu')}</div>
-          <div className="vram__seg vram__seg--weights" style={{ width: '59%' }}>{t('providers.vram.weights')}</div>
-          <div className="vram__seg vram__seg--kv">KV</div>
-        </div>
-        <span className="vram__floor">
-          {t('providers.vram.floor')}
-        </span>
-      </div>
+      <VramPanel gpu={gpu} fleetSize={fleetSize} kvLeft={kvLeft} vramEmuShare={vramEmuShare} vramTotal={vramTotal} />
     </div>
   );
 }

@@ -87,3 +87,8 @@
 .langselect__select { font: inherit; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: var(--radius-sm, 8px); padding: 4px 8px; cursor: pointer; }
 .langselect__select option { color: #111; }
 .langselect--compact { margin-left: auto; }
+
+/* Topo mobile em duas linhas: logo + idioma em cima, medidores embaixo (numa linha só não cabem em 390 px). */
+.topbar { flex-wrap: wrap; row-gap: 8px; }
+.topbar .langselect--compact { order: 2; margin-left: auto; }
+.topbar__meters { order: 3; flex-basis: 100%; justify-content: space-between; }

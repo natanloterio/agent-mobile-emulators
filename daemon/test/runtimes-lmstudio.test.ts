@@ -79,3 +79,13 @@ describe('contexto do modelo carregado (integrador)', () => {
     expect((await createLmStudio({ exec: low.exec, fetch: low.fetch, lmsPath: low.lmsPath, sleep: async () => {} }).ensure('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct')).contextWarning).toMatch(/4096.*--context-length 32768/);
   });
 });
+
+describe('unload do LM Studio (integrador)', () => {
+  it('só chama lms unload se o modelo estiver carregado', async () => {
+    const f = fakes({ loaded: ['llama-3.2-3b-instruct'] });
+    const lm = createLmStudio({ exec: f.exec, fetch: f.fetch, lmsPath: f.lmsPath, sleep: async () => {} });
+    await lm.unload('http://127.0.0.1:1234/v1', 'google/gemma-4-12b-qat');
+    await lm.unload('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct');
+    expect(f.calls.filter((c) => c.startsWith('unload'))).toEqual(['unload llama-3.2-3b-instruct']);
+  });
+});

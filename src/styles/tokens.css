@@ -10,6 +10,10 @@
   --color-danger: #b3261e;
   --color-dark-2: #292a32;
   --color-placeholder: #898989;
+  /* Tons extras para distinguir modelos na barra de VRAM (texto preto legível nos três). */
+  --color-green-2: #8fd64a;
+  --color-green-3: #5fa630;
+  --color-grey-2: #b8b9bf;
 
   --font-sans: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;

@@ -2,7 +2,7 @@ import http from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { GoalPlanSchema, type GoalPlan } from '../leader/types.js';
-import { CLOUD_MODELS, ollamaBase, patchErrorMessage, ProviderPatch, readProviderConfig, ROLE_KEYS, updateProvider, type RoleKey } from '../provider/config.js';
+import { CLOUD_MODELS, modelsToUnload, type ProviderRow, ollamaBase, patchErrorMessage, ProviderPatch, readProviderConfig, ROLE_KEYS, updateProvider, type RoleKey } from '../provider/config.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import type { ScreenCapture } from '../device/screen.js';
 import type { VideoState, VideoStreams } from '../device/video.js';
@@ -35,6 +35,8 @@ export interface ServerOpts {
   /** Rotas de outras frentes (spec inc. 5 §3.2): avaliadas antes do 404, na ordem; `true` = tratou. */
   readonly routes?: readonly Route[];
   /** Modelos baixados de todos os runtimes locais (spec runtimes-locais); ausente = só o Ollama pela API, como antes. */
+  /** Descarrega um modelo local que saiu de todos os papéis (keep_alive 0 no Ollama, `lms unload` no LM Studio). */
+  readonly unloadLocal?: (row: ProviderRow) => Promise<void>;
   readonly listLocal?: (current: { runtime?: LocalRuntimeKind | null; endpoint?: string }) => Promise<readonly RuntimeListing[]>;
 }
 
@@ -137,7 +139,13 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
           if (!parsed.success) return send(res, 400, { error: patchErrorMessage(parsed.error) });
           // Trocar modelo no meio de uma conversa muda prefixo e comportamento; teste e tarefa disputam o mesmo device.
           if (inFlight) return send(res, 409, { error: 'objetivo ou teste em execução; troca de provedor só com a frota parada' });
-          const row = updateProvider(o.db, role, parsed.data); send(res, 200, row); ws.broadcast(); return;
+          const before = readProviderConfig(o.db);
+          const row = updateProvider(o.db, role, parsed.data); send(res, 200, row); ws.broadcast();
+          // O modelo que saiu de todos os papéis não fica ocupando VRAM até o keep-alive vencer.
+          for (const old of modelsToUnload(before, readProviderConfig(o.db))) {
+            void o.unloadLocal?.(old).catch((e: unknown) => console.error(`[daemon] descarregar ${old.model} falhou:`, (e as Error).message));
+          }
+          return;
         }
         if (req.method === 'POST' && isTest) {
           if (inFlight) return send(res, 409, { error: 'objetivo ou teste em execução' });

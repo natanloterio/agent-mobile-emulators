@@ -88,3 +88,19 @@ describe('createHostMetrics', () => {
     m.stop(); expect(cleared).toBe(1);
   });
 });
+
+describe('fatias da GPU no coletor (integrador)', () => {
+  it('mede as fatias no máximo a cada gpuEveryMs e as publica no snapshot', async () => {
+    let t = 0; let calls = 0;
+    const slices = [{ kind: 'model' as const, label: 'm · Ollama', usedMiB: 100 }];
+    const h = createHostMetrics({
+      readFile: (p) => (p === '/proc/meminfo' ? 'MemTotal: 1048576 kB\nMemAvailable: 524288 kB\n' : 'cpu 1 0 1 10 0 0 0 0\n'),
+      nvidiaSmi: async () => '500, 1000', threads: () => 4, now: () => new Date(t),
+      gpu: async (total) => { calls += 1; return { ...total, slices }; }, gpuEveryMs: 10_000,
+    });
+    const a = await h.sample();
+    expect(a.gpu).toMatchObject({ usedMiB: 500, totalMiB: 1000, slices });
+    t = 2_000; await h.sample(); expect(calls).toBe(1);
+    t = 12_000; await h.sample(); expect(calls).toBe(2);
+  });
+});

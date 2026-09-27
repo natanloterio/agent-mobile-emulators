@@ -92,3 +92,20 @@ export function ollamaBase(endpoint: string): string {
 }
 
 export const providerLabel = (r: ProviderRow): string => `${r.mode}:${r.model}`;
+
+const localKey = (r: ProviderRow) => `${r.runtime ?? runtimeForEndpoint(r.endpoint)}|${r.endpoint}|${r.model}`;
+
+/**
+ * Modelos locais que nenhum papel usa mais depois de uma troca: descarregá-los devolve a VRAM na hora, em vez de esperar o
+ * keep-alive (30 min no Ollama). Nuvem nunca entra; o mesmo nome em outro runtime é outro modelo.
+ */
+export function modelsToUnload(before: ProviderConfig, after: ProviderConfig): readonly ProviderRow[] {
+  const inUse = new Set(ROLE_KEYS.map((k) => after[k]).filter((r) => r.mode === 'local').map(localKey));
+  const seen = new Set<string>(); const out: ProviderRow[] = [];
+  for (const k of ROLE_KEYS) {
+    const r = before[k]; const key = localKey(r);
+    if (r.mode !== 'local' || inUse.has(key) || seen.has(key)) continue;
+    seen.add(key); out.push(r);
+  }
+  return out;
+}
