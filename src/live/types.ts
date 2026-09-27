@@ -46,7 +46,29 @@ export type InputGesture =
   | { readonly kind: 'key'; readonly key: 'back' | 'home' | 'recents' | 'enter' | 'del' };
 export type LiveRoleKey = 'lider' | 'worker' | 'esc';
 export interface LiveProviderTest { readonly role: LiveRoleKey; readonly model: string; readonly latencyMs: number; readonly tokensPerSec: number | null; readonly argsValid: boolean; readonly warning: string | null; readonly error: string | null; readonly at: string }
-export interface LiveProvider { readonly role: LiveRoleKey; readonly mode: 'nuvem' | 'local'; readonly model: string; readonly endpoint: string; readonly lastTest: LiveProviderTest | null }
+/** Runtime local de um papel (spec runtimes locais): ambos OpenAI-compatible. */
+export type LocalRuntime = 'ollama' | 'lmstudio';
+export interface LiveProvider {
+  readonly role: LiveRoleKey; readonly mode: 'nuvem' | 'local'; readonly model: string; readonly endpoint: string; readonly lastTest: LiveProviderTest | null;
+  /** `null` na nuvem; ausente em daemon antigo. */
+  readonly runtime?: LocalRuntime | null;
+}
+/** Estado de um runtime local instalado (ou não) na máquina. */
+export interface RuntimeInfo {
+  readonly kind: LocalRuntime; readonly label: string; readonly endpoint: string;
+  readonly installed: boolean; readonly running: boolean; readonly error: string | null;
+}
+/** Modelo já baixado num runtime; tamanho e estado carregado podem ser desconhecidos. */
+export interface ModelEntry {
+  readonly id: string; readonly runtime: LocalRuntime; readonly label: string;
+  readonly sizeBytes: number | null; readonly loaded: boolean | null; readonly toolUse: boolean | null;
+}
+/** `GET /providers/models?role=X`; `runtimes`/`entries` só vêm de papel local em daemon novo. */
+export interface ProviderModelsResponse {
+  readonly source: string; readonly models: readonly string[]; readonly error: string | null;
+  readonly runtimes?: readonly RuntimeInfo[]; readonly entries?: readonly ModelEntry[];
+}
+export interface ProviderPatch { readonly mode?: 'nuvem' | 'local'; readonly model?: string; readonly endpoint?: string; readonly runtime?: LocalRuntime }
 export interface FleetSnapshot {
   readonly identities: readonly LiveIdentity[]; readonly providers?: Readonly<Record<LiveRoleKey, LiveProvider>>; readonly killed: boolean; readonly updatedAt: string;
   readonly goal?: GoalSummary | null; readonly host?: HostMetrics | null;
@@ -64,7 +86,7 @@ export interface EnxameBridge {
   readonly resume: () => Promise<void>;
   /** Canal genérico (spec inc. 5 §3.4): só rotas da lista de permissão do main. */
   readonly api: (method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown) => Promise<unknown>;
-  readonly setProvider: (role: LiveRoleKey, patch: { mode?: 'nuvem' | 'local'; model?: string; endpoint?: string }) => Promise<void>;
+  readonly setProvider: (role: LiveRoleKey, patch: ProviderPatch) => Promise<void>;
   readonly testProvider: (role: LiveRoleKey) => Promise<LiveProviderTest>;
-  readonly getProviderModels: (role: LiveRoleKey) => Promise<{ source: string; models: readonly string[]; error: string | null }>;
+  readonly getProviderModels: (role: LiveRoleKey) => Promise<ProviderModelsResponse>;
 }

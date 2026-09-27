@@ -5,7 +5,8 @@ import type { MessageKey } from '../i18n/messages';
 import { PT, type I18n } from '../i18n/translate';
 import { LOCALE_TAGS } from '../i18n/locales';
 import type { DeviceState, Identity, ProviderMode, RoleKey } from '../types/fleet';
-import type { FleetState } from './fleetReducer';
+import type { FleetState, LocalCatalog } from './fleetReducer';
+import type { LocalRuntime } from '../live/types';
 import { appLabel, offlineOverlay, streamLabel } from './liveSelectors';
 import type { IdRow } from './idRows';
 
@@ -286,6 +287,10 @@ export interface RoleVM {
   readonly error: string | null;
   /** Só o erro do último PUT; decide se o blur do endpoint reenvia. */
   readonly putError: string | null;
+  /** Runtime local do papel vindo do snapshot; null na nuvem, no demo e com daemon antigo. */
+  readonly runtime: LocalRuntime | null;
+  /** Modelos baixados e estado dos runtimes; null quando o daemon não os manda (a tela segue só com `models`). */
+  readonly catalog: LocalCatalog | null;
 }
 
 export function selectRoles(s: FleetState, i18n: I18n = PT): readonly RoleVM[] {
@@ -304,6 +309,8 @@ export function selectRoles(s: FleetState, i18n: I18n = PT): readonly RoleVM[] {
       models: s.providerModels[r.key] ?? [],
       error: s.providerErrors[r.key] ?? s.providerModelsErrors[r.key] ?? null,
       putError: s.providerErrors[r.key] ?? null,
+      runtime: null,
+      catalog: s.providerCatalogs[r.key] ?? null,
       endpoint: endpointFor(mode),
       testLabel: stage === 'run' ? i18n.t('providers.test.running', { account: 'conta1' }) : i18n.t('providers.test.idle'),
       testing: stage === 'run',
