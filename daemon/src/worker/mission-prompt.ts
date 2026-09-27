@@ -14,6 +14,11 @@ Regras:
 7. Se um caminho falhar, tente outro razoável dentro da subtarefa; se não houver, encerre com finish_subtask(ok=false) explicando o que atrapalhou.
 Sempre termine com finish_subtask.`;
 
+/** Pedido final (spec missões §Executor): o executor terminou em texto solto, sem chamar finish_subtask. */
+export const MISSION_FINISH_NUDGE =
+  'Você encerrou sem chamar finish_subtask. Chame finish_subtask agora: ok (o critério de sucesso foi atingido?), ' +
+  'did (o que você fez) e blockers (o que atrapalhou). Se precisa de um humano, chame request_human.';
+
 export const MISSION_ESCALATION_NOTE = (n: number, model: string): string =>
   `Continuação: o modelo anterior (${model}) falhou ${n} vezes ao chamar tools com argumentos válidos e foi substituído por você. ` +
   'Continue a mesma subtarefa de onde a última tela parou. Leia a tela antes de agir. Termine com finish_subtask.';

@@ -58,6 +58,28 @@ function scripted(script: readonly (readonly [string, unknown])[]) {
   return { generate, seen, opts };
 }
 
+/** Como scripted(), mas um roteiro (e um texto final) por chamada de generate — simula vários segmentos (spec missões: pedido final). */
+function scriptedCalls(scripts: readonly (readonly (readonly [string, unknown])[])[], texts: readonly string[] = []) {
+  const seen: string[] = []; const opts: { toolApproval?: unknown; instructions?: string; messages?: unknown; activeTools?: unknown }[] = [];
+  let call = 0;
+  const generate = (async (o: { tools: Record<string, { execute: (i: unknown, x: unknown) => Promise<unknown> }>; onStepFinish?: (s: unknown) => void | Promise<void>; toolApproval?: unknown; instructions?: string; messages?: unknown; prepareStep?: (a: { messages: unknown[] }) => Promise<{ activeTools?: unknown }> }) => {
+    const idx = Math.min(call, scripts.length - 1); const script = scripts[idx]; call++;
+    const prepared = await o.prepareStep?.({ messages: [] });
+    opts.push({ toolApproval: o.toolApproval, instructions: o.instructions, messages: o.messages, activeTools: prepared?.activeTools });
+    let n = 0;
+    for (const [name, input] of script) {
+      const id = `c${idx}-${++n}`; let out: unknown; let err: unknown = null;
+      try { out = await o.tools[name].execute(input, { toolCallId: id, messages: [] }); } catch (e) { err = e; }
+      const text = err ? String((err as Error).message) : typeof out === 'string' ? out : JSON.stringify(out);
+      seen.push(text);
+      const part = err ? { type: 'tool-error', toolCallId: id, toolName: name, input, error: err } : { type: 'tool-result', toolCallId: id, toolName: name, input, output: out };
+      await o.onStepFinish?.({ stepNumber: n - 1, text: '', content: [{ type: 'tool-call', toolCallId: id, toolName: name, input }, part], usage: { inputTokens: 10, outputTokens: 1 } });
+    }
+    return { text: texts[idx] ?? 'fim', totalUsage: { inputTokens: 10, outputTokens: 1 }, steps: [], response: { messages: [] } };
+  }) as unknown as RunTaskDeps['generate'];
+  return { generate, seen, opts };
+}
+
 function setup(vaultIn?: Vault, known: readonly string[] = []) {
   const db = openDb(':memory:'); upsertIdentity(db, row);
   const missionId = createMission(db, 'conta2', 'missão', 'pt');
@@ -179,6 +201,24 @@ describe('runTask em modo missão', () => {
     const r = await s.run({ connect: mcp.connect, generate: scripted([[`${P}get_screen_state`, {}]]).generate });
     expect(r.humanReason).toMatch(/not a robot •••/);
     expect(JSON.stringify(s.db.prepare('select * from task').all())).not.toContain('Segr3do!Forte');
+  });
+  it('1º segmento termina em texto solto (sem finish_subtask); pedido final chama finish_subtask → done com relatório', async () => {
+    const s = setup(); const mcp = fakeMcp();
+    const g = scriptedCalls([[], [['finish_subtask', { ok: true, did: 'fechou', blockers: '' }]]], ['pensei alto e esqueci de chamar finish_subtask', 'fim']);
+    const r = await s.run({ connect: mcp.connect, generate: g.generate });
+    expect(r.report).toEqual({ ok: true, did: 'fechou', blockers: '' });
+    expect(taskState(s.db, s.taskId)).toBe('done');
+    // pedido final: só finish_subtask e request_human, e a última mensagem é o pedido.
+    expect(g.opts[1].activeTools).toEqual(['finish_subtask', 'request_human']);
+    expect(JSON.stringify(g.opts[1].messages)).toMatch(/Você encerrou sem chamar finish_subtask/);
+  });
+  it('pedido final também termina sem finish_subtask → failed com did = último texto do modelo', async () => {
+    const s = setup(); const mcp = fakeMcp();
+    const g = scriptedCalls([[], []], ['divagou sobre o app', 'ainda sem finish_subtask']);
+    const r = await s.run({ connect: mcp.connect, generate: g.generate });
+    expect(taskState(s.db, s.taskId)).toBe('failed');
+    expect(r.report?.did).toBe('ainda sem finish_subtask');
+    expect(r.report?.blockers).toBe('terminou sem finish_subtask');
   });
   it('missão poda telas para CONFIG.mission.keepScreens (1): com 3 leituras, só a última fica completa', async () => {
     const s = setup(); const mcp = fakeMcp();
