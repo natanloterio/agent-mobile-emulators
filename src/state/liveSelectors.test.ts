@@ -62,6 +62,10 @@ describe('liveSelectors — device', () => {
     ]);
     expect(fmtTokens(830)).toBe('830'); expect(fmtTokens(0)).toBe('0'); expect(fmtTokens(12_345)).toBe('12,3k');
   });
+  it('orçamento desligado (budget null): só o contador de passos, sem "/teto"', () => {
+    const t = tileOf({ steps: 9, budget: null, ledgerCount: 12, costUsd: 0.2, lastStepTokens: 1432 });
+    expect(selectLiveSelStats(t)[0]).toEqual({ value: '9', label: 'passos do orçamento' });
+  });
 });
 
 describe('liveSelectors — relatório', () => {

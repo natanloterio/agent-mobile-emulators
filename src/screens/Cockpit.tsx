@@ -63,7 +63,7 @@ function Tile({ t, fullTiles, showCost, bus, onOpen }: { readonly t: TileVM; rea
         <div className="tile__meta">
           <span>{t.app} · {t.task}</span>
           <div className="row-between">
-            <span>{tr('cockpit.tile.step', { steps: t.steps, budget: t.budget })}</span>
+            <span>{t.budget === null ? tr('cockpit.tile.stepNoBudget', { steps: t.steps }) : tr('cockpit.tile.step', { steps: t.steps, budget: t.budget })}</span>
             {showCost && <span>{t.costFmt}</span>}
           </div>
           {t.error && <span className="tile__error">{t.error}</span>}

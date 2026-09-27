@@ -27,7 +27,7 @@ import { humanStopped, settleIdentity } from './stop.js';
 
 export interface RunTaskOpts {
   readonly db: DatabaseSync; readonly identity: IdentityRow; readonly goalText: string; readonly apiKey: string;
-  readonly isKilled: () => boolean; readonly onStep: () => void; readonly stepBudget?: number;
+  readonly isKilled: () => boolean; readonly onStep: () => void; readonly stepBudget?: number | null;
   readonly providers?: ProviderConfig;
   /**
    * Scheduler (spec inc. 5): objetivo/tarefa já criados e a instrução da fatia desta identidade.
@@ -174,7 +174,8 @@ function openTask(db: DatabaseSync, identityId: string, o: RunTaskOpts): { taskI
 export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise<RunTaskResult> {
   const deps = { connect: depsIn.connect ?? connectMcp, generate: depsIn.generate ?? generateText, buildModel: depsIn.buildModel ?? defaultBuildModel, ollama: depsIn.ollama ?? createOllamaSupervisor() };
   const { db, identity } = o;
-  const budget = o.stepBudget ?? Number(process.env.ENXAME_STEP_BUDGET ?? CONFIG.worker.stepBudget);
+  // `null` = orçamento desligado (spec orçamento desligável): a tarefa roda até terminar, pausar ou o kill switch.
+  const budget = o.stepBudget !== undefined ? o.stepBudget : CONFIG.worker.stepBudget;
   const cfg = o.providers ?? readProviderConfig(db);
   const { taskId, ownGoalId } = openTask(db, identity.id, o);
   const mission = o.mission ?? null;
@@ -198,7 +199,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     const base = { taskId, outcome, costUsd, usage, platformBlock: h?.kind === 'platform-block' ? h.text : null, summary,
       degraded, escalatedAtStep, provider: providerLabel(cfg.worker), genMs: genMsTotal, invalidCalls: floor.count() };
     if (mission) {
-      const m = missionOutcome({ outcome, report, halt: h, summary, budgetHit: stepsUsed >= budget });
+      const m = missionOutcome({ outcome, report, halt: h, summary, budgetHit: budget !== null && stepsUsed >= budget });
       if (m.report) setSubtaskReport(db, taskId, m.report);
       setTaskState(db, taskId, m.state);
       return { ...base, earlyStopRemaining: 0, report: m.report, humanReason: m.humanReason };
@@ -214,13 +215,13 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       : outcome === 'infra' ? (h?.kind === 'auth' ? 'failed' : 'todo') : outcome === 'interrupted' || outcome === 'killed' ? 'todo' : 'done';
     setTaskState(db, taskId, taskState);
     if (ownGoalId) finishGoal(db, ownGoalId);
-    const earlyStopRemaining = outcome === 'done' ? Math.max(0, budget - stepsUsed) : 0;
+    const earlyStopRemaining = outcome === 'done' && budget !== null ? Math.max(0, budget - stepsUsed) : 0;
     setEarlyStop(db, taskId, earlyStopRemaining);
     return { ...base, earlyStopRemaining, report: null, humanReason: null };
   };
 
   /** Um segmento = um generateText sobre `messages` com um papel do registro (spec §5). */
-  const segment = (row: ProviderRow, model: LanguageModel, tools: ToolSet, messages: ModelMessage[], stopIfHalted: StopCondition<ToolSet>, slug: string | null, steps: number) => {
+  const segment = (row: ProviderRow, model: LanguageModel, tools: ToolSet, messages: ModelMessage[], stopIfHalted: StopCondition<ToolSet>, slug: string | null, steps: number | null) => {
     activeMode = row.mode;
     return deps.generate({
       model, tools, messages,
@@ -230,7 +231,8 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
       providerOptions: providerOptionsFor(row) as never,
       // Missão roda sem gate (decisão do spec missões); objetivos comuns continuam somente-leitura.
       ...(mission ? {} : { toolApproval: buildToolApproval(slug, () => lastScreen, 'read-only') as never }),
-      stopWhen: [stepCountIs(steps), stopIfHalted, () => report !== null, () => floor.tripped() && row.role === 'worker'],
+      // `steps === null` = orçamento desligado: sem stepCountIs, o segmento só para por halt/report/piso.
+      stopWhen: [...(steps === null ? [] : [stepCountIs(steps)]), stopIfHalted, () => report !== null, () => floor.tripped() && row.role === 'worker'],
       // Pacing antes de cada passo (spec §4.3). Parada durante a espera: o passo roda sem tools (não age) e o stopWhen encerra.
       prepareStep: async ({ messages: m }) => {
         const go = pacer ? await pacer.beforeStep() : 'go';
@@ -299,7 +301,8 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
 
     let result = await segment(cfg.worker, model, tools, messages, stopIfHalted, slug, budget);
 
-    const remaining = budget - stepsUsed;
+    // Orçamento desligado: escalonamento continua possível (sem teto a respeitar).
+    const remaining = budget === null ? Infinity : budget - stepsUsed;
     if (floor.tripped() && !halt && !stopped() && remaining > 0 && report === null) {
       const canEscalate = cfg.esc.mode === 'nuvem' && !!o.apiKey;
       if (!canEscalate) return finish('quality-floor', `piso de qualidade: ${floor.count()} tool calls inválidas com ${providerLabel(cfg.worker)}; sem escalonamento na nuvem`);
@@ -318,7 +321,7 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     if (h) return finish('infra', mission ? maskHalt(h.text) : result.text);
     if (o.isKilled()) return finish('killed', result.text);
     if (humanStopped(db, identity.id)) return finish('interrupted', result.text);
-    return finish(stepsUsed >= budget ? 'budget' : 'done', result.text);
+    return finish(budget !== null && stepsUsed >= budget ? 'budget' : 'done', result.text);
   } catch (e) {
     // Erro fora das tools (ex.: chave da Anthropic inválida) é falha da tarefa, não do device.
     const h = halt as Halt;

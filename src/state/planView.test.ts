@@ -20,6 +20,10 @@ describe('selectPlanVM — plano real do líder', () => {
     expect(vm.leaderWarning).toBeNull();
     expect(selectPlanVM(goalPlan({ pattern: 'sharding' })).patternLabel).toBe('Sharding');
   });
+  it('orçamento desligado (stepBudget 0 na estimativa): "sem limite" em vez de "N por conta"', () => {
+    const vm = selectPlanVM(goalPlan({ estimate: { ...goalPlan().estimate, stepBudget: 0 } }));
+    expect(vm.estimate).toContainEqual({ label: 'Orçamento de passos', value: 'sem limite' });
+  });
   it('tarefas com os 5 sinais reais na ordem da sonda e readyLabel do daemon', () => {
     const [a, b] = selectPlanVM(goalPlan()).tasks;
     expect(a).toEqual({ key: 'conta1', name: 'conta1', handle: '@a', instr: 'Responder a própria caixa', signals: [true, true, true, true, true], ready: true, readyLabel: 'pronto' });

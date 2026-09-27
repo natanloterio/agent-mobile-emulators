@@ -307,6 +307,16 @@ describe('runTask — incremento 3', () => {
     expect(r.outcome).toBe('failed'); expect(taskState(db, r.taskId)).toBe('failed');
     expect(getIdentity(db, 'conta1')?.state).toBe('idle'); expect(getIdentity(db, 'conta1')?.lastError).toMatch(/ANTHROPIC_API_KEY/);
   });
+  it('orçamento desligável (stepBudget: null): sem stepCountIs, roda os 40 passos até o fim, outcome done (não budget)', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const N = 40;
+    const steps = [...Array.from({ length: N }, (_, i) => calls({ id: `c${i}`, name: 'android_conta1_get_screen_state', input: {} })), text('fim')];
+    const m = new MockLanguageModelV4({ doGenerate: steps as never });
+    const r = await runTask({ ...opts(db), providers: providers(), stepBudget: null }, { connect: mkMcp(tools()), model: m, ollama: okOllama });
+    expect(r.outcome).toBe('done');
+    expect(m.doGenerateCalls).toHaveLength(N + 1);
+    expect(r.earlyStopRemaining).toBe(0);
+  });
 });
 
 describe('click_node em nó não clicável (integrador)', () => {

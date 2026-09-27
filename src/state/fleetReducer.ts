@@ -113,7 +113,8 @@ function updateAt<T>(list: readonly T[], index: number, patch: (item: T) => T): 
 
 function advanceRunning(ids: readonly Identity[]): readonly Identity[] {
   return ids.map((d) =>
-    d.state === 'running' && d.steps < d.budget
+    // budget null = sem orçamento (dados do demo continuam numéricos; a checagem cobre o tipo mais amplo).
+    d.state === 'running' && (d.budget === null || d.steps < d.budget)
       ? { ...d, steps: d.steps + 1, cost: d.cost + STEP_COST }
       : d,
   );

@@ -36,6 +36,11 @@ describe('selectors — incremento 3', () => {
     expect(selectSelStats(t)[0].value).toBe('17/30 · 13 sobrando');
     expect(decorateTile({ ...base, genMs: 0 }, 0, false).costFmt).not.toMatch(/GPU/);
   });
+  it('orçamento desligado (budget null): passos mostram só o contador, sem sobra', () => {
+    const base = createInitialState().ids[0];
+    const t = decorateTile({ ...base, steps: 17, budget: null, earlyStopRemaining: 13 }, 0, false);
+    expect(selectSelStats(t)[0].value).toBe('17');
+  });
   it('card mostra erro de PUT antes do erro de carga; só o de PUT decide o reenvio do endpoint', () => {
     const ollama = 'Ollama parado — o próximo teste ou objetivo o sobe';
     const s1 = fleetReducer(createInitialState(), { type: 'providerModelsError', role: 'worker', message: ollama });

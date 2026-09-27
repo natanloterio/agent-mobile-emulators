@@ -15,10 +15,12 @@ export function pickBaseAvd(envBase: string | undefined, avdHome: string, exists
 }
 const AVD_HOME = process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd');
 
-/** Inteiro positivo de uma variável de ambiente; ausente, NaN, zero ou negativo → `fallback`. */
-export function positiveIntOr(raw: string | undefined, fallback: number): number {
-  const n = Math.floor(Number(raw));
-  return raw && Number.isFinite(n) && n > 0 ? n : fallback;
+/** Orçamento de passos de uma env var: `"0"` desliga (`null` = sem limite); inteiro positivo vale; ausente, vazio, NaN, negativo ou não inteiro caem no `fallback`. */
+export function stepBudgetFrom(raw: string | undefined, fallback: number): number | null {
+  if (!raw) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return fallback;
+  return n === 0 ? null : n;
 }
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -39,9 +41,10 @@ export const CONFIG = {
   mcpAppPackage: 'com.danielealbano.androidremotecontrolmcp.gms.debug',
   targetApp: { package: 'com.instagram.android', versionName: '448.0.0.52.84' },
   ports: { consoleFrom: 5554, consoleMax: 5584, mcpHostFrom: 8080 },
-  worker: { stepBudget: 30, keepScreens: 2, qualityFloor: 3 },
-  /** Missões (spec missões): orçamento de passos por subtarefa; a missão em si não tem teto. */
-  mission: { subtaskStepBudget: positiveIntOr(process.env.ENXAME_MISSION_STEP_BUDGET, 60) },
+  /** `ENXAME_STEP_BUDGET=0` desliga o orçamento (spec orçamento desligável): a tarefa roda até terminar, pausar ou o kill switch. */
+  worker: { stepBudget: stepBudgetFrom(process.env.ENXAME_STEP_BUDGET, 30), keepScreens: 2, qualityFloor: 3 },
+  /** Missões (spec missões): orçamento de passos por subtarefa; a missão em si não tem teto. `0` desliga o da subtarefa. */
+  mission: { subtaskStepBudget: stepBudgetFrom(process.env.ENXAME_MISSION_STEP_BUDGET, 60) },
   /** Enxame (spec §4.3 Pacing, inc. 5 §2): starts escalonados com jitter, atraso entre passos e teto de ações/hora por identidade. */
   swarm: { staggerMs: 8000, jitterMs: 3000, stepDelayMs: 1500, stepJitterMs: 1000, maxActionsPerHour: 120 },
   /** Ciclo de vida (spec inc. 5 §2): snapshot mais velho que isto exige confirmação humana para restaurar. */

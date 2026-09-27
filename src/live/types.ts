@@ -1,7 +1,7 @@
 export interface LiveToolRow { readonly idx: number; readonly tool: string; readonly excerpt: string; readonly tokens: number; readonly gate: boolean; readonly provider?: string | null }
 export interface LiveIdentity {
   readonly id: string; readonly name: string; readonly handle: string; readonly state: string; readonly task: string;
-  readonly steps: number; readonly budget: number; readonly costUsd: number; readonly error: string; readonly lastTools: readonly LiveToolRow[];
+  readonly steps: number; readonly budget: number | null; readonly costUsd: number; readonly error: string; readonly lastTools: readonly LiveToolRow[];
   readonly degraded?: boolean; readonly genMs?: number; readonly earlyStopRemaining?: number;
   /** Estado do stream de vídeo no daemon ('idle' | 'starting' | 'streaming' | 'retrying'). */
   readonly video?: string;
