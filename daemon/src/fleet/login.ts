@@ -23,6 +23,8 @@ const LOGIN_BUTTON = /^(log in|entrar|iniciar sesi[oó]n)$/i;
 /** Telas antes do formulário ("tenho uma conta", "entrar em outra conta"). */
 const ENTRY_BUTTON = /^(log in|entrar|iniciar sesi[oó]n|i already have an account|j[aá] tenho uma conta|ya tengo una cuenta|log in(to)? (an)?other account|entrar em outra conta)$/i;
 const NOT_NOW = /^(not now|agora n[aã]o|ahora no)$/i;
+/** Diálogo do Android oferecendo guardar a senha no gerenciador do Google: sempre recusado. */
+const SAVE_PASSWORD = /save password to google|salvar (a )?senha no (gerenciador|google)|guardar (la )?contrase[nñ]a en/i;
 const REFUSED = /incorrect|incorret[ao]|incorrect[ao]|n[aã]o (encontramos|pertence)|couldn'?t find|doesn'?t belong|no pertenece|try again later|tente novamente mais tarde/i;
 
 const label = (n: ScreenNode) => (n.text || n.desc).trim();
@@ -67,6 +69,14 @@ export async function runLogin(io: LoginIo, creds: Credentials, opts: { timeoutM
     const refused = nodes(now).find((n) => REFUSED.test(label(n)));
     if (refused) return { outcome: 'needs-human', detail: `login recusado pelo Instagram: ${label(refused).slice(0, 160)}` };
     if (detectLoggedOut(now)) continue; // ainda carregando na mesma tela
+    // Oferta de guardar a senha (fora do Instagram): recusa e olha de novo o que está por trás.
+    if (nodes(now).some((n) => SAVE_PASSWORD.test(label(n)))) {
+      const no = find(now, NOT_NOW, false);
+      if (no) { await io.tap(no.id); await io.sleep(1_500); }
+      continue;
+    }
+    // Sucesso só com o próprio Instagram na frente, fora da tela de login e sem desafio.
+    if (!inInstagram(now)) continue;
     const later = find(now, NOT_NOW, false);
     if (later) { await io.tap(later.id); await io.sleep(1_500); }
     return { outcome: 'logged-in', detail: 'login feito pelo daemon' };

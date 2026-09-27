@@ -25,3 +25,9 @@ credentials: {
 login(id: string): Promise<{ outcome: 'logged-in' | 'already-logged-in' | 'needs-human'; detail: string }>;
 ```
 Arquivo: `<userData>/credentials.json` com `{ version: 1, entries: { [id]: { username, secret } } }`, `secret` = senha cifrada (base64). Username em claro (não é segredo e a tela o mostra).
+
+## Resultado (2026-09-27)
+
+- Cofre: `safeStorage` disponível nesta máquina (GNOME Keyring); `credentials.json` em 0600, sem a senha em claro. Senha ausente do banco, dos steps, dos logs do daemon/Electron e do logcat.
+- Login real na conta2 pela tela: o daemon preencheu e tocou "Log in" em 18 s. Depois disso o Android ofereceu guardar a senha no gerenciador do Google e, por trás, o Instagram pediu **verificação da conta** ("Choose a way to confirm your account").
+- Defeito achado e corrigido: o roteiro declarou sucesso com o diálogo do Android na frente. Agora recusa o diálogo de senha, trata a verificação de conta como desafio (`needs-human`, sem tocar nela) e só declara sucesso com o próprio Instagram na frente.

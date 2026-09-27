@@ -25,6 +25,8 @@ const BLOCK_PATTERNS: readonly RegExp[] = [
   /confirme que é você/i, /confirm it's you/i, /suspicious login/i, /atividade incomum/i,
   /ajude-nos a confirmar/i, /help us confirm/i, /we suspended your account/i, /sua conta foi suspensa/i,
   /insira o código/i, /enter the code we sent/i, /captcha/i,
+  // Verificação de conta depois de um login (medida na conta2, 2026-09-27): trabalho humano, nunca do agente.
+  /choose a way to confirm/i, /confirm your account/i, /escolha (uma )?forma de confirmar/i, /confirme sua conta/i, /elige una forma de confirmar/i,
 ];
 
 /** Texto do bloqueio de plataforma, ou null. Uma vez detectado, a identidade para (spec §6). */

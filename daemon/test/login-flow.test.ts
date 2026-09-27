@@ -64,3 +64,25 @@ describe('runLogin', () => {
     expect(f.log.some((l) => l.startsWith('type'))).toBe(false);
   });
 });
+
+describe('telas depois do Log in (integrador)', () => {
+  const AUTOFILL = screen([['node_q', 'TextView', 'Save password to Google Password Manager?', '-'], ['node_s', 'Button', 'Save', '-'], ['node_x', 'Button', 'Not now', '-']], 'com.google.android.gms');
+  const CONFIRM = screen([['node_t', 'TextView', 'Choose a way to confirm your account', 'Choose a way to confirm your account'], ['node_c', 'Button', '-', 'Continue']]);
+  it('diálogo do gerenciador de senhas é recusado e o sucesso só vale com o Instagram na frente', async () => {
+    const f = fakeIo([LOGIN, AUTOFILL, FEED]);
+    expect((await runLogin(f.io, creds)).outcome).toBe('logged-in');
+    expect(f.log).toContain('tap node_x');
+    expect(f.log).not.toContain('tap node_s');
+  });
+  it('verificação de conta depois do login → needs-human, sem tocar em nada dela', async () => {
+    const f = fakeIo([LOGIN, AUTOFILL, CONFIRM]);
+    const r = await runLogin(f.io, creds);
+    expect(r).toMatchObject({ outcome: 'needs-human', detail: expect.stringMatching(/Choose a way to confirm/) });
+    expect(f.log).not.toContain('tap node_c');
+  });
+  it('outra tela que não é do Instagram nem o diálogo: não declara sucesso', async () => {
+    const OTHER = screen([['node_z', 'TextView', 'Home', '-']], 'com.google.android.apps.nexuslauncher');
+    const f = fakeIo([LOGIN, OTHER, OTHER]);
+    expect((await runLogin(f.io, creds, { timeoutMs: 3000, pollMs: 1000 })).outcome).toBe('needs-human');
+  });
+});
