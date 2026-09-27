@@ -26,9 +26,16 @@ const nodeFs: VaultFs = { readFile: (p) => readFile(p, 'utf8'), writeFile: (p, d
 function parse(raw: string): Entries {
   try {
     const doc = JSON.parse(raw) as { version?: unknown; entries?: unknown };
-    if (doc?.version !== 1 || typeof doc.entries !== 'object' || doc.entries === null) return {};
+    if (doc?.version !== 1 || typeof doc.entries !== 'object' || doc.entries === null) throw new VaultError('cofre corrompido; nada foi gravado');
     return doc.entries as Entries;
-  } catch { return {}; }
+  } catch (e) {
+    if (e instanceof VaultError) throw e;
+    throw new VaultError('cofre corrompido; nada foi gravado');
+  }
+}
+
+function isFileNotFound(e: unknown): boolean {
+  return ((e as { code?: string }).code === 'ENOENT') || String((e as Error).message ?? '').includes('ENOENT');
 }
 
 /**
@@ -37,7 +44,15 @@ function parse(raw: string): Entries {
  */
 export function createVault({ file, keys, fs = nodeFs }: { file: string; keys: KeySource; fs?: VaultFs }): Vault {
   let key: Buffer | null = null;
-  const load = (): Promise<Entries> => fs.readFile(file).then(parse, () => ({}));
+  const load = async (): Promise<Entries> => {
+    try {
+      return parse(await fs.readFile(file));
+    } catch (e) {
+      if (isFileNotFound(e)) return {};
+      if (e instanceof VaultError) throw e;
+      throw new VaultError(`não foi possível ler o cofre: ${String((e as Error).code ?? (e as Error).message ?? e).slice(0, 80)}`);
+    }
+  };
   const save = async (e: Entries) => {
     const tmp = `${file}.${randomBytes(6).toString('hex')}.tmp`;
     await fs.writeFile(tmp, JSON.stringify({ version: 1, entries: e }), FILE_MODE);

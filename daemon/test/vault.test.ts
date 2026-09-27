@@ -57,4 +57,30 @@ describe('cofre do daemon', () => {
     const run = async () => { const e = new Error('spawn secret-tool ENOENT') as Error & { code: string }; e.code = 'ENOENT'; throw e; };
     await expect(secretToolKeySource(run).load()).rejects.toThrow(/secret-tool ausente/);
   });
+  it('readFile com erro de permissão → put rejeita, nada gravado', async () => {
+    const file = tmpFile(); const keys = memKeys();
+    let writes = 0, renames = 0;
+    const failFs = {
+      readFile: async () => { const e = new Error('Permission denied') as Error & { code?: string }; e.code = 'EACCES'; throw e; },
+      writeFile: async () => { writes++; },
+      rename: async () => { renames++; },
+    };
+    const v = createVault({ file, keys, fs: failFs });
+    await expect(v.put('a', 'secret')).rejects.toBeInstanceOf(VaultError);
+    expect(writes).toBe(0); expect(renames).toBe(0);
+  });
+  it('arquivo com lixo dentro → get/put rejeitam, arquivo não é alterado', async () => {
+    const file = tmpFile(); const keys = memKeys();
+    const garbage = 'not json at all!!!';
+    let writeCount = 0, renameCount = 0;
+    const badFs = {
+      readFile: async () => garbage,
+      writeFile: async () => { writeCount++; },
+      rename: async () => { renameCount++; },
+    };
+    const v = createVault({ file, keys, fs: badFs });
+    await expect(v.get('a')).rejects.toBeInstanceOf(VaultError);
+    await expect(v.put('b', 'value')).rejects.toBeInstanceOf(VaultError);
+    expect(writeCount).toBe(0); expect(renameCount).toBe(0);
+  });
 });
