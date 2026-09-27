@@ -41,4 +41,9 @@ create table if not exists provider_test (
   at text not null default (datetime('now')), latency_ms integer, tokens_per_sec real,
   args_valid integer not null, warning text, error text
 );
+create table if not exists mission_memory (
+  goal_id text not null references goal(id), key text not null, value text not null,
+  secret integer not null default 0, updated_at text not null default (datetime('now')),
+  primary key (goal_id, key)
+);
 `;
