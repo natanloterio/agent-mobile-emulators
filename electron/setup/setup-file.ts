@@ -11,23 +11,29 @@ export const SetupFileSchema = z.object({
 });
 export type SetupFileT = z.infer<typeof SetupFileSchema>;
 
-export async function readSetupFile(file: string): Promise<SetupFileT | null> {
-  try {
-    const parsed = SetupFileSchema.safeParse(JSON.parse(await readFile(file, 'utf8')));
-    return parsed.success ? parsed.data : null;
-  } catch {
+/** Ausente (ENOENT) é normal na primeira execução; existente mas ilegível ou fora do formato merece um aviso. */
+function parseOrWarn(file: string, read: () => string): SetupFileT | null {
+  let text: string;
+  try { text = read(); } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') console.warn(`[enxame] setup.json ilegível (${file}):`, (e as Error).message);
     return null;
   }
+  try {
+    const parsed = SetupFileSchema.safeParse(JSON.parse(text));
+    if (parsed.success) return parsed.data;
+    console.warn(`[enxame] setup.json inválido (${file}), ignorado:`, parsed.error.issues.map((i) => i.message).join('; '));
+  } catch (e) { console.warn(`[enxame] setup.json inválido (${file}), ignorado:`, (e as Error).message); }
+  return null;
+}
+
+export async function readSetupFile(file: string): Promise<SetupFileT | null> {
+  const text = await readFile(file, 'utf8').then((t) => ({ t }), (e: unknown) => ({ e }));
+  return parseOrWarn(file, () => { if ('e' in text) throw text.e; return text.t; });
 }
 
 /** Versão síncrona para a subida do main: os canais IPC precisam existir antes de a janela chamar `setup.status()`. */
 export function readSetupFileSync(file: string): SetupFileT | null {
-  try {
-    const parsed = SetupFileSchema.safeParse(JSON.parse(readFileSync(file, 'utf8')));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
+  return parseOrWarn(file, () => readFileSync(file, 'utf8'));
 }
 
 /** Gravação atômica (tmp + rename): o daemon nunca lê um arquivo pela metade. */
