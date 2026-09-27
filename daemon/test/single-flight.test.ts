@@ -46,4 +46,21 @@ describe('singleFlightOllama', () => {
     expect(await ensured).toBe(ST);
     expect(events).toEqual(['lock-start', 'lock-end', 'ensure-run']);
   });
+  it('unload() também espera a trava: não corre junto com um restart/reload em andamento', async () => {
+    const lock = createRuntimeLock();
+    const events: string[] = [];
+    const holdLock = lock.run(async () => { events.push('lock-start'); await wait(20); events.push('lock-end'); });
+    let unloadCalls = 0;
+    const s = singleFlightOllama({
+      ensure: async () => ST,
+      unload: async (endpoint, model, runtime) => { unloadCalls++; events.push(`unload-run:${endpoint}:${model}:${runtime ?? ''}`); },
+      stop: () => {}, status: () => null, restartIfParallelDiffers: async () => null,
+    }, lock);
+    const unloaded = s.unload('http://127.0.0.1:11434/v1', 'm', 'ollama');
+    await wait(1); // dá tempo do lock.run acima já estar segurando a trava
+    expect(unloadCalls).toBe(0); // ainda não rodou: a trava está ocupada pelo restart/reload
+    await holdLock;
+    await unloaded;
+    expect(events).toEqual(['lock-start', 'lock-end', 'unload-run:http://127.0.0.1:11434/v1:m:ollama']);
+  });
 });

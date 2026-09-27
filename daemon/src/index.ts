@@ -137,7 +137,11 @@ const identityRoutes = createIdentityRoutes({
  */
 const onFleetChange = () => {
   server.broadcast();
-  if (localParallelController.status().pending) void localParallelController.apply().then(() => server.broadcast());
+  if (localParallelController.status().pending) {
+    void localParallelController.apply()
+      .then(() => server.broadcast())
+      .catch((e: unknown) => console.error('[enxame-daemon] apply do paralelismo local falhou:', (e as Error).message));
+  }
 };
 
 // Enxame (spec inc. 5 §3.2): líder planeja sobre a frota; scheduler roda um worker por identidade pronta, com pacing.
@@ -183,7 +187,8 @@ const server = await startServer({
   host: () => host.read(),
   localParallel: () => localParallelController.status(),
   listLocal: (current) => localRuntimes.listAll(current),
-  unloadLocal: (row) => localRuntimes.unload(row.endpoint, row.model, row.runtime),
+  // Pela trava (ollama = single-flight + lock): descarregar não pode correr junto com um restart/reload em andamento.
+  unloadLocal: (row) => ollama.unload(row.endpoint, row.model, row.runtime),
   // Kill switch derruba o Ollama que é nosso (spec §4.3); /resume + próximo objetivo o sobem de novo.
   onKill: () => { ollama.stop(); server.broadcast(); },
   // Kill switch já é recusado na rota (409). Plano do cliente é re-sondado no start de cada identidade.

@@ -2,7 +2,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { ProviderError } from '../src/provider/errors.js';
-import { createOllamaSupervisor, isLoopbackHost, modelListed, OLLAMA_ENV, resetExternalOllamaWarning, warnIfExternalOllama } from '../src/provider/ollama.js';
+import { createOllamaSupervisor, isLoopbackHost, modelListed, OLLAMA_ENV, resetExternalOllamaWarning, warnIfExternalOllama, type OllamaSupervisor } from '../src/provider/ollama.js';
 
 const tags = (...names: string[]) => new Response(JSON.stringify({ models: names.map((name) => ({ name })) }), { status: 200 });
 const refused = () => { throw new Error('fetch failed: ECONNREFUSED'); };
@@ -201,6 +201,37 @@ describe('paralelismo local (restartIfParallelDiffers)', () => {
     expect(applied).toBe(4);
     expect(killed).toContain('SIGTERM');
     expect(spawned.at(-1)?.env.OLLAMA_NUM_PARALLEL).toBe('4');
+  });
+});
+
+describe('kill switch durante o restart (revisão: geração/epoch)', () => {
+  it('stop() bem no fetch de checagem: mata o processo novo, não reivindica sucesso mesmo se ele já respondia', async () => {
+    const killed: string[] = [];
+    const child2 = { pid: 5555, kill: (s?: string) => { killed.push(`spawn:${s}`); return true; }, on: () => undefined };
+    let sup!: OllamaSupervisor;
+    const fetchFn = (async () => { sup.stop(); return tags('m'); }) as never; // kill switch chega bem quando o novo processo já respondia
+    sup = createOllamaSupervisor({
+      fetch: fetchFn, sleep: async () => {}, timeoutMs: 20_000, logPath: '/dev/null', openLog: () => 'x',
+      findProcesses: () => [{ pid: 4242, env: `OLLAMA_HOST=127.0.0.1:11434\0OLLAMA_CONTEXT_LENGTH=${CONFIG.local.contextLength}\0OLLAMA_NUM_PARALLEL=1\0` }],
+      kill: (pid, sig) => killed.push(`adopt:${pid}:${sig}`),
+      spawn: () => child2,
+    });
+    expect(await sup.restartIfParallelDiffers(4)).toBeNull();
+    expect(sup.status()).toBeNull(); // nunca reivindicou o processo novo como nosso
+    expect(killed).toContain('spawn:SIGTERM'); // o processo recém-subido foi morto, não vazou
+  });
+  it('stop() logo no início da espera (antes de qualquer checagem): devolve null rápido, sem vazar o processo novo', async () => {
+    const killed: string[] = [];
+    const child2 = { pid: 7777, kill: (s?: string) => { killed.push(`spawn:${s}`); return true; }, on: () => undefined };
+    let sleepCalls = 0; let sup!: OllamaSupervisor;
+    sup = createOllamaSupervisor({
+      fetch: (async () => tags('m')) as never, sleep: async () => { sleepCalls++; if (sleepCalls === 1) sup.stop(); }, timeoutMs: 20_000, logPath: '/dev/null', openLog: () => 'x',
+      findProcesses: () => [{ pid: 4242, env: `OLLAMA_HOST=127.0.0.1:11434\0OLLAMA_CONTEXT_LENGTH=${CONFIG.local.contextLength}\0OLLAMA_NUM_PARALLEL=1\0` }],
+      kill: () => {},
+      spawn: () => child2,
+    });
+    expect(await sup.restartIfParallelDiffers(4)).toBeNull();
+    expect(killed).toContain('spawn:SIGTERM');
   });
 });
 

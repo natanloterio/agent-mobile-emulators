@@ -47,7 +47,13 @@ export interface OllamaStatus {
 export interface OllamaSupervisor {
   /** `runtime` é ignorado aqui; existe para o despacho de runtimes locais (provider/runtimes/local.ts). */
   ensure(endpoint: string, model: string, runtime?: 'ollama' | 'lmstudio' | null): Promise<OllamaStatus>;
-  unload(endpoint: string, model: string): Promise<void>;
+  /** `runtime` é ignorado aqui; existe para o despacho de runtimes locais (provider/runtimes/local.ts). */
+  unload(endpoint: string, model: string, runtime?: 'ollama' | 'lmstudio' | null): Promise<void>;
+  /**
+   * Kill switch (spec §4.3): NUNCA espera a trava do single-flight — precisa ser imediato mesmo com uma troca de
+   * paralelismo em andamento (que pode levar minutos). Avança a "geração": `ensure()`/`restartIfParallelDiffers`
+   * em voo percebem na próxima checagem, matam o que acabaram de subir e desistem sem reivindicar o processo.
+   */
   stop(): void;
   status(): OllamaStatus | null;
   /**
@@ -121,6 +127,10 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
   let logFd: unknown = null;
   // Último host:porta usado (spec paralelismo): guardado para o restart poder subir de novo sem repetir `ensure(endpoint, model)`.
   let lastHost: string | null = null;
+  // Geração do kill switch (revisão paralelismo): stop() avança; ensure()/restartIfParallelDiffers capturam o
+  // valor no início e o conferem depois de cada await — mudou, é porque stop() rodou enquanto subíamos um processo
+  // novo; matamos o que acabamos de spawnar e desistimos, sem reivindicar (child fica null, sem status de sucesso).
+  let stopEpoch = 0;
   const releaseLog = () => { if (logFd !== null) { closeLog(logFd); logFd = null; } };
 
   const checkModel = (models: readonly string[], model: string) => {
@@ -128,14 +138,25 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
   };
   const adopt = (pid: number): ChildLike => ({ pid, kill: (sig) => { killFn(pid, sig ?? 'SIGTERM'); return true; }, on: () => undefined });
   const status = (models: readonly string[]): OllamaStatus => { last = { running: true, spawnedByUs: child !== null, adopted, pid: child?.pid ?? null, models }; return last; };
+  /**
+   * Kill switch rodou desde `myEpoch` (revisão paralelismo): mata o que a chamada atual acabou de spawnar (ou já
+   * matou, via stop()) e sinaliza para a chamada desistir sem reivindicar sucesso. Checado depois de CADA await no
+   * loop de espera — inclusive depois do `listModels`, para não reivindicar um processo que já devia estar morto.
+   */
+  const stoppedMidFlight = (myEpoch: number): boolean => {
+    if (myEpoch === stopEpoch) return false;
+    child?.kill('SIGTERM'); child = null; releaseLog();
+    return true;
+  };
 
   return {
     status: () => last,
-    stop: () => { if (child) { child.kill('SIGTERM'); child = null; adopted = false; } releaseLog(); },
+    stop: () => { stopEpoch++; if (child) { child.kill('SIGTERM'); child = null; adopted = false; } releaseLog(); },
     unload: async (endpoint, model) => {
       await fetchFn(`${ollamaBase(endpoint)}/api/generate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model, keep_alive: 0 }) }).catch(() => undefined);
     },
     ensure: async (endpoint, model) => {
+      const myEpoch = stopEpoch;
       const base = ollamaBase(endpoint);
       // Só host:porta: um path no endpoint (`…/ollama/v1`) não pode virar "remoto" nem ir para OLLAMA_HOST.
       const host = new URL(base).host;
@@ -162,10 +183,13 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
       child?.on('exit', () => { child = null; releaseLog(); });
       child?.on('error', (e) => { spawnErr = e ?? new Error('spawn error'); child = null; releaseLog(); });
       const t0 = Date.now();
+      const killSwitchErr = () => new ProviderError('infra-local', 'kill switch pressionado durante a subida do Ollama; ele fica parado');
       do {
         await sleep(POLL_MS);
+        if (stoppedMidFlight(myEpoch)) throw killSwitchErr();
         if (spawnErr) { child = null; throw new ProviderError('infra-local', `não foi possível iniciar \`ollama serve\` (${spawnErr.message}); confira se o binário ollama está no PATH do daemon`); }
         const models = await listModels(fetchFn, base);
+        if (stoppedMidFlight(myEpoch)) throw killSwitchErr();
         if (models) { checkModel(models, model); return status(models); }
       } while (Date.now() - t0 < timeoutMs);
       child?.kill('SIGTERM'); child = null;
@@ -173,6 +197,7 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
       throw new ProviderError('infra-local', `Ollama não subiu em ${Math.round(timeoutMs / 1000)} s; veja ${logPath}`);
     },
     restartIfParallelDiffers: async (wanted) => {
+      const myEpoch = stopEpoch;
       if (child === null) {
         // Órfão nosso de uma subida anterior do daemon pode estar rodando mesmo sem nenhum ensure() nesta subida
         // (ex.: PUT /settings/local antes de qualquer tarefa) — mesma adoção por marcador do ensure(), mas sem um
@@ -203,8 +228,10 @@ export function createOllamaSupervisor(deps: OllamaDeps = {}): OllamaSupervisor 
       const t0 = Date.now();
       do {
         await sleep(POLL_MS);
+        if (stoppedMidFlight(myEpoch)) return null;
         if (spawnErr) return null;
         const models = await listModels(fetchFn, base);
+        if (stoppedMidFlight(myEpoch)) return null;
         if (models) { status(models); return wanted; }
       } while (Date.now() - t0 < timeoutMs);
       child?.kill('SIGTERM'); child = null;

@@ -21,5 +21,7 @@ export function singleFlightOllama(sup: OllamaSupervisor, lock: RuntimeLock): Ol
       inflight.set(key, p);
       return p;
     },
+    // Descarrega o modelo (troca de papel/provedor): mexe no mesmo processo/modelo do ensure()/apply — mesma trava.
+    unload: (endpoint, model, runtime) => lock.run(() => sup.unload(endpoint, model, runtime)),
   };
 }
