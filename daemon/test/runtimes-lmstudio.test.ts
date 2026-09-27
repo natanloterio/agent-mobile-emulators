@@ -34,8 +34,13 @@ function fakes(o: { running?: boolean; loaded?: string[]; lms?: boolean; ctx?: n
     };
     return { stdout: '', stderr: '', code: 0 };
   };
-  const fetch = (async (u: string) => {
+  const fetch = (async (u: string, init?: { method?: string; body?: string }) => {
     if (!running) throw new Error('ECONNREFUSED');
+    if (init?.method === 'POST' && u.endsWith('/api/v1/models/unload')) {
+      const id = (JSON.parse(init.body ?? '{}') as { instance_id: string }).instance_id;
+      calls.push(`rest-unload ${id}`); loaded.delete(id);
+      return { ok: true, status: 200, json: async () => ({ instance_id: id }) };
+    }
     const ids = ['google/gemma-4-12b-qat', 'llama-3.2-3b-instruct'];
     return { ok: true, json: async () => (u.endsWith('/api/v0/models') ? V0(Object.fromEntries(ids.map((i) => [i, loaded.has(i) ? 'loaded' : 'not-loaded']))) : { data: ids.map((id) => ({ id })) }) };
   }) as never;
@@ -161,12 +166,12 @@ describe('reloadIfParallelDiffers (spec paralelismo — troca efetiva gerida pel
 });
 
 describe('unload do LM Studio (integrador)', () => {
-  it('só chama lms unload se o modelo estiver carregado', async () => {
+  it('só descarrega se o modelo estiver carregado', async () => {
     const f = fakes({ loaded: ['llama-3.2-3b-instruct'] });
     const lm = createLmStudio({ exec: f.exec, fetch: f.fetch, lmsPath: f.lmsPath, sleep: async () => {} });
     await lm.unload('http://127.0.0.1:1234/v1', 'google/gemma-4-12b-qat');
     await lm.unload('http://127.0.0.1:1234/v1', 'llama-3.2-3b-instruct');
-    expect(f.calls.filter((c) => c.startsWith('unload'))).toEqual(['unload llama-3.2-3b-instruct']);
+    expect(f.calls.filter((c) => c.includes('unload'))).toEqual(['rest-unload llama-3.2-3b-instruct']);
   });
 });
 
@@ -182,5 +187,53 @@ describe('findLms — CLI do LM Studio por SO', () => {
       .toBe('C:\\Users\\u\\.lmstudio\\bin\\lms.exe');
     expect(findLms({ platform: 'win32', home: 'C:\\Users\\u', pathEnv: 'C:\\a;D:\\tools', exists: has('D:\\tools\\lms.exe') })).toBe('D:\\tools\\lms.exe');
     expect(findLms({ platform: 'win32', home: 'C:\\Users\\u', pathEnv: 'C:\\a', exists: has('C:\\Users\\u\\.lmstudio\\bin\\lms') })).toBeNull();
+  });
+});
+
+describe('unload (API REST v1 primeiro, `lms unload` como plano B)', () => {
+  const EP = 'http://127.0.0.1:1234/v1';
+  /** Servidor com `model` carregado; `rest` = status da rota /api/v1/models/unload (null = rota lança). */
+  function server(o: { rest: number | null; lmsCode?: number; loaded?: boolean }) {
+    const calls: string[] = []; const posts: { url: string; body: unknown }[] = [];
+    const fetch = (async (u: string, init?: { method?: string; body?: string }) => {
+      if (init?.method === 'POST') {
+        posts.push({ url: u, body: JSON.parse(init.body ?? 'null') });
+        if (o.rest === null) throw new Error('ECONNRESET');
+        return { ok: o.rest >= 200 && o.rest < 300, status: o.rest, text: async () => 'not found', json: async () => ({}) };
+      }
+      return { ok: true, json: async () => V0({ 'qwen/qwen3.6-27b': o.loaded === false ? 'not-loaded' : 'loaded' }) };
+    }) as never;
+    const exec = async (_f: string, args: readonly string[]) => {
+      calls.push(args.join(' '));
+      return { stdout: '', stderr: o.lmsCode ? 'Invalid passkey for lms CLI client' : '', code: o.lmsCode ?? 0 };
+    };
+    return { fetch, exec, calls, posts };
+  }
+
+  it('descarrega pela API REST (instance_id) sem chamar o CLI', async () => {
+    const s = server({ rest: 200 });
+    await createLmStudio({ exec: s.exec, fetch: s.fetch, lmsPath: '/x/lms' }).unload(EP, 'qwen/qwen3.6-27b');
+    expect(s.posts).toEqual([{ url: 'http://127.0.0.1:1234/api/v1/models/unload', body: { instance_id: 'qwen/qwen3.6-27b' } }]);
+    expect(s.calls).toEqual([]);
+  });
+  it('funciona sem o CLI lms instalado', async () => {
+    const s = server({ rest: 200 });
+    await createLmStudio({ exec: s.exec, fetch: s.fetch, lmsPath: null }).unload(EP, 'qwen/qwen3.6-27b');
+    expect(s.posts).toHaveLength(1);
+  });
+  it('API sem a rota (LM Studio antigo): cai no `lms unload`', async () => {
+    const s = server({ rest: 404 });
+    await createLmStudio({ exec: s.exec, fetch: s.fetch, lmsPath: '/x/lms' }).unload(EP, 'qwen/qwen3.6-27b');
+    expect(s.calls).toEqual(['unload qwen/qwen3.6-27b']);
+  });
+  it('API e CLI falham (ex.: passkey do lms): erro com os dois motivos', async () => {
+    const s = server({ rest: null, lmsCode: 1 });
+    await expect(createLmStudio({ exec: s.exec, fetch: s.fetch, lmsPath: '/x/lms' }).unload(EP, 'qwen/qwen3.6-27b'))
+      .rejects.toThrow(/qwen\/qwen3\.6-27b.*ECONNRESET.*Invalid passkey/);
+  });
+  it('modelo não carregado: nada a fazer', async () => {
+    const s = server({ rest: 200, loaded: false });
+    await createLmStudio({ exec: s.exec, fetch: s.fetch, lmsPath: '/x/lms' }).unload(EP, 'qwen/qwen3.6-27b');
+    expect(s.posts).toEqual([]); expect(s.calls).toEqual([]);
   });
 });

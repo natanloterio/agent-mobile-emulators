@@ -63,7 +63,7 @@ type V0 = { data?: { id: string; state?: string; type?: string; capabilities?: s
 export interface LmStudio {
   list(endpoint: string): Promise<RuntimeListing>;
   ensure(endpoint: string, model: string): Promise<RuntimeStatus>;
-  /** Tira o modelo da memória (`lms unload`); não carregado ou sem CLI: nada a fazer. */
+  /** Tira o modelo da memória: API REST do LM Studio, senão `lms unload`; não carregado: nada a fazer. */
   unload(endpoint: string, model: string): Promise<void>;
   /**
    * Paralelismo (spec paralelismo §Ocioso): recarrega (unload + load --parallel) o modelo carregado só se o
@@ -162,11 +162,24 @@ export function createLmStudio(deps: LmStudioDeps = {}): LmStudio {
     return { running: true, spawnedByUs: startedByUs, adopted: false, pid: null, models: (api.data ?? []).map((m) => m.id), contextWarning: await contextWarning(model) };
   };
 
+  /** `POST /api/v1/models/unload` (LM Studio 0.4+): não depende do CLI, que pode ser recusado pelo servidor (passkey). */
+  const restUnload = async (endpoint: string, model: string): Promise<string | null> => {
+    try {
+      const r = await f(`${ollamaBase(endpoint)}/api/v1/models/unload`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ instance_id: model }),
+      });
+      return r.ok ? null : `API ${r.status}: ${(await r.text().catch(() => '')).trim().slice(0, 120)}`;
+    } catch (e) { return `API: ${String((e as Error)?.message ?? e).slice(0, 120)}`; }
+  };
+
   const unload = async (endpoint: string, model: string): Promise<void> => {
     const api = await v0(endpoint);
-    if (!lms || !api || !(api.data ?? []).some((m) => m.id === model && m.state === 'loaded')) return;
+    if (!api || !(api.data ?? []).some((m) => m.id === model && m.state === 'loaded')) return;
+    const restError = await restUnload(endpoint, model);
+    if (restError === null) return;
+    if (!lms) throw new Error(`descarregar ${model}: ${restError}; sem o CLI lms para tentar de novo`);
     const r = await exec(lms, ['unload', model], { timeoutMs: LIST_TIMEOUT_MS });
-    if (r.code !== 0) throw new Error(`lms unload ${model}: ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
+    if (r.code !== 0) throw new Error(`descarregar ${model}: ${restError}; lms unload: ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
   };
 
   const reloadIfParallelDiffers = async (endpoint: string, wanted: number): Promise<number | null> => {
