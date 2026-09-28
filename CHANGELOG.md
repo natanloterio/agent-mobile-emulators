@@ -3,6 +3,11 @@
 ## Não lançado
 
 ### Corrigido
+- Nova missão prendia identidades com missão pausada ou esperando humano: a lista mostrava "Em execução" e a conta ficava
+  desabilitada, sem dizer como liberar. Agora mostra o estado real ("Pausada · iniciar abandona esta missão"), deixa
+  escolher e, com confirmação, abandona a missão parada antes de começar a nova (`replace` em `POST /missions` e
+  `POST /missions/chain`). Missão rodando de verdade segue bloqueando. Com o kill switch acionado, a tela avisa e trava
+  o botão, em vez de falhar ao iniciar.
 - Onboarding travava em máquinas onde nenhum modelo local cabia (ex.: Mac de 16 GB, com ≈ 10,7 GB de vídeo): o menor
   modelo da lista pedia 13 GB e o Install ficava desabilitado sem dizer por quê. Entram `qwen3:8b` e `qwen3:4b`; o
   padrão passa a ser o maior modelo que cabe na memória e no disco livre e, se nenhum cabe, o modo Só nuvem. Install

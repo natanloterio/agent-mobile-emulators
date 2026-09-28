@@ -20,6 +20,26 @@ function mk(o: { killed?: boolean } = {}) {
 const status = (f: () => unknown) => { try { f(); return 0; } catch (e) { return (e as MissionError).status; } };
 
 describe('runner de missões', () => {
+  it('start com replace abandona a missão pausada/esperando humano e começa outra; rodando continua bloqueando', async () => {
+    const h = mk();
+    const old = createMission(h.db, 'conta2', 'antiga', 'pt');
+    setMissionState(h.db, old, 'paused', 'infra: fetch failed');
+    expect(status(() => h.runner.start('conta2', 'nova', 'pt'))).toBe(409);
+    const id = h.runner.start('conta2', 'nova', 'pt', undefined, { replace: true });
+    expect(getMission(h.db, old)?.state).toBe('abandoned');
+    expect(getMission(h.db, id)?.state).toBe('running');
+    // A nova está rodando (loop ativo): replace não derruba missão em execução.
+    expect(status(() => h.runner.start('conta2', 'outra', 'pt', undefined, { replace: true }))).toBe(409);
+    h.release(); await h.runner.settle();
+  });
+  it('replace de missão esperando humano devolve a identidade de needs-human', () => {
+    const h = mk();
+    const old = createMission(h.db, 'conta2', 'antiga', 'pt');
+    setMissionState(h.db, old, 'awaiting-human', 'captcha'); setIdentityState(h.db, 'conta2', 'needs-human');
+    h.runner.start('conta2', 'nova', 'pt', undefined, { replace: true });
+    expect(getMission(h.db, old)?.state).toBe('abandoned');
+    expect(getIdentity(h.db, 'conta2')?.state).not.toBe('needs-human');
+  });
   it('start cria e lança o loop; segunda missão na mesma identidade → 409', async () => {
     const h = mk();
     const id = h.runner.start('conta2', 'crie um e-mail', 'pt');

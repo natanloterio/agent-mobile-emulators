@@ -10,8 +10,8 @@ import './Mission.css';
  * Sequência com arquivo (spec arquivos §Interface): uma etapa por conta, na ordem. O daemon roda a primeira, espera ela
  * terminar e leva o arquivo que ela baixou para o celular da seguinte.
  */
-export function ChainComposer({ options, req, onStart }: {
-  readonly options: readonly MissionIdentityOption[]; readonly req: RequestStatus;
+export function ChainComposer({ options, req, blocked = false, onStart }: {
+  readonly options: readonly MissionIdentityOption[]; readonly req: RequestStatus; readonly blocked?: boolean;
   readonly onStart: (steps: readonly ChainStepDraft[]) => void;
 }) {
   const { t } = useI18n();
@@ -44,7 +44,7 @@ export function ChainComposer({ options, req, onStart }: {
       </ol>
       <div className="row-between">
         <Button variant="secondary" disabled={steps.length >= MAX_STEPS} onClick={() => edit(addStep(steps))}>{t('files.chain.add')}</Button>
-        <Button size="lg" disabled={req.busy || !canStartChain(options, steps)} onClick={() => onStart(steps)}>
+        <Button size="lg" disabled={req.busy || blocked || !canStartChain(options, steps)} onClick={() => onStart(steps)}>
           {req.busy ? t('mission.starting') : t('files.chain.start')}
         </Button>
       </div>

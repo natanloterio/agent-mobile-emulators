@@ -18,6 +18,7 @@ import { Cockpit } from './screens/Cockpit';
 import { Device } from './screens/Device';
 import { Identities, type CredentialHandlers } from './screens/Identities';
 import type { MissionIdentityOption } from './screens/MissionComposer';
+import { missionOptions, replacedNames } from './screens/missionPick';
 import { NewGoal } from './screens/NewGoal';
 import { Providers } from './screens/Providers';
 import { Report } from './screens/Report';
@@ -27,7 +28,7 @@ import { selectLiveIdRows, type IdRow, type RowAction } from './state/idRows';
 import {
   selectGoalHeader, selectLiveGoalPct, selectLiveGoalStats, selectLiveReportCards, selectPastGoalRows,
 } from './state/liveSelectors';
-import { isOpenMission, missionForIdentity } from './state/missionView';
+import { missionForIdentity } from './state/missionView';
 import { filesKey } from './state/fileActions';
 import { missionKey, MISSION_START_KEY } from './state/missionActions';
 import { selectDemoPlanVM, selectPlanVM } from './state/planView';
@@ -158,14 +159,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
         );
       }
       case 'new': {
-        const options: readonly MissionIdentityOption[] = (live?.identities ?? [])
-          .filter((i) => !i.discardedAt && i.state !== 'banned')
-          .map((i) => {
-            const busyMission = (live?.missions ?? []).some((m) => m.identityId === i.id && isOpenMission(m));
-            const disabled = busyMission || !!i.controlled || !!i.paused || i.state === 'running';
-            const note = busyMission ? t('mission.state.running') : i.controlled ? t('device.control.release') : i.paused ? t('device.resume') : i.state;
-            return { id: i.id, name: i.name, handle: i.handle, disabled, note };
-          });
+        const options: readonly MissionIdentityOption[] = missionOptions(live, i18n);
         return (
           <NewGoal
             goalText={state.goalText}
@@ -182,8 +176,9 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
             mission={isLive
               ? {
                   options, req: requestOf(state, MISSION_START_KEY),
-                  onStart: (ids, text) => void mission.start(ids, text).then((ok) => { if (ok) actions.go('cockpit'); }),
-                  onStartChain: (steps) => void mission.startChain(steps).then((ok) => { if (ok) actions.go('cockpit'); }),
+                  blocked: view.killed ? t('mission.killed') : null,
+                  onStart: (ids, text) => void mission.start(ids, text, replacedNames(options, ids)).then((ok) => { if (ok) actions.go('cockpit'); }),
+                  onStartChain: (steps) => void mission.startChain(steps, replacedNames(options, steps.map((x) => x.identityId))).then((ok) => { if (ok) actions.go('cockpit'); }),
                 }
               : { options: demoMissionOptions(tiles), req: requestOf(state, MISSION_START_KEY), onStart: () => actions.go('cockpit') }}
           />

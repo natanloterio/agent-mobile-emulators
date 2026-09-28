@@ -9,9 +9,10 @@ export type MissionAction = 'pause' | 'resume' | 'continue' | 'abandon';
 export type MissionInstructThen = 'continue' | 'resume';
 export interface MissionActions {
   /** A mesma missão em cada identidade (uma missão por device). true só se todas iniciaram. */
-  readonly start: (identityIds: readonly string[], text: string) => Promise<boolean>;
+  /** `replacing`: nomes das identidades com missão parada que serão abandonadas (pede confirmação; vazio = nada a substituir). */
+  readonly start: (identityIds: readonly string[], text: string, replacing?: readonly string[]) => Promise<boolean>;
   /** Sequência com arquivo (spec arquivos): uma etapa por identidade, na ordem; o arquivo de uma vai para a seguinte. */
-  readonly startChain: (steps: readonly ChainStepInput[]) => Promise<boolean>;
+  readonly startChain: (steps: readonly ChainStepInput[], replacing?: readonly string[]) => Promise<boolean>;
   readonly act: (id: string, action: MissionAction, text?: string) => Promise<void>;
   /** Instrução do operador (spec instruções): texto aparado; vazio não chama o daemon. */
   readonly instruct: (id: string, text: string, then?: MissionInstructThen) => Promise<boolean>;
@@ -35,12 +36,14 @@ function parseStartReply(x: unknown): StartReply {
 export function createMissionActions(deps: ApiDeps & { readonly confirm: (m: string) => boolean; readonly getLocale?: () => Locale }): MissionActions {
   const locale = () => (deps.getLocale ?? documentLocale)();
   return {
-    start: async (identityIds, raw) => {
+    start: async (identityIds, raw, replacing = []) => {
       const text = raw.trim();
       const i18n = createI18n(locale());
       if (identityIds.length === 0) return false;
       if (text.length < MIN_CHARS) { deps.dispatch({ type: 'requestError', key: MISSION_START_KEY, message: i18n.t('goal.error.tooShort', { min: MIN_CHARS }) }); return false; }
-      const r = await track(deps, MISSION_START_KEY, (b) => b.api?.('POST', '/missions', { identityIds, text, lang: i18n.locale }));
+      if (replacing.length && !deps.confirm(i18n.t('mission.confirm.replace', { names: replacing.join(', ') }))) return false;
+      const body = { identityIds, text, lang: i18n.locale, ...(replacing.length ? { replace: true } : {}) };
+      const r = await track(deps, MISSION_START_KEY, (b) => b.api?.('POST', '/missions', body));
       if (!r.ok) return false;
       const { started, failed } = parseStartReply(r.value);
       if (failed.length === 0) return true;
@@ -50,12 +53,14 @@ export function createMissionActions(deps: ApiDeps & { readonly confirm: (m: str
       }) });
       return false;
     },
-    startChain: async (raw) => {
+    startChain: async (raw, replacing = []) => {
       const i18n = createI18n(locale());
       const steps = raw.map((s) => ({ identityId: s.identityId, text: s.text.trim() }));
       if (steps.length < 2 || steps.some((s) => !s.identityId)) { deps.dispatch({ type: 'requestError', key: MISSION_START_KEY, message: i18n.t('mission.chain.needTwo') }); return false; }
       if (steps.some((s) => s.text.length < MIN_CHARS)) { deps.dispatch({ type: 'requestError', key: MISSION_START_KEY, message: i18n.t('goal.error.tooShort', { min: MIN_CHARS }) }); return false; }
-      const r = await track(deps, MISSION_START_KEY, (b) => b.api?.('POST', '/missions/chain', { steps, lang: i18n.locale }));
+      if (replacing.length && !deps.confirm(i18n.t('mission.confirm.replace', { names: replacing.join(', ') }))) return false;
+      const body = { steps, lang: i18n.locale, ...(replacing.length ? { replace: true } : {}) };
+      const r = await track(deps, MISSION_START_KEY, (b) => b.api?.('POST', '/missions/chain', body));
       return r.ok;
     },
     act: async (id, action, text) => {

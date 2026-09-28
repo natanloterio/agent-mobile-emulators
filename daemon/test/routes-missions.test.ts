@@ -18,7 +18,7 @@ const identityMask = async () => (s: string) => s;
 async function mk(overrides: Partial<MissionRunner> = {}, mask: (missionId: string) => Promise<(s: string) => string> = identityMask) {
   const calls: string[] = [];
   const runner: MissionRunner = {
-    start: (identityId, text, lang) => { calls.push(`start ${identityId} ${text} ${lang}`); if (identityId === 'ocupada') throw new MissionError('identidade já tem uma missão aberta', 409); return 'm-1'; },
+    start: (identityId, text, lang, _seed, opts) => { calls.push(`start ${identityId} ${text} ${lang}${opts?.replace ? ' replace' : ''}`); if (identityId === 'ocupada') throw new MissionError('identidade já tem uma missão aberta', 409); return 'm-1'; },
     pause: (id) => { calls.push(`pause ${id}`); if (id === 'nada') throw new MissionError('missão desconhecida', 404); return 'paused'; },
     resume: (id) => { calls.push(`resume ${id}`); return 'running'; },
     continue: (id) => { calls.push(`continue ${id}`); if (id === 'm-1') throw new MissionError('a missão não está esperando humano', 409); return 'running'; },
@@ -35,6 +35,13 @@ async function mk(overrides: Partial<MissionRunner> = {}, mask: (missionId: stri
 }
 
 describe('rotas de missão', () => {
+  it('POST /missions com replace passa a opção ao runner (uma e várias identidades)', async () => {
+    const t = await mk();
+    expect((await t.post('/missions', { identityId: 'conta2', text: 'crie um e-mail', replace: true })).status).toBe(201);
+    expect((await t.post('/missions', { identityIds: ['conta1'], text: 'abra o youtube', replace: true })).status).toBe(201);
+    expect((await t.post('/missions', { identityId: 'conta2', text: 'crie um e-mail', replace: 'sim' })).status).toBe(400);
+    expect(t.calls).toEqual(['start conta2 crie um e-mail pt replace', 'start conta1 abra o youtube pt replace']);
+  });
   it('POST /missions/chain: 201 com os ids na ordem; 400 com menos de 2 etapas ou texto curto; 409 do runner', async () => {
     const t = await mk();
     const r = await t.post('/missions/chain', { steps: [{ identityId: 'conta1', text: 'baixe a foto' }, { identityId: 'conta2', text: 'poste a foto' }], lang: 'en' });

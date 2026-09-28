@@ -123,6 +123,17 @@ describe('missões encadeadas', () => {
     expect(status(() => mk({ killed: () => true }).runner.startChain([{ identityId: 'conta1', text: 'a' }, { identityId: 'conta2', text: 'b' }], 'pt'))).toBe(409);
     expect(h.db.prepare("select count(*) as n from goal where identity_id='conta1'").get()).toEqual({ n: 0 });
   });
+  it('sequência com replace substitui missão parada; sem replace, recusa', async () => {
+    const h = mk({ finish: 'running' });
+    const old = h.runner.start('conta2', 'antiga', 'pt');
+    await h.runner.settle();
+    setMissionState(h.db, old, 'paused', 'infra');
+    expect(status(() => h.runner.startChain([{ identityId: 'conta1', text: 'a' }, { identityId: 'conta2', text: 'b' }], 'pt'))).toBe(409);
+    const ids = h.runner.startChain([{ identityId: 'conta1', text: 'a' }, { identityId: 'conta2', text: 'b' }], 'pt', { replace: true });
+    expect(getMission(h.db, old)?.state).toBe('abandoned');
+    expect(getMission(h.db, ids[1])?.state).toBe('waiting');
+    await h.runner.settle();
+  });
   it('ao subir o daemon: esperando cuja anterior já terminou recebe o arquivo e roda', async () => {
     const h = mk();
     const ids = h.runner.startChain([{ identityId: 'conta1', text: 'a' }, { identityId: 'conta2', text: 'b' }], 'pt');

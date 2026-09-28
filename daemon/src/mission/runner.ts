@@ -14,12 +14,13 @@ export class MissionError extends Error {
 
 export interface MissionRunner {
   /** `seed` roda entre criar e lançar: memória inicial (ex.: referência a um segredo do cofre) antes do primeiro passo. */
-  start(identityId: string, text: string, lang: string, seed?: (missionId: string) => void): string;
+  /** `replace`: missão aberta que não está rodando (pausada, esperando humano ou esperando a etapa anterior) é abandonada antes. */
+  start(identityId: string, text: string, lang: string, seed?: (missionId: string) => void, opts?: { readonly replace?: boolean }): string;
   /**
    * Sequência (spec arquivos): uma missão por etapa, cada uma numa identidade; a primeira roda já, as outras esperam a
    * anterior terminar e recebem o arquivo que ela baixou. Valida todas antes de criar qualquer uma. Devolve os ids na ordem.
    */
-  startChain(steps: readonly ChainStep[], lang: string): readonly string[];
+  startChain(steps: readonly ChainStep[], lang: string, opts?: { readonly replace?: boolean }): readonly string[];
   pause(id: string): MissionState; resume(id: string): MissionState; continue(id: string): MissionState; abandon(id: string): MissionState;
   resumeAllOnStart(): number;
   settle(): Promise<void>;
@@ -67,13 +68,14 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
     return null;
   }
   /** Mesmas recusas do `start`, por identidade (sem criar nada). */
-  const assertCanStart = (identityId: string) => {
+  const assertCanStart = (identityId: string, replace = false) => {
     const i = getIdentity(d.db, identityId);
     if (!i) throw new MissionError(`identidade desconhecida: ${identityId}`, 404);
     const block = identityBlock(identityId);
     if (block) throw new MissionError(`${identityId}: ${block}`, 409);
     if (i.state === 'running') throw new MissionError(`${identityId}: identidade rodando um objetivo`, 409);
-    if (openMissionFor(d.db, identityId)) throw new MissionError(`${identityId}: identidade já tem uma missão aberta`, 409);
+    const open = openMissionFor(d.db, identityId);
+    if (open && (!replace || open.state === 'running' || loops.has(open.id))) throw new MissionError(`${identityId}: identidade já tem uma missão aberta`, 409);
     return i;
   };
   /** Guarda comum de retomar/continuar: loop antigo ainda parando, kill switch ou identidade bloqueada → 409. */
@@ -84,26 +86,42 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
     if (block) throw new MissionError(block, 409);
   };
   const done = (_id: string, s: MissionState) => { d.onChange?.(); return s; };
+  /** Abandona uma missão aberta: pausa quem a esperava e tira a identidade de needs-human que a missão pôs. */
+  function abandonOpen(id: string): void {
+    const m = mission(id);
+    setMissionState(d.db, id, 'abandoned');
+    cancelWaiting(d.db, id);
+    const i = getIdentity(d.db, m.identityId);
+    // Loop ativo desfaz o próprio 'running'; aqui só o needs-human que a missão pôs.
+    if (i && i.state === 'needs-human' && m.state === 'awaiting-human') setIdentityState(d.db, m.identityId, 'idle', { lastError: null });
+  }
 
   return {
-    start: (identityId, text, lang, seed) => {
+    start: (identityId, text, lang, seed, opts) => {
       const i = getIdentity(d.db, identityId);
       if (!i) throw new MissionError('identidade desconhecida', 404);
       if (d.isKilled()) throw new MissionError('kill switch acionado: retome antes de iniciar uma missão', 409);
       const block = identityBlock(identityId);
       if (block) throw new MissionError(block, 409);
       if (i.state === 'running') throw new MissionError('identidade rodando um objetivo', 409);
-      if (openMissionFor(d.db, identityId)) throw new MissionError('identidade já tem uma missão aberta', 409);
+      const open = openMissionFor(d.db, identityId);
+      if (open) {
+        // Só a parada é substituída: com loop vivo (rodando) a identidade está de fato ocupada.
+        if (!opts?.replace || open.state === 'running' || loops.has(open.id)) throw new MissionError('identidade já tem uma missão aberta', 409);
+        abandonOpen(open.id);
+      }
       const id = createMission(d.db, identityId, text, lang);
       // Semente que falhou não pode deixar missão aberta órfã (prenderia a identidade: "já tem uma missão aberta").
       try { seed?.(id); } catch (e) { setMissionState(d.db, id, 'abandoned'); throw e; }
       launch(id); d.onChange?.();
       return id;
     },
-    startChain: (steps, lang) => {
+    startChain: (steps, lang, opts) => {
       if (d.isKilled()) throw new MissionError('kill switch acionado: retome antes de iniciar uma missão', 409);
       if (new Set(steps.map((s) => s.identityId)).size !== steps.length) throw new MissionError('cada etapa precisa de uma identidade diferente', 409);
-      const identities = steps.map((s) => assertCanStart(s.identityId));
+      const identities = steps.map((s) => assertCanStart(s.identityId, opts?.replace === true));
+      // Validou todas: só agora abandona as missões paradas que a sequência substitui.
+      for (const s of steps) { const open = openMissionFor(d.db, s.identityId); if (open) abandonOpen(open.id); }
       const chainId = randomUUID().replace(/-/g, '').slice(0, 8);
       const ids: string[] = [];
       steps.forEach((s, k) => {
@@ -144,11 +162,7 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
     abandon: (id) => {
       const m = mission(id);
       if (!OPEN_MISSION_STATES.includes(m.state)) throw new MissionError('missão já encerrada', 409);
-      setMissionState(d.db, id, 'abandoned');
-      cancelWaiting(d.db, id);
-      const i = getIdentity(d.db, m.identityId);
-      // Loop ativo desfaz o próprio 'running'; aqui só o needs-human que a missão pôs.
-      if (i && i.state === 'needs-human' && m.state === 'awaiting-human') setIdentityState(d.db, m.identityId, 'idle', { lastError: null });
+      abandonOpen(id);
       return done(id, 'abandoned');
     },
     resumeAllOnStart: () => {

@@ -16,13 +16,15 @@ export interface MissionComposerProps {
   readonly onStart: (identityIds: readonly string[], text: string) => void;
   /** Sequência com arquivo (spec arquivos); ausente, só o modo "várias contas em paralelo". */
   readonly onStartChain?: (steps: readonly ChainStepDraft[]) => void;
+  /** Motivo para nada poder começar agora (ex.: kill switch); o botão fica travado e o aviso aparece em cima. */
+  readonly blocked?: string | null;
 }
 
 /**
  * Missão: texto livre + uma, várias ou todas as identidades, cada uma roda a sua missão (spec missões §Interface);
  * ou uma sequência de etapas em contas diferentes, com o arquivo de uma indo para a seguinte (spec arquivos).
  */
-export function MissionComposer({ options, req, onStart, onStartChain }: MissionComposerProps) {
+export function MissionComposer({ options, req, onStart, onStartChain, blocked }: MissionComposerProps) {
   const { t } = useI18n();
   const te = useDaemonError();
   const [kind, setKind] = useState<'parallel' | 'chain'>('parallel');
@@ -37,13 +39,14 @@ export function MissionComposer({ options, req, onStart, onStartChain }: Mission
   const flip = (id: string) => setTouched(togglePick(picked, id));
   return (
     <div className="card card--grey card--shadow newgoal__composer">
+      {blocked && <Notice tone="warn">{blocked}</Notice>}
       {onStartChain && (
         <div className="newgoal__modes" role="tablist">
           <Button variant={kind === 'parallel' ? 'primary' : 'ghost'} size="sm" onClick={() => setKind('parallel')}>{t('files.chain.mode.parallel')}</Button>
           <Button variant={kind === 'chain' ? 'primary' : 'ghost'} size="sm" onClick={() => setKind('chain')}>{t('files.chain.mode.chain')}</Button>
         </div>
       )}
-      {onStartChain && kind === 'chain' ? <ChainComposer options={options} req={req} onStart={onStartChain} /> : (<>
+      {onStartChain && kind === 'chain' ? <ChainComposer options={options} req={req} blocked={!!blocked} onStart={onStartChain} /> : (<>
       <p className="screen__lede">{t('mission.lede')}</p>
       <textarea className="newgoal__textarea" autoFocus rows={3} value={text} placeholder={t('mission.placeholder')} onChange={(e) => setText(e.target.value)} />
       <div className="mission__compose-ids" role="group" aria-label={t('mission.pickIdentities')}>
@@ -64,7 +67,7 @@ export function MissionComposer({ options, req, onStart, onStartChain }: Mission
         ))}
       </div>
       <div className="row-between" style={{ justifyContent: 'flex-end' }}>
-        <Button size="lg" disabled={req.busy || chosen.length === 0} onClick={() => onStart(chosen, text)}>
+        <Button size="lg" disabled={req.busy || chosen.length === 0 || !!blocked} onClick={() => onStart(chosen, text)}>
           {req.busy ? t('mission.starting') : chosen.length > 1 ? t('mission.startMany', { count: chosen.length }) : t('mission.start')}
         </Button>
       </div>
