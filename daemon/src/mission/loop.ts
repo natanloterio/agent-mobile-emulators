@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { describeFile, FILES_IN_PROMPT, listFiles } from '../db/files.js';
 import { getIdentity, setIdentityState, type IdentityRow } from '../db/identities.js';
 import { listNotes, markNotesRead } from '../db/mission-notes.js';
 import {
@@ -10,6 +11,7 @@ import { summarizeScreen } from '../screen/human-check.js';
 import type { ScreenState } from '../screen/parse.js';
 import { missionInstruction } from '../worker/mission-prompt.js';
 import { settleIdentity } from '../worker/stop.js';
+import type { HandoffFiles } from './chain.js';
 import type { PlannerDecision, PlannerInput } from './planner.js';
 
 export interface SubtaskJob { readonly identity: IdentityRow; readonly missionId: string; readonly taskId: string; readonly instruction: string; readonly shouldStop: () => boolean }
@@ -25,6 +27,8 @@ export interface MissionDeps {
   readonly promote: (missionId: string) => Promise<unknown>;
   /** Máscara dos segredos já guardados da missão (lê o cofre); lança VaultError se o cofre não abre. */
   readonly mask: (missionId: string) => Promise<(s: string) => string>;
+  /** Entrega de arquivo entre etapas de uma sequência (spec arquivos); ausente = as etapas rodam sem arquivo. */
+  readonly files?: HandoffFiles;
   readonly onChange?: () => void;
 }
 
@@ -78,6 +82,8 @@ function maskDecision(dec: PlannerDecision, mask: (s: string) => string): Planne
   return { ...dec, reason: mask(dec.reason) };
 }
 
+const fileLines = (db: DatabaseSync) => listFiles(db, FILES_IN_PROMPT).map(describeFile);
+
 const taskState = (db: DatabaseSync, taskId: string) => (db.prepare('select state from task where id=?').get(taskId) as { state: string } | undefined)?.state ?? 'failed';
 
 /** Um ciclo: tela → planejador → executor → resultado. Repete até a missão sair de `running` (spec missões §O loop). */
@@ -107,7 +113,7 @@ export async function runMission(missionId: string, d: MissionDeps): Promise<Mis
         missionText: m.text, identity: { name: identity.name, handle: identity.handle, appPackage: identity.appPackage },
         // mask entra em summarizeScreen (mascara cada rótulo antes do corte de 120; achado residual) em vez de envolver o resultado.
         memory: listMemory(d.db, m.id), subtasks: listSubtasks(d.db, m.id), screen: summarizeScreen(screen, 40, mask), lang: asLang(m.lang),
-        notes: notes.map((n) => n.text),
+        notes: notes.map((n) => n.text), files: fileLines(d.db),
       });
       addMissionCost(d.db, m.id, r.costUsd);
       decision = maskDecision(r.decision, mask);
@@ -130,7 +136,7 @@ export async function runMission(missionId: string, d: MissionDeps): Promise<Mis
     // As notas que o planejador acabou de ler também contam como lidas neste ciclo (marcador não recua as já lidas antes).
     if (notes.length) markNotesRead(d.db, notes.map((n) => n.id), subtaskSeq(d.db, taskId));
     d.onChange?.();
-    const instruction = missionInstruction({ objective: decision.objective, successCriteria: decision.successCriteria, memory: listMemory(d.db, m.id), missionText: m.text });
+    const instruction = missionInstruction({ objective: decision.objective, successCriteria: decision.successCriteria, memory: listMemory(d.db, m.id), missionText: m.text, files: fileLines(d.db) });
     const shouldStop = () => d.isKilled() || getMission(d.db, m.id)?.state !== 'running';
     let r: SubtaskResult;
     try { r = await d.runSubtask({ identity, missionId: m.id, taskId, instruction, shouldStop }); }

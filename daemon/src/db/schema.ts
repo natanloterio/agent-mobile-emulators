@@ -49,6 +49,13 @@ create table if not exists mission_memory (
 create table if not exists settings (
   key text primary key, value text not null, updated_at text not null default (datetime('now'))
 );
+-- Arquivos passados entre aparelhos (spec arquivos): cópia no host em host_path; label é o nome que missões usam.
+create table if not exists fleet_file (
+  id text primary key, label text not null, name text not null, mime text not null, size_bytes integer not null,
+  sha256 text not null, host_path text not null, source_identity_id text, source_mission_id text, source_path text,
+  created_at text not null default (datetime('now'))
+);
+create index if not exists fleet_file_label on fleet_file(label, created_at);
 -- Instruções do operador para uma missão (spec instruções): texto livre, lido pelo executor e pelo planejador.
 create table if not exists mission_note (
   id integer primary key autoincrement, goal_id text not null references goal(id), text text not null,

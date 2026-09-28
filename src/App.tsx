@@ -28,6 +28,7 @@ import {
   selectGoalHeader, selectLiveGoalPct, selectLiveGoalStats, selectLiveReportCards, selectPastGoalRows,
 } from './state/liveSelectors';
 import { isOpenMission, missionForIdentity } from './state/missionView';
+import { filesKey } from './state/fileActions';
 import { missionKey, MISSION_START_KEY } from './state/missionActions';
 import { selectDemoPlanVM, selectPlanVM } from './state/planView';
 import {
@@ -60,7 +61,7 @@ function demoMissionOptions(tiles: readonly { readonly name: string; readonly ha
 }
 
 export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
-  const { state, actions, bridged, goal, identity, credentials, mission, settings } = useFleet();
+  const { state, actions, bridged, goal, identity, credentials, mission, settings, files } = useFleet();
   // Só na montagem: a tela escolhida no fim do onboarding.
   useEffect(() => { if (startScreen) actions.go(startScreen); }, [startScreen]);
   const isMobile = useIsMobile();
@@ -127,6 +128,9 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
         const id = sel.id ?? '';
         const m = isLive ? missionForIdentity(live, sel.id) : state.sel === 0 ? demoMission(i18n) : null;
         const mReq = m ? requestOf(state, missionKey(m.id)) : null;
+        const fReq = requestOf(state, filesKey(id));
+        const liveId = live?.identities.find((x) => x.id === id);
+        const nameOf = (identityId: string) => live?.identities.find((x) => x.id === identityId)?.name ?? identityId;
         return (
           <Device
             sel={sel}
@@ -145,6 +149,11 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
             missionError={mReq?.error ?? null}
             onMission={isLive && m ? (a) => void mission.act(m.id, a, m.text) : undefined}
             onInstruct={isLive && m ? (text, then) => mission.instruct(m.id, text, then) : undefined}
+            files={isLive ? {
+              online: !!liveId?.online, stored: live?.files ?? [], nameOf, busy: fReq.busy, errors: fReq.error ? [fReq.error] : [],
+              onList: () => files.listDevice(id), onKeep: (path) => files.exportFile(id, path),
+              onSendHere: (fileId) => void files.send(fileId, [id], filesKey(id)), onDelete: (fileId, name) => void files.remove(fileId, name, filesKey(id)),
+            } : undefined}
           />
         );
       }
@@ -171,7 +180,11 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
             onLaunch={() => (isLive ? state.plan && void goal.launch(state.plan) : actions.launch(fleetSize))}
             // O modo demonstração mostra a mesma tela do app de verdade (missão); iniciar só volta ao Cockpit.
             mission={isLive
-              ? { options, req: requestOf(state, MISSION_START_KEY), onStart: (ids, text) => void mission.start(ids, text).then((ok) => { if (ok) actions.go('cockpit'); }) }
+              ? {
+                  options, req: requestOf(state, MISSION_START_KEY),
+                  onStart: (ids, text) => void mission.start(ids, text).then((ok) => { if (ok) actions.go('cockpit'); }),
+                  onStartChain: (steps) => void mission.startChain(steps).then((ok) => { if (ok) actions.go('cockpit'); }),
+                }
               : { options: demoMissionOptions(tiles), req: requestOf(state, MISSION_START_KEY), onStart: () => actions.go('cockpit') }}
           />
         );

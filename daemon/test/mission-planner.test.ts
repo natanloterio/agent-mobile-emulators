@@ -18,6 +18,10 @@ const input: PlannerInput = {
 };
 
 describe('planejador da missão', () => {
+  it('prompt lista os arquivos guardados no Tapflock, ou "(nenhum)"', () => {
+    expect(plannerPrompt(input)).toContain('Arquivos guardados no Tapflock (o executor copia com file_import):\n(nenhum)');
+    expect(plannerPrompt({ ...input, files: ['handoff.1: a.jpg (image/jpeg), de conta1'] })).toContain('- handoff.1: a.jpg (image/jpeg), de conta1');
+  });
   it('prompt traz missão, memória (segredo só pela chave), histórico com relatório e tela', () => {
     const p = plannerPrompt(input);
     expect(p).toContain('crie um e-mail');

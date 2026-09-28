@@ -49,6 +49,8 @@ export interface Adb {
   settingsGetSecure(serial: string, key: string): Promise<string>;
   versionName(serial: string, pkg: string): Promise<string | null>;
   push(serial: string, local: string, remote: string): Promise<void>;
+  /** `adb pull`: copia um arquivo do device para o host (argumentos vão direto ao adb, sem passar pelo `sh` do device). */
+  pull(serial: string, remote: string, local: string): Promise<void>;
   forward(serial: string, hostPort: number, spec: string): Promise<void>;
   forwardRemove(serial: string, hostPort: number): Promise<void>;
   shellSpawn(serial: string, cmd: readonly string[]): ChildLike;
@@ -100,6 +102,7 @@ export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: 
     settingsGetSecure: (serial, key) => shell(serial, ['settings', 'get', 'secure', key]),
     versionName: async (serial, pkg) => /versionName=(\S+)/.exec(await shell(serial, ['dumpsys', 'package', pkg]))?.[1] ?? null,
     push: async (serial, local, remote) => { await run(['-s', serial, 'push', local, remote]); },
+    pull: async (serial, remote, local) => { await run(['-s', serial, 'pull', remote, local]); },
     forward: async (serial, hostPort, spec) => { await run(['-s', serial, 'forward', `tcp:${hostPort}`, spec]); },
     forwardRemove: async (serial, hostPort) => { await run(['-s', serial, 'forward', '--remove', `tcp:${hostPort}`]); },
     shellSpawn: (serial, cmd) => spawnFn(adbPath, ['-s', serial, 'shell', ...cmd], { env }),

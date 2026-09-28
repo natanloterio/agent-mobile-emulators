@@ -12,6 +12,7 @@ Regras:
 5. Código de confirmação enviado para um e-mail desta missão: abra a caixa, leia o código e digite-o.
 6. Captcha, "confirme que é você", código enviado por SMS/telefone ou pedido de número de telefone: chame request_human explicando o que falta. Não tente contornar verificação de forma alguma, nem por sites de terceiros.
 7. Se um caminho falhar, tente outro razoável dentro da subtarefa; se não houver, encerre com finish_subtask(ok=false) explicando o que atrapalhou.
+8. Arquivos entre contas: file_export guarda no Tapflock um arquivo que você baixou ou salvou neste celular; file_import copia para cá um arquivo guardado (imagem aparece na galeria, em Pictures/Tapflock; o resto em Download/Tapflock). Use o label pedido na subtarefa.
 Sempre termine com finish_subtask.`;
 
 /** Pedido final (spec missões §Executor): o executor terminou em texto solto, sem chamar finish_subtask. */
@@ -24,9 +25,10 @@ export const MISSION_ESCALATION_NOTE = (n: number, model: string): string =>
   'Continue a mesma subtarefa de onde a última tela parou. Leia a tela antes de agir. Termine com finish_subtask.';
 
 /** Mensagem do usuário da subtarefa: missão, objetivo, critério e memória (segredos só pela chave). */
-export function missionInstruction(i: { objective: string; successCriteria: string; memory: readonly MemoryRow[]; missionText: string }): string {
+export function missionInstruction(i: { objective: string; successCriteria: string; memory: readonly MemoryRow[]; missionText: string; files?: readonly string[] }): string {
   const mem = i.memory.length ? i.memory.map((m) => `- ${m.key}: ${m.secret ? '(segredo no cofre; use type_secret)' : m.value}`).join('\n') : '(vazia)';
-  return `Missão: ${i.missionText}\nSubtarefa: ${i.objective}\nCritério de sucesso: ${i.successCriteria}\nMemória da missão:\n${mem}`;
+  const files = i.files?.length ? `\nArquivos guardados no Tapflock (file_import):\n${i.files.map((f) => `- ${f}`).join('\n')}` : '';
+  return `Missão: ${i.missionText}\nSubtarefa: ${i.objective}\nCritério de sucesso: ${i.successCriteria}\nMemória da missão:\n${mem}${files}`;
 }
 
 /** Tools extras de digitação e gesto que a missão usa além das 11 do worker (filtradas pelo que o MCP tiver). */

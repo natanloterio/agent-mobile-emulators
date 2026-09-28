@@ -108,6 +108,8 @@ export const CONFIG = {
   /** Contexto dos modelos locais (Ollama, LM Studio) via `TAPFLOCK_LOCAL_CONTEXT` (spec local: contexto configurável). */
   local: { contextLength: localContextFrom(brandEnv(process.env, 'LOCAL_CONTEXT')) },
   /** Enxame de identidades (spec §4.3 Pacing, inc. 5 §2): starts escalonados com jitter, atraso entre passos e teto de ações/hora por identidade. */
+  // Arquivos passados entre aparelhos (spec arquivos): guardados em <dataDir>/files, com teto por arquivo.
+  files: { dir: path.join(DATA_DIR, 'files'), maxBytes: 500 * 1024 * 1024, recentLimit: 50 },
   swarm: { staggerMs: 8000, jitterMs: 3000, stepDelayMs: 1500, stepJitterMs: 1000, maxActionsPerHour: 120 },
   /** Ciclo de vida (spec inc. 5 §2): snapshot mais velho que isto exige confirmação humana para restaurar. */
   identity: { restoreUnsafeDays: 14 },

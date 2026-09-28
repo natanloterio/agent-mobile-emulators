@@ -87,6 +87,11 @@ describe('adb — processo e forward (incremento 4)', () => {
       ['-s', 'emulator-5554', 'forward', '--remove', 'tcp:27183'],
     ]);
   });
+  it('pull passa caminho com espaço direto ao adb, sem shell do device', async () => {
+    const { exec, calls } = fakeExec({});
+    await createAdb({ exec }).pull('emulator-5554', '/sdcard/Download/a b.pdf', '/tmp/x/a b.pdf');
+    expect(calls).toEqual([['-s', 'emulator-5554', 'pull', '/sdcard/Download/a b.pdf', '/tmp/x/a b.pdf']]);
+  });
   it('shellSpawn usa o binário, ANDROID_ADB_SERVER_PORT e `shell` + comando', () => {
     const seen: { file: string; args: readonly string[]; env: NodeJS.ProcessEnv }[] = [];
     const spawn = (file: string, args: readonly string[], opts: { env: NodeJS.ProcessEnv }) => { seen.push({ file, args, env: opts.env }); return { pid: 1, kill: () => true, on: () => undefined }; };

@@ -6,13 +6,19 @@ import { getMission, OPEN_MISSION_STATES } from '../db/missions.js';
 import { MissionError, type MissionRunner } from '../mission/runner.js';
 import { GoalText, type Route } from './api.js';
 
-const IdentityId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'identidade inválida').refine((id) => id !== BASE_IDENTITY_ID, 'identidade reservada ao celular-base');
+export const IdentityId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'identidade inválida').refine((id) => id !== BASE_IDENTITY_ID, 'identidade reservada ao celular-base');
 const MAX_IDENTITIES = 50;
 /** Uma identidade (`identityId`, corpo antigo) ou várias (`identityIds`: a mesma missão em cada device). */
 const StartBody = z.union([
   z.object({ identityId: IdentityId, text: GoalText, lang: z.enum(LANGS).optional() }).strict(),
   z.object({ identityIds: z.array(IdentityId).min(1).max(MAX_IDENTITIES), text: GoalText, lang: z.enum(LANGS).optional() }).strict(),
 ]);
+const MAX_STEPS = 10;
+/** Sequência (spec arquivos): 2 a 10 etapas, cada uma numa identidade; o arquivo de uma vai para a seguinte. */
+const ChainBody = z.object({
+  steps: z.array(z.object({ identityId: IdentityId, text: GoalText }).strict()).min(2).max(MAX_STEPS),
+  lang: z.enum(LANGS).optional(),
+}).strict();
 interface StartFail { readonly identityId: string; readonly error: string; readonly status: 404 | 409 }
 const ACTION = /^\/missions\/([A-Za-z0-9-]{1,64})\/(pause|resume|continue|abandon)$/;
 const INSTRUCT = /^\/missions\/([A-Za-z0-9-]{1,64})\/instruct$/;
@@ -31,6 +37,13 @@ export function missionRoutes(o: {
     const guard = (fn: () => void) => {
       try { fn(); } catch (e) { if (e instanceof MissionError) ctx.send(e.status, { error: e.message }); else throw e; }
     };
+    if (ctx.url.pathname === '/missions/chain') {
+      const parsed = ChainBody.safeParse(await ctx.body());
+      if (!parsed.success) { ctx.send(400, { error: parsed.error.issues.map((i) => i.message) }); return true; }
+      const { steps, lang = 'pt' } = parsed.data;
+      guard(() => { const goalIds = o.runner.startChain(steps, lang); ctx.send(201, { goalIds }); ctx.broadcast(); });
+      return true;
+    }
     if (ctx.url.pathname === '/missions') {
       const parsed = StartBody.safeParse(await ctx.body());
       if (!parsed.success) { ctx.send(400, { error: parsed.error.issues.map((i) => i.message) }); return true; }

@@ -39,6 +39,9 @@ import { createLmStudio } from './provider/runtimes/lmstudio.js';
 import { createLocalRuntimes } from './provider/runtimes/local.js';
 import { recordProviderTest, testProvider } from './provider/probe.js';
 import { createMissionRunner } from './mission/runner.js';
+import { bindMissionFiles } from './files/mission-files.js';
+import { createFileService } from './files/service.js';
+import { fileRoutes } from './server/routes-files.js';
 import { planNext } from './mission/planner.js';
 import { promoteAccounts } from './mission/promote.js';
 import { readScreenOnce } from './mission/screen-io.js';
@@ -167,10 +170,17 @@ const runWorker = (j: WorkerJob) => runTask({
   stepBudget: readStepBudgets(db).goal,
 }, { ollama });
 
+// Arquivos entre aparelhos (spec arquivos): adb pull/push para <dataDir>/files; missões encadeadas entregam por aqui.
+const fileService = createFileService({
+  db, adb, dir: CONFIG.files.dir, maxBytes: CONFIG.files.maxBytes, recentLimit: CONFIG.files.recentLimit,
+  // Armazenamento criptografado só existe com a tela destravada (reboot, restore, tela apagada).
+  unlock: (i) => ensureUnlocked(adb, i.serial, i.lockPin),
+});
+
 // Missões (spec missões): loop planejador → executor por identidade, fora do lock de objetivo.
 const missionMask = async (missionId: string) => createSecretMask(await loadMissionSecrets(db, vault, missionId)).mask;
 const missions = createMissionRunner({
-  db, isKilled: () => server.isKilled(), onChange: onFleetChange,
+  db, isKilled: () => server.isKilled(), onChange: onFleetChange, files: fileService,
   plan: (input) => planNext(input, { providers: readProviderConfig(db), apiKey: apiKeys.current(), ollama }),
   readScreen: (identity) => readScreenOnce(db, identity, { ensureReady: (d, i) => ensureIdentityReady(d, i, { adb }) }),
   mask: missionMask,
@@ -187,7 +197,7 @@ const missions = createMissionRunner({
     const r = await runTask({
       db, identity: j.identity, goalText: j.instruction, goalId: j.missionId, taskId: j.taskId, instruction: j.instruction,
       apiKey: apiKeys.current(), isKilled: j.shouldStop, onStep: () => server.broadcast(),
-      stepBudget: readStepBudgets(db).mission, pacing: CONFIG.swarm, mission: { missionId: j.missionId, vault, mask, takeNotes },
+      stepBudget: readStepBudgets(db).mission, pacing: CONFIG.swarm, mission: { missionId: j.missionId, vault, mask, takeNotes, files: bindMissionFiles(fileService, db, j.identity, j.missionId) },
     }, { ollama });
     return { humanReason: r.humanReason, summary: r.platformBlock ?? r.summary };
   },
@@ -228,7 +238,7 @@ const server = await startServer({
   // missões e credenciais do cofre (spec missões) não usam o lock de objetivo.
   routes: [
     goalsRoutes({ plan: (text, lang) => planGoal(text, planDeps(), lang) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) }),
-    missionRoutes({ runner: missions, mask: missionMask }), credentialRoutes({ vault }), settingsRoutes(), anthropicKeyRoutes({ store: apiKeys }),
+    missionRoutes({ runner: missions, mask: missionMask }), fileRoutes({ service: fileService }), credentialRoutes({ vault }), settingsRoutes(), anthropicKeyRoutes({ store: apiKeys }),
     localParallelRoutes({ controller: localParallelController }),
     baseRoutes({
       prepare: (lang) => { baseLang = lang; void basePrep.start(); },

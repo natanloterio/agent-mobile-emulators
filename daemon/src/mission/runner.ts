@@ -1,7 +1,11 @@
 import { getIdentity, setIdentityState } from '../db/identities.js';
 import { addNote } from '../db/mission-notes.js';
+import { randomUUID } from 'node:crypto';
 import { createMission, getMission, listMissions, openMissionFor, OPEN_MISSION_STATES, setMissionState, type MissionState } from '../db/missions.js';
+import { ABANDONED_BEFORE, cancelWaiting, deliverNote, handOff, handoffLabel } from './chain.js';
 import { PAUSE_REASON, runMission, type MissionDeps } from './loop.js';
+
+export interface ChainStep { readonly identityId: string; readonly text: string }
 
 /** Erro de transição com o status HTTP que a rota devolve. */
 export class MissionError extends Error {
@@ -11,6 +15,11 @@ export class MissionError extends Error {
 export interface MissionRunner {
   /** `seed` roda entre criar e lançar: memória inicial (ex.: referência a um segredo do cofre) antes do primeiro passo. */
   start(identityId: string, text: string, lang: string, seed?: (missionId: string) => void): string;
+  /**
+   * Sequência (spec arquivos): uma missão por etapa, cada uma numa identidade; a primeira roda já, as outras esperam a
+   * anterior terminar e recebem o arquivo que ela baixou. Valida todas antes de criar qualquer uma. Devolve os ids na ordem.
+   */
+  startChain(steps: readonly ChainStep[], lang: string): readonly string[];
   pause(id: string): MissionState; resume(id: string): MissionState; continue(id: string): MissionState; abandon(id: string): MissionState;
   resumeAllOnStart(): number;
   settle(): Promise<void>;
@@ -27,11 +36,21 @@ export function humanResolvedNote(lang: string, reason: string | null): string {
 /** Transições da missão (spec missões §Ciclo de vida) e no máximo um loop por missão. */
 export function createMissionRunner(d: MissionDeps & { readonly run?: typeof runMission }): MissionRunner {
   const loops = new Map<string, Promise<unknown>>();
+  const handoffs = new Set<Promise<unknown>>();
   const run = d.run ?? runMission;
+  /** Etapa terminou: entrega o arquivo às que a esperam (acompanhado por `settle`). */
+  const afterLoop = (id: string) => {
+    const m = getMission(d.db, id);
+    if (m?.state !== 'done') return;
+    const p = handOff(m, { db: d.db, files: d.files, block: (identityId) => (d.isKilled() ? PAUSE_REASON.kill : identityBlock(identityId)), launch, onChange: d.onChange })
+      .catch((e: unknown) => console.error(`[missão ${id}] entrega falhou:`, e))
+      .finally(() => { handoffs.delete(p); });
+    handoffs.add(p);
+  };
   const launch = (id: string) => {
     if (loops.has(id)) return;
     const p = run(id, d).catch((e: unknown) => console.error(`[missão ${id}] loop falhou:`, e))
-      .finally(() => { loops.delete(id); d.onChange?.(); });
+      .finally(() => { loops.delete(id); afterLoop(id); d.onChange?.(); });
     loops.set(id, p);
   };
   const mission = (id: string) => {
@@ -39,13 +58,23 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
     if (!m) throw new MissionError('missão desconhecida', 404);
     return m;
   };
-  const identityBlock = (identityId: string): string | null => {
+  function identityBlock(identityId: string): string | null {
     const i = getIdentity(d.db, identityId);
     if (!i) return 'identidade desconhecida';
     if (i.discardedAt || i.state === 'banned') return 'identidade banida ou descartada';
     if (i.controlled) return 'identidade sob controle humano; devolva ao agente antes';
     if (i.paused) return 'identidade pausada';
     return null;
+  }
+  /** Mesmas recusas do `start`, por identidade (sem criar nada). */
+  const assertCanStart = (identityId: string) => {
+    const i = getIdentity(d.db, identityId);
+    if (!i) throw new MissionError(`identidade desconhecida: ${identityId}`, 404);
+    const block = identityBlock(identityId);
+    if (block) throw new MissionError(`${identityId}: ${block}`, 409);
+    if (i.state === 'running') throw new MissionError(`${identityId}: identidade rodando um objetivo`, 409);
+    if (openMissionFor(d.db, identityId)) throw new MissionError(`${identityId}: identidade já tem uma missão aberta`, 409);
+    return i;
   };
   /** Guarda comum de retomar/continuar: loop antigo ainda parando, kill switch ou identidade bloqueada → 409. */
   const assertCanRelaunch = (id: string, identityId: string) => {
@@ -70,6 +99,22 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
       try { seed?.(id); } catch (e) { setMissionState(d.db, id, 'abandoned'); throw e; }
       launch(id); d.onChange?.();
       return id;
+    },
+    startChain: (steps, lang) => {
+      if (d.isKilled()) throw new MissionError('kill switch acionado: retome antes de iniciar uma missão', 409);
+      if (new Set(steps.map((s) => s.identityId)).size !== steps.length) throw new MissionError('cada etapa precisa de uma identidade diferente', 409);
+      const identities = steps.map((s) => assertCanStart(s.identityId));
+      const chainId = randomUUID().replace(/-/g, '').slice(0, 8);
+      const ids: string[] = [];
+      steps.forEach((s, k) => {
+        const last = k === steps.length - 1;
+        const label = last ? undefined : handoffLabel(chainId, k);
+        const id = createMission(d.db, s.identityId, s.text, lang, { waitFor: ids[k - 1], handoffLabel: label });
+        if (label) addNote(d.db, id, deliverNote(lang, identities[k + 1].name, label));
+        ids.push(id);
+      });
+      launch(ids[0]); d.onChange?.();
+      return ids;
     },
     pause: (id) => {
       if (mission(id).state !== 'running') throw new MissionError('só missão em execução pode ser pausada', 409);
@@ -100,16 +145,24 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
       const m = mission(id);
       if (!OPEN_MISSION_STATES.includes(m.state)) throw new MissionError('missão já encerrada', 409);
       setMissionState(d.db, id, 'abandoned');
+      cancelWaiting(d.db, id);
       const i = getIdentity(d.db, m.identityId);
       // Loop ativo desfaz o próprio 'running'; aqui só o needs-human que a missão pôs.
       if (i && i.state === 'needs-human' && m.state === 'awaiting-human') setIdentityState(d.db, m.identityId, 'idle', { lastError: null });
       return done(id, 'abandoned');
     },
     resumeAllOnStart: () => {
-      const running = listMissions(d.db, 200).filter((m) => m.state === 'running');
+      const all = listMissions(d.db, 200);
+      const running = all.filter((m) => m.state === 'running');
       running.forEach((m) => launch(m.id));
+      // Etapa esperando uma anterior que já terminou (o daemon caiu antes da entrega) ou foi abandonada.
+      for (const w of all.filter((m) => m.state === 'waiting' && m.waitFor)) {
+        const prev = getMission(d.db, w.waitFor as string);
+        if (prev?.state === 'done') afterLoop(prev.id);
+        else if (!prev || prev.state === 'abandoned') setMissionState(d.db, w.id, 'paused', ABANDONED_BEFORE);
+      }
       return running.length;
     },
-    settle: async () => { while (loops.size) await Promise.all([...loops.values()]); },
+    settle: async () => { while (loops.size || handoffs.size) await Promise.all([...loops.values(), ...handoffs]); },
   };
 }

@@ -15,6 +15,17 @@ describe('apiRoute', () => {
     expect(() => apiRoute('POST', '/identities/conta1/rm')).toThrow();
     expect(() => apiRoute('GET', '/goals/plan')).toThrow();
   });
+  it('arquivos e sequência de missões; recusa traversal e ação desconhecida', () => {
+    expect(apiRoute('POST', '/missions/chain').path).toBe('/missions/chain');
+    expect(apiRoute('GET', '/files').method).toBe('GET');
+    expect(apiRoute('GET', '/files/device/conta1').path).toBe('/files/device/conta1');
+    expect(apiRoute('POST', '/files/export').path).toBe('/files/export');
+    expect(apiRoute('POST', '/files/0b6f6c1e-8a1d-4b43/send').path).toBe('/files/0b6f6c1e-8a1d-4b43/send');
+    expect(apiRoute('POST', '/files/abc/delete').path).toBe('/files/abc/delete');
+    expect(() => apiRoute('POST', '/files/../kill/send')).toThrow();
+    expect(() => apiRoute('POST', '/files/abc/rm')).toThrow();
+    expect(() => apiRoute('GET', '/files/device/../x')).toThrow();
+  });
   it('login pelo daemon não passa pelo canal genérico (só o main manda a senha)', () => {
     expect(() => apiRoute('POST', '/identities/conta1/login')).toThrow();
   });

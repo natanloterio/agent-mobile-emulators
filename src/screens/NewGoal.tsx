@@ -8,7 +8,7 @@ import { useDaemonError } from '../i18n/useDaemonError';
 import type { RequestStatus } from '../state/fleetReducer';
 import { localizePlanVM, type PlanTaskVM, type PlanVM } from '../state/planView';
 import type { PlanStage } from '../types/fleet';
-import { MissionComposer, type MissionIdentityOption } from './MissionComposer';
+import { MissionComposer, type MissionComposerProps } from './MissionComposer';
 import './NewGoal.css';
 
 interface NewGoalProps {
@@ -24,7 +24,7 @@ interface NewGoalProps {
   readonly onReset: () => void;
   readonly onLaunch: () => void;
   /** Só no vivo: alterna Objetivo | Missão (spec missões §Interface). */
-  readonly mission?: { readonly options: readonly MissionIdentityOption[]; readonly req: RequestStatus; readonly onStart: (identityIds: readonly string[], text: string) => void };
+  readonly mission?: MissionComposerProps;
 }
 
 /** Objetivo (líder + fan-out) oculto por enquanto: no vivo a tela só oferece Missão. O código do Objetivo fica para voltar. */

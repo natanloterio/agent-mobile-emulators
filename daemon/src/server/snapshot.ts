@@ -7,6 +7,7 @@ import { readProviderConfig, type ProviderRow, type RoleKey } from '../provider/
 import type { LocalParallelStatus } from '../provider/local-parallel.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
 import type { VideoState } from '../device/video.js';
+import { fileViews, type FleetFileView } from './snapshot-files.js';
 import { missionViews, type MissionView } from './snapshot-missions.js';
 
 export interface ToolRow { readonly idx: number; readonly tool: string; readonly excerpt: string; readonly tokens: number; readonly gate: boolean; readonly provider: string | null }
@@ -58,6 +59,8 @@ export interface FleetSnapshot {
   readonly killed: boolean; readonly updatedAt: string;
   readonly goal: GoalSummary | null; readonly host: HostMetrics | null;
   readonly missions: readonly MissionView[];
+  /** Arquivos guardados no host para passar entre aparelhos (spec arquivos), mais novos primeiro. */
+  readonly files: readonly FleetFileView[];
   /** Limites de passos configuráveis (spec limites §UI): valor atual do banco, lido a cada snapshot. */
   readonly stepBudgets: StepBudgets;
   /** Paralelismo local configurável (spec paralelismo §UI): pedido, o que cada runtime confirma e se falta aplicar. */
@@ -163,5 +166,5 @@ export function buildSnapshot(db: DatabaseSync, killed: boolean, sources?: Snaps
   try { localParallel = src.localParallel?.() ?? DEFAULT_LOCAL_PARALLEL; } catch { localParallel = DEFAULT_LOCAL_PARALLEL; }
   let baseAvd: BaseAvdLive | null = null;
   try { baseAvd = src.baseAvd?.() ?? null; } catch { baseAvd = null; }
-  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db).filter((m) => { const i = getIdentity(db, m.identityId); return !i || !isBaseRow(i); }), stepBudgets, localParallel, baseAvd };
+  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db).filter((m) => { const i = getIdentity(db, m.identityId); return !i || !isBaseRow(i); }), files: fileViews(db), stepBudgets, localParallel, baseAvd };
 }

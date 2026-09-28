@@ -23,6 +23,7 @@ async function mk(overrides: Partial<MissionRunner> = {}, mask: (missionId: stri
     resume: (id) => { calls.push(`resume ${id}`); return 'running'; },
     continue: (id) => { calls.push(`continue ${id}`); if (id === 'm-1') throw new MissionError('a missão não está esperando humano', 409); return 'running'; },
     abandon: (id) => { calls.push(`abandon ${id}`); return 'abandoned'; },
+    startChain: (steps, lang) => { calls.push(`chain ${steps.map((s) => s.identityId).join('>')} ${lang}`); if (steps.some((s) => s.identityId === 'ocupada')) throw new MissionError('ocupada: identidade já tem uma missão aberta', 409); return steps.map((_, k) => `m-${k + 1}`); },
     resumeAllOnStart: () => 0, settle: async () => undefined,
     ...overrides,
   };
@@ -34,6 +35,15 @@ async function mk(overrides: Partial<MissionRunner> = {}, mask: (missionId: stri
 }
 
 describe('rotas de missão', () => {
+  it('POST /missions/chain: 201 com os ids na ordem; 400 com menos de 2 etapas ou texto curto; 409 do runner', async () => {
+    const t = await mk();
+    const r = await t.post('/missions/chain', { steps: [{ identityId: 'conta1', text: 'baixe a foto' }, { identityId: 'conta2', text: 'poste a foto' }], lang: 'en' });
+    expect(r.status).toBe(201); expect(await r.json()).toEqual({ goalIds: ['m-1', 'm-2'] });
+    expect((await t.post('/missions/chain', { steps: [{ identityId: 'conta1', text: 'baixe a foto' }] })).status).toBe(400);
+    expect((await t.post('/missions/chain', { steps: [{ identityId: 'conta1', text: 'ab' }, { identityId: 'conta2', text: 'poste' }] })).status).toBe(400);
+    expect((await t.post('/missions/chain', { steps: [{ identityId: 'conta1', text: 'baixe' }, { identityId: 'ocupada', text: 'poste' }] })).status).toBe(409);
+    expect(t.calls).toEqual(['chain conta1>conta2 en', 'chain conta1>ocupada pt']);
+  });
   it('POST /missions: 201 com goalId; 400 corpo inválido; 409 do runner', async () => {
     const t = await mk();
     const r = await t.post('/missions', { identityId: 'conta2', text: 'crie um e-mail', lang: 'en' });

@@ -11,6 +11,7 @@ import type { MissionAction, MissionInstructThen } from '../state/missionActions
 import { isOpenMission } from '../state/missionView';
 import type { LogRow, Stat, TileVM } from '../state/selectors';
 import './Device.css';
+import { DeviceFiles, type DeviceFilesProps } from './DeviceFiles';
 import { MissionPanel } from './MissionPanel';
 
 interface DeviceProps {
@@ -43,6 +44,8 @@ interface DeviceProps {
   readonly now?: number;
   readonly onMission?: (a: MissionAction) => void;
   readonly onInstruct?: (text: string, then?: MissionInstructThen) => Promise<boolean>;
+  /** Arquivos entre aparelhos (spec arquivos); só no vivo. */
+  readonly files?: DeviceFilesProps;
 }
 
 /**
@@ -153,6 +156,7 @@ export function Device(p: DeviceProps) {
               onAction={(a) => p.onMission?.(a)} onInstruct={(text, then) => p.onInstruct?.(text, then) ?? Promise.resolve(false)}
             />
           )}
+          {p.files && <DeviceFiles {...p.files} />}
 
           <div className="stats">
             {p.stats.map((s) => (

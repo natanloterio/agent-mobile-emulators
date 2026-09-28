@@ -34,6 +34,11 @@ const COLUMNS: readonly { table: string; column: string; ddl: string }[] = [
   { table: 'task', column: 'objective', ddl: 'text' },
   { table: 'task', column: 'success_criteria', ddl: 'text' },
   { table: 'task', column: 'report_json', ddl: 'text' },
+  // Missões encadeadas (spec arquivos): espera a anterior terminar; handoff_label = arquivo que esta entrega à próxima.
+  { table: 'goal', column: 'wait_for', ddl: 'text' },
+  { table: 'goal', column: 'handoff_label', ddl: 'text' },
+  // Quando a missão começou a rodar de fato (etapa de sequência: ao sair de waiting, não na criação da sequência).
+  { table: 'goal', column: 'run_started_at', ddl: 'text' },
 ];
 
 export function applyMigrations(db: DatabaseSync): void {
