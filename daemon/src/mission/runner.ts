@@ -1,4 +1,5 @@
 import { getIdentity, setIdentityState } from '../db/identities.js';
+import { addNote } from '../db/mission-notes.js';
 import { createMission, getMission, listMissions, openMissionFor, OPEN_MISSION_STATES, setMissionState, type MissionState } from '../db/missions.js';
 import { PAUSE_REASON, runMission, type MissionDeps } from './loop.js';
 
@@ -13,6 +14,14 @@ export interface MissionRunner {
   pause(id: string): MissionState; resume(id: string): MissionState; continue(id: string): MissionState; abandon(id: string): MissionState;
   resumeAllOnStart(): number;
   settle(): Promise<void>;
+}
+
+/** Nota do "Continuar": o que foi pedido já foi feito por uma pessoa; confira a tela e siga. */
+export function humanResolvedNote(lang: string, reason: string | null): string {
+  const what = (reason ?? '').slice(0, 300);
+  return lang.startsWith('pt')
+    ? `Um humano já resolveu o que foi pedido${what ? ` ("${what}")` : ''}. Leia a tela atual e siga a missão a partir dela; não peça humano de novo por esse motivo se a tela não mostra mais o bloqueio.`
+    : `A human already handled what was asked${what ? ` ("${what}")` : ''}. Read the current screen and continue the mission from it; do not ask for a human again for that reason if the screen no longer shows the blocker.`;
 }
 
 /** Transições da missão (spec missões §Ciclo de vida) e no máximo um loop por missão. */
@@ -79,6 +88,9 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
       const m = mission(id);
       if (m.state !== 'awaiting-human') throw new MissionError('a missão não está esperando humano', 409);
       assertCanRelaunch(id, m.identityId);
+      // O planejador só vê o histórico (subtarefa em needs-human com o bloqueio) e a regra "não repita o que falhou";
+      // sem saber que alguém resolveu, ele pede humano de novo sem tentar nada. A nota entra como instrução do operador.
+      addNote(d.db, id, humanResolvedNote(m.lang, m.humanReason));
       setIdentityState(d.db, m.identityId, 'idle', { lastError: null });
       setMissionState(d.db, id, 'running');
       launch(id);

@@ -1,3 +1,4 @@
+import { listNotes } from '../src/db/mission-notes.js';
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, setIdentityFlags, setIdentityState, upsertIdentity } from '../src/db/identities.js';
@@ -59,6 +60,17 @@ describe('runner de missões', () => {
     expect(h.runner.continue(id)).toBe('running');
     expect(getIdentity(h.db, 'conta2')?.state).toBe('idle');
     expect(getMission(h.db, id)?.humanReason).toBeNull();
+    h.release(); await h.runner.settle();
+  });
+  it('continue deixa uma nota para o planejador: o humano resolveu o motivo (senão ele pede humano de novo pelo histórico)', async () => {
+    const h = mk();
+    const id = createMission(h.db, 'conta2', 'x', 'pt');
+    setMissionState(h.db, id, 'awaiting-human', 'Google pediu passkey'); setIdentityState(h.db, 'conta2', 'needs-human');
+    h.runner.continue(id);
+    const notes = listNotes(h.db, id).map((n) => n.text);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatch(/Google pediu passkey/);
+    expect(notes[0]).toMatch(/humano/i);
     h.release(); await h.runner.settle();
   });
   it('abandon de awaiting-human devolve a identidade a idle', () => {
