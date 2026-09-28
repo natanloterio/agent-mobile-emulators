@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { CONFIG, type BaseAvdLive } from '../config.js';
-import { listIdentities, type IdentityRow, type ProbeSignalsRow } from '../db/identities.js';
+import { getIdentity, isBaseRow, listFleet, type IdentityRow, type ProbeSignalsRow } from '../db/identities.js';
 import { openMissionFor } from '../db/missions.js';
 import { readStepBudgets, type StepBudgets } from '../db/settings.js';
 import { readProviderConfig, type ProviderRow, type RoleKey } from '../provider/config.js';
@@ -142,7 +142,7 @@ export function currentGoal(db: DatabaseSync): GoalSummary | null {
 export function buildSnapshot(db: DatabaseSync, killed: boolean, sources?: SnapshotSources | ((id: string) => VideoState)): FleetSnapshot {
   const src: SnapshotSources = typeof sources === 'function' ? { videoState: sources } : (sources ?? {});
   const stepBudgets = readStepBudgets(db);
-  const identities = listIdentities(db).map((id) => identitySnapshot(db, id, stepBudgets, src.videoState));
+  const identities = listFleet(db).map((id) => identitySnapshot(db, id, stepBudgets, src.videoState));
   const cfg = readProviderConfig(db); const tests = lastProviderTests(db);
   const providers = Object.fromEntries((Object.keys(cfg) as RoleKey[]).map((k) => [k, { ...cfg[k], lastTest: tests[k] ?? null }])) as Record<RoleKey, ProviderSnapshot>;
   let host: HostMetrics | null = null;
@@ -151,5 +151,5 @@ export function buildSnapshot(db: DatabaseSync, killed: boolean, sources?: Snaps
   try { localParallel = src.localParallel?.() ?? DEFAULT_LOCAL_PARALLEL; } catch { localParallel = DEFAULT_LOCAL_PARALLEL; }
   let baseAvd: BaseAvdLive | null = null;
   try { baseAvd = src.baseAvd?.() ?? null; } catch { baseAvd = null; }
-  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db), stepBudgets, localParallel, baseAvd };
+  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db).filter((m) => { const i = getIdentity(db, m.identityId); return !i || !isBaseRow(i); }), stepBudgets, localParallel, baseAvd };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BaseAvdGuide } from '../components/BaseAvdGuide';
+import { BasePrepCard } from '../components/BasePrepCard';
 import { baseBlocksProvision, baseStage } from '../components/baseAvdStage';
 import { Button } from '../components/Button';
 import { Heading } from '../components/Heading';
@@ -134,7 +134,7 @@ export function Identities({ rows, isMobile, provisionReq, baseAvd, onProvision,
   const credLine = (r: IdRow) => r.credUser && <span className="idrow__cred">{t('identities.creds.saved', { username: r.credUser })}</span>;
   const loginNote = (r: IdRow) => r.loginNote && <Notice tone={r.loginNote.tone === 'ok' ? 'warn' : 'error'}>{r.loginNote.text}</Notice>;
 
-  const stage = baseStage(baseAvd, rows.length > 0);
+  const stage = baseStage(baseAvd);
   const blocked = baseBlocksProvision(stage);
 
   return (
@@ -147,13 +147,13 @@ export function Identities({ rows, isMobile, provisionReq, baseAvd, onProvision,
         <form className="ids__provision" onSubmit={(e) => { e.preventDefault(); onProvision(newPin); }}>
           <input className="idrow__input" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder={t('identities.provision.pinPlaceholder')}
             aria-label={t('identities.provision.pinAria')} inputMode="numeric" type="password" />
-          <Button type="submit" disabled={provisionReq.busy || blocked} title={stage === 'missing' ? t('identities.base.blocked') : stage === 'running' ? t('identities.base.closeFirst') : undefined}>
+          <Button type="submit" disabled={provisionReq.busy || blocked} title={stage === 'running' ? t('identities.base.closeFirst') : stage ? t('identities.base.blocked') : undefined}>
             {t(provisionReq.busy ? 'identities.provision.busy' : 'identities.provision.submit')}
           </Button>
         </form>
       </header>
       {provisionReq.error && <Notice>{t('identities.provision.failed', { error: provisionReq.error })}</Notice>}
-      {stage && baseAvd && <BaseAvdGuide name={baseAvd.name} stage={stage} />}
+      {stage && baseAvd && <BasePrepCard base={baseAvd} stage={stage} />}
 
       <div className="ids__cycle">
         <span className="ids__cycle-label">{t('identities.cycle.label')}</span>

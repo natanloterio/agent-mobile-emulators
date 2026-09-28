@@ -16,7 +16,7 @@ import { loginViaDaemon } from './login.js';
 import { apiRoute } from './api-route.js';
 import { providerRoute } from './provider-route.js';
 import { testAnthropicKey } from './setup/anthropic-key.js';
-import { AnthropicKeySchema } from './setup/requests.js';
+import { AnthropicKeySchema, BaseGoogleSchema } from './setup/requests.js';
 import { finishSetup } from './setup/finish.js';
 import { nodeHardwareDeps } from './setup/hardware.js';
 import { registerSetupIpc } from './setup/ipc.js';
@@ -122,6 +122,11 @@ Promise.all([app.whenReady(), dataMigration]).then(() => {
   // Chave da Anthropic depois do onboarding (tela Provedores): canal próprio, fora do genérico; a resposta nunca traz a chave.
   ipcMain.handle('tapflock:anthropicKey:status', () => daemon('GET', '/settings/anthropic-key'));
   ipcMain.handle('tapflock:anthropicKey:set', (_e, raw: unknown) => daemon('PUT', '/settings/anthropic-key', { key: AnthropicKeySchema.parse(raw) }));
+  // Conta Google do preparo do celular-base: a senha vai direto ao cofre do daemon, nunca pelo canal genérico.
+  ipcMain.handle('tapflock:base:google', (_e, email: unknown, password: unknown) => {
+    const body = BaseGoogleSchema.parse({ email, password });
+    return daemon('PUT', '/base/google', body);
+  });
   ipcMain.handle('tapflock:getProviderModels', (_e, role: string) => gate.use((info) => request(info, 'GET', providerRoute(role, 'models'))));
 
   const projectRoot = path.join(here, '..');
@@ -149,6 +154,10 @@ Promise.all([app.whenReady(), dataMigration]).then(() => {
         onSnapshot: (data) => { lastSnapshot = data; broadcast('tapflock:snapshot', data); },
         onFrame: (f) => { const id = (f as { id?: unknown })?.id; if (typeof id === 'string') lastFrames.set(id, f); broadcast('tapflock:frame', f); },
         onVideo: (p) => { gop.push(p as never); broadcast('tapflock:video', p); },
+      }, () => {
+        // Daemon morreu com o app aberto: sem isso o gate seguia na porta velha e "Tentar de novo" não subia outro.
+        daemonStart = null; gate.fail('o daemon parou');
+        setDaemonStatus({ state: 'failed', reason: 'stopped', exitCode: null, logPath: daemonLogPath(app.isPackaged), detail: 'o daemon parou' });
       });
     })().catch((e: Error) => {
       gate.fail(e.message); console.error('[tapflock] sem daemon:', e.message); daemonStart = null;

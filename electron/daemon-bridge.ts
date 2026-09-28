@@ -91,9 +91,23 @@ export async function waitForInfo(child: ChildProcess | null = null, timeoutMs =
 /** Log do daemon (só existe empacotado; em desenvolvimento a saída vai para o terminal). */
 export const daemonLogPath = (isPackaged: boolean): string | null => (isPackaged ? path.join(dataDir(), 'daemon.log') : null);
 
-export function connectSnapshots(info: Info, h: WsHandlers): () => void {
+const DOWN_CHECKS = 10;
+
+/** `onDown`: o socket caiu e o processo do daemon não existe mais (queda depois de uma subida bem-sucedida). */
+export function connectSnapshots(info: Info, h: WsHandlers, onDown?: () => void): () => void {
   const ws = new WebSocket(`ws://127.0.0.1:${info.port}/ws?token=${info.token}`);
   ws.on('message', (m) => dispatchWsMessage(String(m), h));
+  // Sem ouvinte, um erro de conexão derrubaria o main; o 'close' que vem junto decide.
+  ws.on('error', () => undefined);
+  // O daemon é filho do main: logo depois do 'close' ele pode ainda ser um zumbi (kill(pid, 0) ainda passa). Olha por uns segundos.
+  ws.on('close', () => {
+    let tries = 0;
+    const check = () => {
+      if (!alive(info.pid)) { onDown?.(); return; }
+      if (++tries < DOWN_CHECKS) setTimeout(check, 500);
+    };
+    check();
+  });
   return () => ws.close();
 }
 

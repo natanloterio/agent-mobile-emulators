@@ -1,3 +1,4 @@
+import { BASE_IDENTITY_ID } from '../db/identities.js';
 import { z } from 'zod';
 import { LANGS } from '../leader/lang.js';
 import { addNote } from '../db/mission-notes.js';
@@ -5,7 +6,7 @@ import { getMission, OPEN_MISSION_STATES } from '../db/missions.js';
 import { MissionError, type MissionRunner } from '../mission/runner.js';
 import { GoalText, type Route } from './api.js';
 
-const IdentityId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'identidade inválida');
+const IdentityId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'identidade inválida').refine((id) => id !== BASE_IDENTITY_ID, 'identidade reservada ao celular-base');
 const MAX_IDENTITIES = 50;
 /** Uma identidade (`identityId`, corpo antigo) ou várias (`identityIds`: a mesma missão em cada device). */
 const StartBody = z.union([

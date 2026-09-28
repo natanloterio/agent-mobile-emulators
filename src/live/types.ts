@@ -113,8 +113,14 @@ export interface FleetSnapshot {
   /** AVD-base do provisionamento; ausente em daemon antigo. */
   readonly baseAvd?: BaseAvdStatus | null;
 }
-/** `running` ausente em daemon da versão anterior a esta. */
-export interface BaseAvdStatus { readonly name: string; readonly found: boolean; readonly running?: boolean }
+/** `running` e `prep` ausentes em daemon de versão anterior. */
+export interface BaseAvdStatus { readonly name: string; readonly found: boolean; readonly running?: boolean; readonly prep?: BasePrep }
+export type BasePhase = 'avd' | 'boot' | 'mcp' | 'google' | 'app' | 'finish';
+/** Espelha daemon/src/db/base-settings.ts: andamento do preparo automático do celular-base. */
+export interface BasePrep {
+  readonly state: 'idle' | 'running' | 'needs-google' | 'needs-human' | 'failed' | 'done'; readonly phase: BasePhase | null;
+  readonly error: string | null; readonly missionId: string | null; readonly humanReason: string | null; readonly progress: number | null;
+}
 /** Poster (último screencap PNG, base64) de uma identidade; casado por id (spec inc. 4 §4.3). */
 export interface LiveFrame { readonly id: string; readonly at: string; readonly png: string }
 /** Access unit H.264 Annex B (base64); `key` traz SPS+PPS+IDR. */
@@ -137,6 +143,8 @@ export interface TapflockBridge {
   readonly login?: (id: string) => Promise<LoginResult>;
   /** Onboarding de primeira execução; ausente em preload antigo e no navegador. */
   readonly setup?: SetupBridge;
+  /** Conta Google do preparo do celular-base; ausente em preload antigo e no navegador. */
+  readonly base?: BaseBridge;
   /** Chave da Anthropic depois do onboarding; ausente em preload antigo e no navegador. */
   readonly anthropicKey?: AnthropicKeyBridge;
   /** Subida do daemon (estado e nova tentativa); ausente em preload antigo e no navegador. */
@@ -145,7 +153,8 @@ export interface TapflockBridge {
 /** Espelha DaemonStatus de electron/daemon-wait.ts; chega como `unknown` e é validado em src/live/daemonStatus.ts. */
 export type DaemonStatus =
   | { readonly state: 'starting' | 'ok' }
-  | { readonly state: 'failed'; readonly reason: 'exited' | 'timeout' | 'other'; readonly exitCode: number | null; readonly logPath: string | null; readonly detail: string };
+  | { readonly state: 'failed'; readonly reason: 'exited' | 'timeout' | 'stopped' | 'other'; readonly exitCode: number | null; readonly logPath: string | null; readonly detail: string };
+export interface BaseBridge { readonly google: (email: string, password: string) => Promise<void> }
 export interface AnthropicKeyBridge {
   readonly status: () => Promise<unknown>;
   readonly set: (key: string) => Promise<void>;

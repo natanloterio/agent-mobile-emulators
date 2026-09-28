@@ -73,6 +73,8 @@ contextBridge.exposeInMainWorld('tapflock', {
   },
   login: (id: string) => ipcRenderer.invoke('tapflock:login', id),
   // Chave da Anthropic em Provedores: status diz só se há chave e de onde veio.
+  // Conta Google do preparo do celular-base; a senha vai direto ao main.
+  base: { google: (email: string, password: string) => ipcRenderer.invoke('tapflock:base:google', email, password) },
   anthropicKey: {
     status: () => ipcRenderer.invoke('tapflock:anthropicKey:status'),
     set: (key: string) => ipcRenderer.invoke('tapflock:anthropicKey:set', key),

@@ -96,7 +96,7 @@ export function createEmulatorSupervisor(deps: EmulatorSupervisorDeps = {}): Emu
 }
 
 export interface BootDeps {
-  readonly adb: Pick<Adb, 'devices' | 'getprop'>;
+  readonly adb: Pick<Adb, 'devices' | 'getprop'> & Partial<Pick<Adb, 'deviceState' | 'killServer'>>;
   readonly supervisor: EmulatorSupervisor;
   readonly isPortFree?: (port: number) => Promise<boolean>;
   readonly leasePorts?: (db: DatabaseSync) => Promise<{ consolePort: number; mcpHostPort: number }>;
@@ -134,10 +134,18 @@ export async function bootEmulator(db: DatabaseSync, identity: IdentityRow, opts
   let exited = false;
   child.on('exit', () => { exited = true; });
   const t0 = now();
+  let restartedAdb = false;
   for (;;) {
     if (exited) throw new Error(`emulador ${id.avdName} saiu antes do boot; veja ${path.join(CONFIG.dataDir, `emulator-${id.avdName}.log`)}`);
     const booted = await deps.adb.getprop(serial, 'sys.boot_completed').catch(() => '');
     if (booted === '1') return id;
+    // "Permitir depuração USB?": o servidor adb (porta privada do Tapflock) foi subido com outra chave que a do emulador
+    // (outro HOME). Reiniciado uma vez, ele sobe com o ambiente do daemon, o mesmo do emulador, e a chave bate sem clique.
+    if (!restartedAdb && deps.adb.deviceState && deps.adb.killServer && (await deps.adb.deviceState(serial).catch(() => null)) === 'unauthorized') {
+      restartedAdb = true;
+      await deps.adb.killServer().catch(() => undefined);
+      continue;
+    }
     if (now() - t0 >= timeoutMs) {
       deps.supervisor.stop(id.id);
       throw new Error(`emulador ${id.avdName} não completou o boot em ${Math.round(timeoutMs / 1000)} s`);

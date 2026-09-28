@@ -1,3 +1,4 @@
+import { IDLE_PREP, writeBasePrep } from '../src/db/base-settings.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../src/db/open.js';
@@ -80,6 +81,14 @@ describe('POST /identities', () => {
     const h = harness({ baseAvd: 'mcp_test_playstore' }); const s = await serve(h.db, h.ops);
     const r = await s.post('/identities', {});
     expect(r.status).toBe(409); expect(String(r.body?.error)).toMatch(/em uso \(emulator-5554\)/);
+    expect(h.log.some((l) => l.startsWith('clone'))).toBe(false);
+  });
+  it('nome "base" é reservado; com o celular-base em preparo, provisionar é recusado sem clonar', async () => {
+    const h = harness(); const s = await serve(h.db, h.ops);
+    expect((await s.post('/identities', { name: 'base' })).status).toBe(400);
+    writeBasePrep(h.db, { ...IDLE_PREP, state: 'running', phase: 'avd' });
+    const r = await s.post('/identities', {});
+    expect(r.status).toBe(409); expect(String(r.body?.error)).toMatch(/sendo preparado/);
     expect(h.log.some((l) => l.startsWith('clone'))).toBe(false);
   });
   it('clone falhou → 500 com a mensagem e nada gravado', async () => {

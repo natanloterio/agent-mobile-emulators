@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { listIdentities, setIdentityFlags, type IdentityRow, type ProbeSignalsRow } from '../db/identities.js';
+import { listFleet, setIdentityFlags, type IdentityRow, type ProbeSignalsRow } from '../db/identities.js';
 import { openMissionFor } from '../db/missions.js';
 import type { ProbeResult } from '../device/probe.js';
 
@@ -14,7 +14,7 @@ const short = (s: string) => (s.length > LABEL_DETAIL_MAX ? `${s.slice(0, LABEL_
 
 /** Candidatas ao objetivo: nem descartadas nem banidas (spec inc. 5 §3.2). */
 export function candidateIdentities(db: DatabaseSync): readonly IdentityRow[] {
-  return listIdentities(db).filter((i) => !i.discardedAt && i.state !== 'banned');
+  return listFleet(db).filter((i) => !i.discardedAt && i.state !== 'banned');
 }
 
 /** Estado que dispensa a sonda: o humano está no comando, ou a identidade exige ação humana (spec §6: nunca retry). */

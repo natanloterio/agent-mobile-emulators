@@ -5,7 +5,7 @@ import type { DaemonStatus } from './types';
 const DaemonStatusSchema = z.union([
   z.object({ state: z.enum(['starting', 'ok']) }),
   z.object({
-    state: z.literal('failed'), reason: z.enum(['exited', 'timeout', 'other']),
+    state: z.literal('failed'), reason: z.enum(['exited', 'timeout', 'stopped', 'other']),
     exitCode: z.number().nullable(), logPath: z.string().nullable(), detail: z.string(),
   }),
 ]);

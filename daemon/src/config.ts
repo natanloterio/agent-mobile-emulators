@@ -19,7 +19,7 @@ export function pickBaseAvd(envBase: string | undefined, avdHome: string, exists
 }
 export interface BaseAvdStatus { readonly name: string; readonly found: boolean }
 /** Com o emulador da base ligado (o snapshot mede; o provisionamento recusa enquanto isso). */
-export interface BaseAvdLive extends BaseAvdStatus { readonly running: boolean }
+export interface BaseAvdLive extends BaseAvdStatus { readonly running: boolean; readonly prep?: import('./db/base-settings.js').BasePrep }
 /** Base que o provisionamento vai clonar e se ela existe; sem nenhuma, o nome sugerido é a dourada. */
 export function baseAvdStatus(envBase: string | undefined, avdHome: string, exists: (p: string) => boolean = existsSync): BaseAvdStatus {
   const name = pickBaseAvd(envBase, avdHome, exists);

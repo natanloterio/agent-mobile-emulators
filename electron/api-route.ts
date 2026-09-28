@@ -17,6 +17,8 @@ const ALLOWED: readonly { readonly method: 'GET' | 'POST' | 'PUT'; readonly path
   // Paralelismo local (spec paralelismo §UI): idem, direto pela tela.
   { method: 'GET', path: /^\/settings\/local$/ },
   { method: 'PUT', path: /^\/settings\/local$/ },
+  // Preparo do celular-base: começar/retomar e seguir depois de uma verificação humana (a senha Google vai por IPC próprio).
+  { method: 'POST', path: /^\/base\/(?:prepare|continue|reset)$/ },
 ];
 
 export type ApiMethod = 'GET' | 'POST' | 'PUT';

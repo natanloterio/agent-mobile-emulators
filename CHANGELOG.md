@@ -34,6 +34,17 @@
   (`daemon.lock`) garante um daemon só por pasta; o segundo sai com código 3 e o app espera o que já roda.
 - Provedores ganhou o cartão da chave da Anthropic: diz se há chave e de onde veio, e testa antes de salvar.
 
+### Celular-base automático
+- O Tapflock prepara o celular-base sozinho, sem Android Studio: cria o AVD (`avdmanager` com o Java do onboarding),
+  sobe com janela, baixa o app Android Remote Control MCP v1.12.0 (sha256 fixo), instala pelo adb e liga acessibilidade
+  e início automático. Pede uma conta Google uma vez (cofre do sistema) e roda uma missão no celular-base que entra na
+  Play Store, instala o Instagram e remove a conta Google do aparelho (clones não herdam a conta). Verificação do
+  Google aparece no cartão com "Continuar". No fim grava a versão instalada como oficial (identidades novas são
+  conferidas contra ela), desliga a Play Store da base e o emulador. Cada fase pula o que já está feito: "Tentar de
+  novo" retoma de onde parou.
+- O guia manual de Android Studio saiu das telas (Identidades, passo Pronto, Cockpit vazio).
+- A linha reservada `base` (portas e token do celular-base) fica fora da frota: snapshot, objetivos, testes de provedor.
+
 ### Consistência
 - Botão desabilitado agora parece desabilitado (antes era igual ao ativo).
 - "Precisam de você" conta a mesma lista que o Relatório mostra (antes identidades offline ficavam fora do número).

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getIdentity } from '../db/identities.js';
+import { getFleetIdentity } from '../db/identities.js';
 import { clearCredential, credentialStatus, putCredential } from '../vault/credentials.js';
 import { VaultError, type Vault } from '../vault/vault.js';
 import type { Route, RouteCtx } from './api.js';
@@ -29,14 +29,14 @@ export function credentialRoutes(o: { readonly vault: Vault }): Route {
     if (ctx.method === 'POST' && ctx.url.pathname === '/credentials/import') {
       const parsed = ImportBody.safeParse(await ctx.body());
       if (!parsed.success) { ctx.send(400, { error: issues(parsed.error) }); return true; }
-      const known = parsed.data.entries.filter((e) => getIdentity(ctx.db, e.id));
+      const known = parsed.data.entries.filter((e) => getFleetIdentity(ctx.db, e.id));
       await vaultCall(ctx, async () => { for (const e of known) await putCredential(o.vault, e.id, { username: e.username, password: e.password }); }, 200, { imported: known.length });
       return true;
     }
     const m = ID_ROUTE.exec(ctx.url.pathname);
     if (!m || (ctx.method !== 'PUT' && ctx.method !== 'DELETE')) return false;
     const id = m[1];
-    if (!getIdentity(ctx.db, id)) { ctx.send(404, { error: 'identidade desconhecida' }); return true; }
+    if (!getFleetIdentity(ctx.db, id)) { ctx.send(404, { error: 'identidade desconhecida' }); return true; }
     if (ctx.method === 'DELETE') { await vaultCall(ctx, () => clearCredential(o.vault, id), 204); ctx.broadcast(); return true; }
     const parsed = CredsBody.safeParse(await ctx.body());
     if (!parsed.success) { ctx.send(400, { error: issues(parsed.error) }); return true; }

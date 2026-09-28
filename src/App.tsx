@@ -100,7 +100,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
       onKill={() => (isLive ? void goal.kill() : actions.kill())}
       onNew={() => actions.go('new')}
       onProvision={() => actions.go('ids')}
-      baseMissing={isLive && baseBlocksProvision(baseStage(live?.baseAvd, false))}
+      baseMissing={isLive && baseBlocksProvision(baseStage(live?.baseAvd))}
     />
   );
 

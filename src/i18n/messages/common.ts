@@ -59,6 +59,7 @@ export const common = defineMessages({
   'daemon.failed.devLog': 'Os detalhes estão no terminal onde o app foi aberto.',
   'daemon.retry': 'Tentar de novo',
   'daemon.retrying': 'Tentando…',
+  'daemon.failed.stopped': 'Ele parou com o app aberto.',
 }, {
   en: {
     'state.paused': 'paused',
@@ -89,6 +90,7 @@ export const common = defineMessages({
     'daemon.failed.devLog': 'Details are in the terminal where the app was started.',
     'daemon.retry': 'Try again',
     'daemon.retrying': 'Trying…',
+    'daemon.failed.stopped': 'It stopped while the app was open.',
   },
   es: {
     'state.paused': 'pausado',
@@ -119,6 +121,7 @@ export const common = defineMessages({
     'daemon.failed.devLog': 'Los detalles están en la terminal donde se abrió la app.',
     'daemon.retry': 'Intentar de nuevo',
     'daemon.retrying': 'Intentando…',
+    'daemon.failed.stopped': 'Se detuvo con la app abierta.',
   },
   fr: {
     'state.paused': 'en pause',
@@ -149,6 +152,7 @@ export const common = defineMessages({
     'daemon.failed.devLog': "Les détails sont dans le terminal où l'app a été lancée.",
     'daemon.retry': 'Réessayer',
     'daemon.retrying': 'Nouvel essai…',
+    'daemon.failed.stopped': 'Il s’est arrêté pendant que l’app était ouverte.',
   },
   de: {
     'state.paused': 'pausiert',
@@ -179,6 +183,7 @@ export const common = defineMessages({
     'daemon.failed.devLog': 'Details stehen im Terminal, in dem die App gestartet wurde.',
     'daemon.retry': 'Erneut versuchen',
     'daemon.retrying': 'Versuche…',
+    'daemon.failed.stopped': 'Er wurde beendet, während die App offen war.',
   },
   zh: {
     'state.paused': '已暂停',
@@ -209,5 +214,6 @@ export const common = defineMessages({
     'daemon.failed.devLog': '详情见启动应用的终端。',
     'daemon.retry': '重试',
     'daemon.retrying': '正在重试…',
+    'daemon.failed.stopped': '它在应用打开时停止了。',
   },
 });

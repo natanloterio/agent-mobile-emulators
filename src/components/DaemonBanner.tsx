@@ -9,6 +9,7 @@ export function DaemonBanner({ status, retrying, onRetry }: { readonly status: F
   const { t } = useI18n();
   const reason = status.reason === 'exited' ? t('common.daemon.failed.exited', { code: String(status.exitCode ?? '?') })
     : status.reason === 'timeout' ? t('common.daemon.failed.timeout')
+    : status.reason === 'stopped' ? t('common.daemon.failed.stopped')
     : t('common.daemon.failed.other', { detail: status.detail });
   return (
     <div className="killbanner" role="alert">
