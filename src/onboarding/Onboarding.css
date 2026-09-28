@@ -20,7 +20,6 @@
 .onb__hint { color: var(--color-dark-2); font-size: 15px; }
 .onb__hint--error { color: var(--color-danger); font-weight: var(--weight-medium); }
 .onb__actions { display: flex; gap: 10px; }
-.onb__actions .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .onb-head { display: flex; flex-direction: column; gap: 14px; }
 /* Pílula do título do tamanho do texto, não da coluna. */

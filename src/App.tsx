@@ -162,7 +162,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
       case 'report':
         return (
           <Report
-            cards={isLive ? selectLiveReportCards(view.goal, i18n) : selectReportCards(tiles)}
+            cards={isLive ? selectLiveReportCards(view.goal, i18n, selectNeedsList(tiles).length) : selectReportCards(tiles)}
             needsList={selectNeedsList(tiles)}
             costRows={selectCostRows(tiles)}
             pastGoals={isLive ? (state.pastGoals && selectPastGoalRows(state.pastGoals, i18n)) : DEMO_PAST}

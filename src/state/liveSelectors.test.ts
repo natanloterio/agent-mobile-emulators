@@ -78,6 +78,10 @@ describe('liveSelectors — relatório', () => {
     ]);
     expect(selectLiveReportCards(null).map((c) => c.value)).toEqual(['—', '—', '—', '—']);
   });
+  it('"precisam de você" conta a mesma lista que a tela mostra (identidades), mesmo sem objetivo', () => {
+    expect(selectLiveReportCards(goalSummary(), undefined, 2)[2].value).toBe('2');
+    expect(selectLiveReportCards(null, undefined, 1)[2].value).toBe('1');
+  });
   it('objetivos anteriores: resultado done/total · N needs e custo', () => {
     expect(selectPastGoalRows([goalSummary({ id: 'a', tasksDone: 3, tasksTotal: 4, tasksNeeds: 1, costUsd: 2.5 })])).toEqual([
       { key: 'a', text: 'Responder comentários', pattern: 'fan-out', result: '3/4 · 1 needs', cost: 'US$ 2,50' },

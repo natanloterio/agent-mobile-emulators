@@ -21,6 +21,10 @@ export const device = defineMessages({
   'phone.controlSurface': 'tela de {handle} em controle: toque, arraste e digite',
   'phone.video': 'vídeo de {handle}',
   'phone.screen': 'tela de {handle}',
+  'needs.how': 'Assuma o controle, resolva no celular ao lado e devolva ao agente.',
+  'needs.take': 'Assumir controle para resolver',
+  'needs.inControl': 'Você está no controle. Resolva no celular ao lado; quando terminar, devolva.',
+  'needs.resolveRelease': 'Resolvido, devolver ao agente',
 }, {
   en: {
     'needs.kicker': 'Needs human attention',
@@ -32,6 +36,10 @@ export const device = defineMessages({
     'phone.back': 'Back', 'phone.home': 'Home', 'phone.recents': 'Recents', 'phone.keys': 'device keys',
     'phone.controlSurface': '{handle} screen under control: tap, drag and type',
     'phone.video': '{handle} video', 'phone.screen': '{handle} screen',
+    'needs.how': 'Take control, fix it on the phone next to this, then hand it back to the agent.',
+    'needs.take': 'Take control to fix it',
+    'needs.inControl': "You're in control. Fix it on the phone next to this; when you're done, hand it back.",
+    'needs.resolveRelease': 'Fixed, hand back to the agent',
   },
   es: {
     'needs.kicker': 'Requiere atención humana',
@@ -43,6 +51,10 @@ export const device = defineMessages({
     'phone.back': 'Atrás', 'phone.home': 'Inicio', 'phone.recents': 'Recientes', 'phone.keys': 'teclas del dispositivo',
     'phone.controlSurface': 'pantalla de {handle} bajo control: toca, arrastra y escribe',
     'phone.video': 'vídeo de {handle}', 'phone.screen': 'pantalla de {handle}',
+    'needs.how': 'Toma el control, resuélvelo en el teléfono de al lado y devuélvelo al agente.',
+    'needs.take': 'Tomar el control para resolver',
+    'needs.inControl': 'Tienes el control. Resuélvelo en el teléfono de al lado; al terminar, devuélvelo.',
+    'needs.resolveRelease': 'Resuelto, devolver al agente',
   },
   fr: {
     'needs.kicker': 'Intervention humaine requise',
@@ -54,6 +66,10 @@ export const device = defineMessages({
     'phone.back': 'Retour', 'phone.home': 'Accueil', 'phone.recents': 'Récents', 'phone.keys': 'touches de l’appareil',
     'phone.controlSurface': 'écran de {handle} sous contrôle : touchez, faites glisser et tapez',
     'phone.video': 'vidéo de {handle}', 'phone.screen': 'écran de {handle}',
+    'needs.how': 'Prenez le contrôle, réglez le problème sur le téléphone à côté, puis rendez-le à l’agent.',
+    'needs.take': 'Prendre le contrôle pour régler',
+    'needs.inControl': 'Vous avez le contrôle. Réglez le problème sur le téléphone à côté ; ensuite, rendez-le.',
+    'needs.resolveRelease': 'Réglé, rendre à l’agent',
   },
   de: {
     'needs.kicker': 'Braucht menschliche Hilfe',
@@ -65,6 +81,10 @@ export const device = defineMessages({
     'phone.back': 'Zurück', 'phone.home': 'Start', 'phone.recents': 'Zuletzt', 'phone.keys': 'Gerätetasten',
     'phone.controlSurface': 'Bildschirm von {handle} unter Kontrolle: tippen, ziehen und schreiben',
     'phone.video': 'Video von {handle}', 'phone.screen': 'Bildschirm von {handle}',
+    'needs.how': 'Übernimm die Steuerung, behebe es am Telefon daneben und gib es dann an den Agenten zurück.',
+    'needs.take': 'Steuerung übernehmen und beheben',
+    'needs.inControl': 'Du hast die Steuerung. Behebe es am Telefon daneben; danach gib es zurück.',
+    'needs.resolveRelease': 'Behoben, an den Agenten zurückgeben',
   },
   zh: {
     'needs.kicker': '需要人工处理',
@@ -76,5 +96,9 @@ export const device = defineMessages({
     'phone.back': '返回', 'phone.home': '主页', 'phone.recents': '最近', 'phone.keys': '设备按键',
     'phone.controlSurface': '{handle} 的屏幕已接管：可点按、拖动和输入',
     'phone.video': '{handle} 的视频', 'phone.screen': '{handle} 的屏幕',
+    'needs.how': '接管控制，在旁边的手机上解决，然后交还给智能体。',
+    'needs.take': '接管控制以解决',
+    'needs.inControl': '你正在控制。在旁边的手机上解决；完成后交还。',
+    'needs.resolveRelease': '已解决，交还给智能体',
   },
 });

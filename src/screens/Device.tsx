@@ -42,15 +42,31 @@ interface DeviceProps {
   readonly onInstruct?: (text: string, then?: MissionInstructThen) => Promise<boolean>;
 }
 
-function NeedsCard({ error, busy, onResolve, onBan }: { readonly error: string; readonly busy: boolean; readonly onResolve: () => void; readonly onBan?: () => void }) {
+/**
+ * Checkpoint da plataforma: a ordem certa é assumir, resolver no celular e devolver. Fora do controle o botão principal
+ * é assumir ("Resolvi" fica como secundário, para quando já foi resolvido por outro caminho); no controle, um botão só
+ * marca resolvido e devolve ao agente.
+ */
+function NeedsCard({ error, busy, control, onTakeControl, onResolve, onResolveAndRelease, onBan }: {
+  readonly error: string; readonly busy: boolean; readonly control: boolean;
+  readonly onTakeControl: () => void; readonly onResolve: () => void; readonly onResolveAndRelease: () => void; readonly onBan?: () => void;
+}) {
   const { t } = useI18n();
   return (
     <div className="card card--dark needs">
       <span className="needs__kicker">{t('device.needs.kicker')}</span>
       <span className="needs__error">{error}</span>
       <span className="needs__body">{t('device.needs.body')}</span>
+      <span className="needs__body" role="status">{t(control ? 'device.needs.inControl' : 'device.needs.how')}</span>
       <div className="device__controls">
-        <Button variant="tertiary" disabled={busy} onClick={onResolve}>{t('device.needs.resolve')}</Button>
+        {control ? (
+          <Button variant="tertiary" disabled={busy} onClick={onResolveAndRelease}>{t('device.needs.resolveRelease')}</Button>
+        ) : (
+          <>
+            <Button variant="tertiary" disabled={busy} onClick={onTakeControl}>{t('device.needs.take')}</Button>
+            <Button variant="secondary" disabled={busy} onClick={onResolve}>{t('device.needs.resolve')}</Button>
+          </>
+        )}
         {onBan && <Button variant="secondary" disabled={busy} onClick={onBan}>{t('device.needs.ban')}</Button>}
       </div>
     </div>
@@ -120,7 +136,10 @@ export function Device(p: DeviceProps) {
         </div>
 
         <div className="device__right">
-          {sel.needs && !(p.mission && isOpenMission(p.mission)) && <NeedsCard error={sel.error} busy={busy} onResolve={p.onResolve} onBan={p.onBan} />}
+          {sel.needs && !(p.mission && isOpenMission(p.mission)) && <NeedsCard
+              error={sel.error} busy={busy} control={control} onTakeControl={p.onToggleControl} onResolve={p.onResolve} onBan={p.onBan}
+              onResolveAndRelease={() => { p.onResolve(); p.onToggleControl(); }}
+            />}
           {p.mission && (
             <MissionPanel
               mission={p.mission} busy={!!p.missionBusy} error={p.missionError ?? null} now={p.now ?? Date.now()}

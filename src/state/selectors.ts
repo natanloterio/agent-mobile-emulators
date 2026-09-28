@@ -83,7 +83,7 @@ export interface Stat { readonly value: string; readonly label: string }
 export function selectGoalStats(tiles: readonly TileVM[], fleetSize: number, showCost: boolean, i18n: I18n = PT): readonly Stat[] {
   const { t, fmt } = i18n;
   const running = tiles.filter((d) => d.state === 'running').length;
-  const needs = tiles.filter((d) => d.state === 'needs').length;
+  const needs = selectNeedsCount(tiles);
   const total = tiles.reduce((a, d) => a + d.cost, 0);
   return [
     { value: `${running}/${fleetSize}`, label: t('common.stat.running') },
@@ -97,8 +97,9 @@ export function selectGoalPct(tiles: readonly TileVM[]): number {
   return Math.round((done / (tiles.length * TASKS_PER_IDENTITY)) * 100);
 }
 
+/** Mesmo recorte da lista "Precisam de você" do Relatório: contador e lista nunca discordam. */
 export function selectNeedsCount(tiles: readonly TileVM[]): number {
-  return tiles.filter((d) => d.state === 'needs').length;
+  return selectNeedsList(tiles).length;
 }
 
 export interface LogRow {
