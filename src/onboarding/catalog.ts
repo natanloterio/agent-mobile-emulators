@@ -13,10 +13,15 @@ export interface ModelEntry { readonly id: string; readonly sizeGb: number; read
 export const LOCAL_MODELS: readonly ModelEntry[] = [
   { id: 'gpt-oss:20b', sizeGb: 14, vramGb: 16, noteKey: 'onboarding.model.note.gptoss20', recommended: true },
   { id: 'qwen3:14b', sizeGb: 9.3, vramGb: 13, noteKey: 'onboarding.model.note.qwen14' },
+  // Para Macs de 16 GB (≈ 10,7 GB de vídeo) e placas de 8–12 GB: sem eles, nenhum modelo local cabia e o onboarding travava.
+  { id: 'qwen3:8b', sizeGb: 5.2, vramGb: 8, noteKey: 'onboarding.model.note.qwen8' },
+  { id: 'qwen3:4b', sizeGb: 2.5, vramGb: 5, noteKey: 'onboarding.model.note.qwen4' },
   { id: 'qwen3:32b', sizeGb: 20, vramGb: 24, noteKey: 'onboarding.model.note.qwen32' },
   { id: 'gpt-oss:120b', sizeGb: 65, vramGb: 68, noteKey: 'onboarding.model.note.gptoss120' },
 ];
 export const VRAM_SYSTEM_GIB = 1.2;
+/** Folga de disco além do modelo (Ollama, imagem do sistema, cache) ao escolher o padrão. */
+export const DISK_MARGIN_GIB = 2;
 /** Mesmos números de src/lib/resources.ts (HOST.ramPerEmulatorGiB, HOST.vcpuPerEmulator). */
 export const RAM_PER_EMULATOR_GIB = 4.6;
 export const THREADS_PER_EMULATOR = 4;

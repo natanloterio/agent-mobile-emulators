@@ -20,7 +20,7 @@ export function ModelsStep({ state, onMode, onModel, onKey, onTestKey }: ModelsS
   const i18n = useI18n();
   const { t } = i18n;
   const gpu = state.report?.hardware.gpu ?? null;
-  const recommended: SetupMode = defaultMode(gpu);
+  const recommended: SetupMode = defaultMode(gpu, state.report?.hardware.diskFreeGiB);
   const current = modelEntry(state.model) ?? LOCAL_MODELS[0];
   const bar = vramBar(current, gpu);
   const gb = (n: number) => `${i18n.fmt.decimal(n)} GB`;

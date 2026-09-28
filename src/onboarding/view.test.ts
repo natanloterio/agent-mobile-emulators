@@ -59,6 +59,21 @@ describe('hardware', () => {
     expect(defaultModel({ name: 'x', totalGiB: 16, unified: false })).toBe('qwen3:14b');
     expect(defaultModel(null)).toBe('gpt-oss:20b');
   });
+  it('Mac de 16 GB (10,7 GB de vídeo) pega um modelo que cabe; de 8 GB, sem modelo que caiba, vai para Só nuvem', () => {
+    const mac16 = { name: 'Apple Silicon', totalGiB: 10.7, unified: true };
+    const mac8 = { name: 'Apple Silicon', totalGiB: 5.3, unified: true };
+    expect(defaultModel(mac16)).toBe('qwen3:8b');
+    expect(defaultMode(mac16)).toBe('misto');
+    expect(defaultModel(mac8)).toBe('qwen3:4b');
+    expect(modelFit(model('qwen3:4b'), mac8)).toBe('too-big');
+    expect(defaultMode(mac8)).toBe('nuvem');
+  });
+  it('disco curto: pega o maior modelo que cabe no disco; nenhum cabe → Só nuvem', () => {
+    expect(defaultModel(rtx, 10)).toBe('qwen3:8b');
+    expect(defaultModel(rtx, 5)).toBe('qwen3:4b');
+    expect(defaultMode(rtx, 10)).toBe('misto');
+    expect(defaultMode(rtx, 3)).toBe('nuvem');
+  });
   it('barra de VRAM', () => {
     const b = vramBar(model('gpt-oss:20b'), rtx)!;
     expect(b.systemPct).toBeCloseTo(5);
@@ -104,7 +119,13 @@ describe('footerView', () => {
   it('passo 2: Instalar com o download; aviso de disco curto; modelo que não cabe bloqueia', () => {
     expect(footerView(st({ step: 1, model: 'gpt-oss:20b' }), PT)).toMatchObject({ action: 'Instalar', hint: '15,6 GB de download', disabled: false });
     const lowDisk = { ...partial, hardware: { ...hw, diskFreeGiB: 10 } };
-    expect(footerView(st({ step: 1, report: lowDisk, model: 'gpt-oss:20b' }), PT).hint).toBe('15,6 GB de download, mas só 10,0 GB livres em disco');
+    expect(footerView(st({ step: 1, report: lowDisk, model: 'gpt-oss:20b' }), PT)).toMatchObject({
+      hint: '15,6 GB de download, mas só 10,0 GB livres em disco. Libere espaço, escolha um modelo menor ou o modo Só nuvem.', disabled: true, error: true,
+    });
+    const small = { ...partial, hardware: { ...hw, gpu: { name: 'Apple Silicon', totalGiB: 10.7, unified: true } } };
+    expect(footerView(st({ step: 1, report: small, model: 'qwen3:14b' }), PT)).toMatchObject({
+      disabled: true, error: true, hint: 'qwen3:14b não cabe na memória de vídeo desta máquina (10,7 GB). Escolha um modelo menor ou o modo Só nuvem.',
+    });
     expect(footerView(st({ step: 1, model: 'qwen3:32b' }), PT).disabled).toBe(true);
   });
   it('passo 3: espera terminar; erro bloqueia; tudo pronto libera; configurando bloqueia', () => {
