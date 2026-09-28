@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialState, fleetReducer } from './fleetReducer';
 import { liveRoles } from '../live/merge';
-import { decorateTile, selectRoles, selectSelStats } from './selectors';
+import { decorateTile, selectNeedsCount, selectNeedsList, selectRoles, selectSelStats } from './selectors';
 import { shouldSubmitEndpoint } from '../screens/endpointSubmit';
 
 describe('selectors — incremento 3', () => {
@@ -52,5 +52,13 @@ describe('selectors — incremento 3', () => {
     const w2 = selectRoles(s2).find((r) => r.key === 'worker')!;
     expect(w2.error).toBe('endpoint precisa ser http(s)');
     expect(shouldSubmitEndpoint(w2.endpoint, w2.endpoint, w2.putError)).toBe(true);
+  });
+});
+
+describe('selectNeedsCount', () => {
+  it('é o tamanho da lista "Precisam de você" (precisa de atenção e offline), não só needs', () => {
+    const tiles = [{ state: 'needs' }, { state: 'offline' }, { state: 'running' }] as never;
+    expect(selectNeedsCount(tiles)).toBe(2);
+    expect(selectNeedsCount(tiles)).toBe(selectNeedsList(tiles).length);
   });
 });

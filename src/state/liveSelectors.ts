@@ -77,12 +77,13 @@ export function selectLiveSelStats(sel: TileVM, i18n: I18n = PT): readonly Stat[
   ];
 }
 
-export function selectLiveReportCards(g: GoalSummary | null | undefined, i18n: I18n = PT): readonly ReportCard[] {
+/** `needsNow`: identidades na lista "Precisam de você" (a tela passa o tamanho dela, para o número bater com a lista). */
+export function selectLiveReportCards(g: GoalSummary | null | undefined, i18n: I18n = PT, needsNow?: number): readonly ReportCard[] {
   const { t, fmt } = i18n;
   return [
     { value: g ? doneOf(g) : '—', label: t('common.stat.tasksDone'), tone: 'grey' },
     { value: g ? String(g.itemsHandled) : '—', label: t('common.stat.itemsHandled'), tone: 'green' },
-    { value: g ? String(g.tasksNeeds) : '—', label: t('common.stat.needYou'), tone: 'dark' },
+    { value: needsNow !== undefined ? String(needsNow) : g ? String(g.tasksNeeds) : '—', label: t('common.stat.needYou'), tone: 'dark' },
     { value: g ? fmt.usd(g.costUsd) : '—', label: t('common.stat.goalCost'), tone: 'white' },
   ];
 }

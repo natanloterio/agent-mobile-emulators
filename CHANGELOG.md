@@ -34,6 +34,12 @@
   (`daemon.lock`) garante um daemon só por pasta; o segundo sai com código 3 e o app espera o que já roda.
 - Provedores ganhou o cartão da chave da Anthropic: diz se há chave e de onde veio, e testa antes de salvar.
 
+### Consistência
+- Botão desabilitado agora parece desabilitado (antes era igual ao ativo).
+- "Precisam de você" conta a mesma lista que o Relatório mostra (antes identidades offline ficavam fora do número).
+- Checkpoint no Device: o botão principal é "Assumir controle para resolver"; no controle, um botão só marca
+  resolvido e devolve ao agente. "Resolvi, devolver à fila" fica como secundário.
+
 ## 0.1.0 — pré-lançamento
 
 Primeira versão pública.
