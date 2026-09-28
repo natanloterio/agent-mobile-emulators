@@ -1,6 +1,6 @@
 # Changelog
 
-## Não lançado
+## 0.4.0 — pré-lançamento
 
 ### Novo
 - Arquivos entre aparelhos: `adb pull` de Download/DCIM/Pictures/Movies/Documents para `<dados>/files/<id>/`, tipo pelos
