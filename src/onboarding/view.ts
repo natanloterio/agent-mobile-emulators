@@ -1,3 +1,4 @@
+import { daemonErrorText } from '../i18n/daemonErrors';
 import type { I18n } from '../i18n/translate';
 import { LOCAL_MODELS, RAM_PER_EMULATOR_GIB, THREADS_PER_EMULATOR, VRAM_SYSTEM_GIB, type ModelEntry, type SetupMode } from './catalog';
 import type { OnboardingState } from './reducer';
@@ -105,7 +106,7 @@ export function footerView(s: OnboardingState, i18n: I18n): FooterView {
   const { t } = i18n;
   const base = { showBack: s.step > 0 && s.step < 3, backDisabled: s.step === 0 || s.installing || s.finishing, error: false };
   if (!s.report) {
-    return { ...base, action: t('onboarding.nav.continue'), disabled: true, error: !!s.checkError, hint: s.checkError ? t('onboarding.check.failed', { error: s.checkError }) : t('onboarding.check.loading') };
+    return { ...base, action: t('onboarding.nav.continue'), disabled: true, error: !!s.checkError, hint: s.checkError ? t('onboarding.check.failed', { error: daemonErrorText(s.checkError, t) }) : t('onboarding.check.loading') };
   }
   const rows = depRows(s.report, s.mode, s.model);
   const sum = summarize(rows);
@@ -132,7 +133,7 @@ export function footerView(s: OnboardingState, i18n: I18n): FooterView {
     const cont = t('onboarding.nav.continue');
     if (s.installing) return { ...base, action: cont, disabled: true, hint: t('onboarding.hint.installing') };
     if (totals.failed || s.installError) return { ...base, action: cont, disabled: true, error: true, hint: t('onboarding.hint.error') };
-    if (s.finishError) return { ...base, action: t('onboarding.nav.retry'), disabled: false, error: true, hint: t('onboarding.hint.finishFailed', { error: s.finishError }) };
+    if (s.finishError) return { ...base, action: t('onboarding.nav.retry'), disabled: false, error: true, hint: t('onboarding.hint.finishFailed', { error: daemonErrorText(s.finishError, t) }) };
     if (totals.allDone && !s.installing) return { ...base, action: cont, disabled: false, hint: t('onboarding.hint.done') };
     return { ...base, action: cont, disabled: true, hint: t('onboarding.hint.installing') };
   }

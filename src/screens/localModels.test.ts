@@ -77,3 +77,9 @@ describe('cardError', () => {
     expect(cardError('Ollama parado', null, null)).toBe('Ollama parado');
   });
 });
+
+describe('cardError — runtime parado', () => {
+  it('"parado — o próximo teste o sobe" não vira erro no card (a linha do runtime já diz)', () => {
+    expect(cardError('Ollama parado — o próximo teste ou objetivo o sobe', null, [])).toBeNull();
+  });
+});

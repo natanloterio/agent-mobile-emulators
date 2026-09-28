@@ -3,6 +3,7 @@ import { Button } from '../components/Button';
 import { Heading } from '../components/Heading';
 import { Notice } from '../components/Notice';
 import { useI18n } from '../i18n/I18nProvider';
+import { useDaemonError } from '../i18n/useDaemonError';
 import { useDaemonStatus } from '../live/daemonStatus';
 import type { MessageKey } from '../i18n/messages';
 import { KeyTestSchema } from '../onboarding/schema';
@@ -17,6 +18,7 @@ const PHASE_MSG: Partial<Record<Phase, MessageKey>> = {
 /** Chave da Anthropic depois do onboarding: testa antes de gravar, e a resposta do daemon nunca traz a chave. */
 export function AnthropicKeyCard({ anyCloudRole }: { readonly anyCloudRole: boolean }) {
   const { t } = useI18n();
+  const te = useDaemonError();
   const bridge = window.tapflock;
   const [status, setStatus] = useState<KeyStatus | null>(null);
   const [key, setKey] = useState('');
@@ -59,7 +61,7 @@ export function AnthropicKeyCard({ anyCloudRole }: { readonly anyCloudRole: bool
         <Button type="submit" disabled={!key.trim() || phase === 'busy'}>{t(phase === 'busy' ? 'providers.key.saving' : 'providers.key.save')}</Button>
       </form>
       {msg && <p role="status" className={phase === 'saved' ? 'keycard__ok' : 'keycard__bad'}>{t(msg)}</p>}
-      {phase === 'failed' && error && <Notice>{t('providers.key.saveFailed', { error })}</Notice>}
+      {phase === 'failed' && error && <Notice>{t('providers.key.saveFailed', { error: te(error) })}</Notice>}
     </section>
   );
 }

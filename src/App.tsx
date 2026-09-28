@@ -49,6 +49,16 @@ export interface AppProps {
   readonly onReopenSetup?: () => void;
 }
 
+/** Com o kill switch acionado, o cabeçalho não pode seguir dizendo "em execução". */
+function withKilled<H extends { readonly kicker: string }>(h: H, killed: boolean, label: string): H {
+  return killed ? { ...h, kicker: label } : h;
+}
+
+/** Identidades do demo como opções da missão: as que estão rodando ficam indisponíveis, como no vivo. */
+function demoMissionOptions(tiles: readonly { readonly name: string; readonly handle: string; readonly state: string; readonly stateLabel: string }[]): readonly MissionIdentityOption[] {
+  return tiles.map((d) => ({ id: d.name, name: d.name, handle: d.handle, disabled: d.state === 'running', note: d.stateLabel }));
+}
+
 export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
   const { state, actions, bridged, goal, identity, credentials, mission, settings } = useFleet();
   // Só na montagem: a tela escolhida no fim do onboarding.
@@ -80,16 +90,17 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
     else if (a.kind === 'discard') void identity.discard(r.id, r.name);
     else if (a.kind === 'restore') void identity.restore(r.id, r.name);
     else if (a.kind === 'rebaseline') void identity.rebaseline(r.id);
+    else if (a.kind === 'accept-version') void identity.acceptVersion(r.id);
   };
 
   const cockpit = () => (
     <Cockpit
       tiles={tiles}
       bus={bus}
-      goalHeader={isLive
+      goalHeader={withKilled(isLive
         ? selectGoalHeader(view.goal, i18n)
-        : { kicker: t('cockpit.goal.running', { pattern: t('cockpit.demo.pattern') }), title: currentGoalText(i18n) }}
-      goalStats={isLive ? selectLiveGoalStats(view.goal, SHOW_COST, i18n) : selectGoalStats(tiles, fleetSize, SHOW_COST, i18n)}
+        : { kicker: t('cockpit.goal.running', { pattern: t('cockpit.demo.pattern') }), title: currentGoalText(i18n) }, view.killed, t('cockpit.goal.killed'))}
+      goalStats={isLive ? selectLiveGoalStats(view.goal, SHOW_COST, i18n) : selectGoalStats(tiles, fleetSize, SHOW_COST, i18n, view.killed)}
       goalPct={isLive ? selectLiveGoalPct(view.goal) : selectGoalPct(tiles)}
       showCost={SHOW_COST}
       fullTiles={FULL_TILES}
@@ -101,6 +112,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
       onNew={() => actions.go('new')}
       onProvision={() => actions.go('ids')}
       baseMissing={isLive && baseBlocksProvision(baseStage(live?.baseAvd))}
+      killed={view.killed}
     />
   );
 
@@ -155,7 +167,10 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
             onDecompose={() => (isLive ? void goal.decompose(state.goalText || DEFAULT_GOAL_TEXT) : actions.decompose())}
             onReset={actions.resetPlan}
             onLaunch={() => (isLive ? state.plan && void goal.launch(state.plan) : actions.launch(fleetSize))}
-            mission={isLive ? { options, req: requestOf(state, MISSION_START_KEY), onStart: (ids, text) => void mission.start(ids, text).then((ok) => { if (ok) actions.go('cockpit'); }) } : undefined}
+            // O modo demonstração mostra a mesma tela do app de verdade (missão); iniciar só volta ao Cockpit.
+            mission={isLive
+              ? { options, req: requestOf(state, MISSION_START_KEY), onStart: (ids, text) => void mission.start(ids, text).then((ok) => { if (ok) actions.go('cockpit'); }) }
+              : { options: demoMissionOptions(tiles), req: requestOf(state, MISSION_START_KEY), onStart: () => actions.go('cockpit') }}
           />
         );
       }

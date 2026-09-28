@@ -39,3 +39,7 @@
   .tile { border-radius: 24px; padding: 10px 10px 14px; gap: 10px; }
   .tile__name { font-size: 16px; }
 }
+
+/* Confirmação do kill switch. */
+.killconfirm { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; background: var(--color-dark); color: var(--color-white); border-radius: var(--radius-control); padding: 16px 20px; line-height: 1.4; }
+.killconfirm__actions { display: flex; gap: 10px; flex-wrap: wrap; }

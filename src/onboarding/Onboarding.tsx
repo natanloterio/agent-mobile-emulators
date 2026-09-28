@@ -1,5 +1,6 @@
 import { Button } from '../components/Button';
 import { DaemonBanner } from '../components/DaemonBanner';
+import { LanguageSelect } from '../components/LanguageSelect';
 import { Logo } from '../components/Logo';
 import { useI18n } from '../i18n/I18nProvider';
 import type { MessageKey } from '../i18n/messages';
@@ -64,6 +65,8 @@ export function Onboarding({ bridge, onDone, onClose }: OnboardingProps) {
           <span>{t('onboarding.rail.firstRun')}</span>
           <span>{t('onboarding.rail.redo')}</span>
         </div>
+        {/* Primeira tela que qualquer pessoa vê: o idioma se troca aqui mesmo, não só depois, dentro do app. */}
+        <div className="onb__lang"><LanguageSelect /></div>
       </aside>
       <div className="onb__main">
         <div className="onb__content">

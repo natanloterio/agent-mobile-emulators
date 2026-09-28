@@ -7,6 +7,7 @@ import { Notice } from '../components/Notice';
 import { Pill } from '../components/Pill';
 import { LIFECYCLE_ORDER } from '../data/identities';
 import { useI18n } from '../i18n/I18nProvider';
+import { useDaemonError } from '../i18n/useDaemonError';
 import type { BaseAvdStatus } from '../live/types';
 import type { RequestStatus } from '../state/fleetReducer';
 import { lifecycleTone, type IdRow, type RowAction } from '../state/idRows';
@@ -106,6 +107,7 @@ function RowActions({ row, logging, mobile, onPick, onLogin, onCancel, onSaveCre
 
 export function Identities({ rows, isMobile, provisionReq, baseAvd, onProvision, onAction, onLoginDone, onRegisterPin, creds }: IdentitiesProps) {
   const { t } = useI18n();
+  const te = useDaemonError();
   const [inline, setInline] = useState<{ key: string; kind: InlineKind } | null>(null);
   const [newPin, setNewPin] = useState('');
   // Status das credenciais ao abrir a tela (set/clear recarregam pelas ações).
@@ -145,14 +147,17 @@ export function Identities({ rows, isMobile, provisionReq, baseAvd, onProvision,
           <p className="screen__lede" style={{ maxWidth: 420 }}>{t('identities.lede')}</p>
         </div>
         <form className="ids__provision" onSubmit={(e) => { e.preventDefault(); onProvision(newPin); }}>
-          <input className="idrow__input" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder={t('identities.provision.pinPlaceholder')}
-            aria-label={t('identities.provision.pinAria')} inputMode="numeric" type="password" />
+          <label className="ids__pin">
+            <span>{t('identities.provision.pinLabel')}</span>
+            <input className="idrow__input" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="1234"
+              inputMode="numeric" type="password" autoComplete="off" />
+          </label>
           <Button type="submit" disabled={provisionReq.busy || blocked} title={stage === 'running' ? t('identities.base.closeFirst') : stage ? t('identities.base.blocked') : undefined}>
             {t(provisionReq.busy ? 'identities.provision.busy' : 'identities.provision.submit')}
           </Button>
         </form>
       </header>
-      {provisionReq.error && <Notice>{t('identities.provision.failed', { error: provisionReq.error })}</Notice>}
+      {provisionReq.error && <Notice>{t('identities.provision.failed', { error: te(provisionReq.error) })}</Notice>}
       {stage && baseAvd && <BasePrepCard base={baseAvd} stage={stage} />}
 
       <div className="ids__cycle">
@@ -180,7 +185,7 @@ export function Identities({ rows, isMobile, provisionReq, baseAvd, onProvision,
               </div>
               {actionsOf(r)}
               {loginNote(r)}
-              {r.error && <Notice>{r.error}</Notice>}
+              {r.error && <Notice>{te(r.error)}</Notice>}
             </div>
           ))}
         </div>
@@ -200,7 +205,7 @@ export function Identities({ rows, isMobile, provisionReq, baseAvd, onProvision,
               <span className="idrow__ports">{r.ports}</span>
               {actionsOf(r)}
               {r.loginNote && <div className="idrow__error">{loginNote(r)}</div>}
-              {r.error && <div className="idrow__error"><Notice>{r.error}</Notice></div>}
+              {r.error && <div className="idrow__error"><Notice>{te(r.error)}</Notice></div>}
             </div>
           ))}
         </div>

@@ -1,4 +1,5 @@
 import { Heading } from '../components/Heading';
+import { onRadioKey } from '../lib/radioKeys';
 import { useI18n } from '../i18n/I18nProvider';
 import type { MessageKey } from '../i18n/messages';
 import { LOCAL_MODELS, MODE_ROLES, MODES, type SetupMode } from './catalog';
@@ -32,8 +33,11 @@ export function ModelsStep({ state, onMode, onModel, onKey, onTestKey }: ModelsS
         <p className="onb-lede">{t('onboarding.models.lede')}</p>
       </header>
       <div className="onb-modes" role="radiogroup" aria-label={t('onboarding.models.title')}>
-        {MODES.map((m) => (
-          <button type="button" key={m} role="radio" aria-checked={state.mode === m} className="onb-mode" onClick={() => onMode(m)}>
+        {MODES.map((m, i) => (
+          <button
+            type="button" key={m} role="radio" aria-checked={state.mode === m} tabIndex={state.mode === m ? 0 : -1} className="onb-mode"
+            onClick={() => onMode(m)} onKeyDown={(e) => onRadioKey(e, i, MODES.length, (to) => onMode(MODES[to]))}
+          >
             {m === recommended ? <span className="pill pill--dark">{t('onboarding.mode.recommended')}</span> : <span className="onb-mode__spacer" />}
             <h3>{t(`onboarding.mode.${m}` as MessageKey)}</h3>
             <p>{t(`onboarding.mode.${m}.text` as MessageKey)}</p>
@@ -50,11 +54,16 @@ export function ModelsStep({ state, onMode, onModel, onKey, onTestKey }: ModelsS
           <div className="card onb-local">
             <span className="onb-label">{t('onboarding.models.localTitle')}</span>
             <div className="onb-models" role="radiogroup" aria-label={t('onboarding.models.localTitle')}>
-              {LOCAL_MODELS.map((m) => {
+              {LOCAL_MODELS.map((m, i) => {
                 const fit = modelFit(m, gpu);
+                const tooBig = (j: number) => modelFit(LOCAL_MODELS[j], gpu) === 'too-big';
                 const installed = state.report?.localModels.includes(m.id) ?? false;
                 return (
-                  <button type="button" key={m.id} role="radio" aria-checked={state.model === m.id} aria-disabled={fit === 'too-big'} className="onb-model" onClick={() => onModel(m.id)}>
+                  <button
+                    type="button" key={m.id} role="radio" aria-checked={state.model === m.id} aria-disabled={fit === 'too-big'}
+                    tabIndex={state.model === m.id ? 0 : -1} className="onb-model" onClick={() => onModel(m.id)}
+                    onKeyDown={(e) => onRadioKey(e, i, LOCAL_MODELS.length, (to) => onModel(LOCAL_MODELS[to].id), tooBig)}
+                  >
                     <span className="onb-radio" aria-hidden="true" />
                     <div>
                       <h4>

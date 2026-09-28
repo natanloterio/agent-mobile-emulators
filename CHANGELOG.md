@@ -34,6 +34,20 @@
   (`daemon.lock`) garante um daemon só por pasta; o segundo sai com código 3 e o app espera o que já roda.
 - Provedores ganhou o cartão da chave da Anthropic: diz se há chave e de onde veio, e testa antes de salvar.
 
+### Acabamento de UX
+- "Novo objetivo" virou "Nova missão" no menu e no Cockpit (o modo objetivo está oculto; a tela já era de missão).
+  O modo demonstração mostra a mesma tela de missão do app de verdade.
+- Kill switch pede confirmação na própria tela; acionado, o botão trava e o cabeçalho diz "Parado pelo kill switch"
+  (antes seguia "Objetivo em execução").
+- Cockpit mostra primeiro quem precisa de alguém (atenção, depois offline); o tile não mostra mais resolução e fps.
+- Erros do daemon aparecem no idioma da tela (cerca de 30 mensagens conhecidas, com os parâmetros); o "Ollama
+  parado — o próximo teste o sobe" não aparece mais duplicado como erro em Provedores.
+- Identidade com o app alvo atualizado sozinho ganha "Aceitar a versão instalada" (rota
+  `POST /identities/:id/accept-version`), em vez de ficar fora da frota sem nada a fazer.
+- Onboarding: seletor de idioma no próprio onboarding; grupos de escolha (modo e modelo) com um ponto de Tab e setas.
+- Identidades: PIN com rótulo visível, estados como legenda (não parecem filtros), portas discretas. Provedores com
+  textos sem jargão ("Memória de vídeo", "Planeja cada missão · roda pouco"…). Menu do celular com os nomes inteiros.
+
 ### Celular-base automático
 - O Tapflock prepara o celular-base sozinho, sem Android Studio: cria o AVD (`avdmanager` com o Java do onboarding),
   sobe com janela, baixa o app Android Remote Control MCP v1.12.0 (sha256 fixo), instala pelo adb e liga acessibilidade

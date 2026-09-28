@@ -24,6 +24,7 @@ function harness(over: Partial<IdentityOps> = {}, online: string[] = ['emulator-
       devices: async () => devices,
       emu: async (s, a) => { log.push(`emu ${s} ${a.join(' ')}`); if (a[0] === 'kill') devices.splice(devices.indexOf(s), 1); return 'OK'; },
       trimCaches: async (s) => { log.push(`trim ${s}`); },
+      versionName: async () => '450.0.0.1',
     },
     clone: async (name) => { log.push(`clone ${name}`); },
     deleteAvd: async (name) => { log.push(`delete ${name}`); },
@@ -90,6 +91,20 @@ describe('POST /identities', () => {
     const r = await s.post('/identities', {});
     expect(r.status).toBe(409); expect(String(r.body?.error)).toMatch(/sendo preparado/);
     expect(h.log.some((l) => l.startsWith('clone'))).toBe(false);
+  });
+  it('accept-version: grava a versão instalada no aparelho como a da identidade e sonda de novo', async () => {
+    const h = harness(); const s = await serve(h.db, h.ops);
+    const r = await s.post('/identities/conta1/accept-version');
+    expect(r.status).toBe(200);
+    expect(getIdentity(h.db, 'conta1')?.appVersionName).toBe('450.0.0.1');
+    expect(h.log).toContain('probe conta1');
+    expect(getIdentity(h.db, 'conta1')?.lastSignals?.versionMatch).toBe(true);
+  });
+  it('accept-version sem o emulador no adb: 409 e nada muda', async () => {
+    const h = harness(); h.devices.splice(0); const s = await serve(h.db, h.ops);
+    const before = getIdentity(h.db, 'conta1')?.appVersionName;
+    expect((await s.post('/identities/conta1/accept-version')).status).toBe(409);
+    expect(getIdentity(h.db, 'conta1')?.appVersionName).toBe(before);
   });
   it('clone falhou → 500 com a mensagem e nada gravado', async () => {
     const h = harness({ clone: async () => { throw new Error('AVD tapflock_conta2 já existe'); } }); const s = await serve(h.db, h.ops);

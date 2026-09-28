@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialState, fleetReducer } from './fleetReducer';
 import { liveRoles } from '../live/merge';
-import { decorateTile, selectNeedsCount, selectNeedsList, selectRoles, selectSelStats } from './selectors';
+import { byAttention, decorateTile, selectGoalStats, selectNeedsCount, selectNeedsList, selectRoles, selectSelStats } from './selectors';
 import { shouldSubmitEndpoint } from '../screens/endpointSubmit';
 
 describe('selectors — incremento 3', () => {
@@ -60,5 +60,20 @@ describe('selectNeedsCount', () => {
     const tiles = [{ state: 'needs' }, { state: 'offline' }, { state: 'running' }] as never;
     expect(selectNeedsCount(tiles)).toBe(2);
     expect(selectNeedsCount(tiles)).toBe(selectNeedsList(tiles).length);
+  });
+});
+
+describe('byAttention', () => {
+  it('quem precisa de alguém vem primeiro (atenção, depois offline); o resto na ordem de antes', () => {
+    const tiles = [{ name: 'a', state: 'running' }, { name: 'b', state: 'offline' }, { name: 'c', state: 'idle' }, { name: 'd', state: 'needs' }, { name: 'e', state: 'running' }];
+    expect(byAttention(tiles).map((t) => t.name)).toEqual(['d', 'b', 'a', 'c', 'e']);
+  });
+});
+
+describe('selectGoalStats — kill switch', () => {
+  it('com o kill switch acionado, ninguém conta como rodando', () => {
+    const tiles = [{ state: 'running', cost: 0 }, { state: 'running', cost: 0 }] as never;
+    expect(selectGoalStats(tiles, 2, true)[0].value).toBe('2/2');
+    expect(selectGoalStats(tiles, 2, true, undefined, true)[0].value).toBe('0/2');
   });
 });

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Button } from '../components/Button';
 import { Heading } from '../components/Heading';
 import { useI18n } from '../i18n/I18nProvider';
+import { useDaemonError } from '../i18n/useDaemonError';
 import type { GpuBarView } from '../lib/gpuBar';
 import type { ProviderPatch } from '../live/types';
 import type { RoleVM } from '../state/selectors';
@@ -40,6 +41,7 @@ const MODES: readonly ProviderMode[] = ['nuvem', 'local'];
 export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, gpu, showVram, isMobile, onPickMode, onTest, onSetField, onLoadModels, onReopenSetup, budgets }: ProvidersProps) {
   // Recarrega a lista de modelos quando a tela abre e quando algum papel troca de modo.
   const { t } = useI18n();
+  const te = useDaemonError();
   const modeKey = roles.map((r) => `${r.key}:${r.mode}`).join('|');
   useEffect(() => { roles.forEach((r) => onLoadModels(r.key)); }, [modeKey]);
 
@@ -92,7 +94,7 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, g
             {(() => {
               // Com catálogo, o erro de um runtime já aparece na linha dele: o card não o repete.
               const error = r.mode === 'local' && r.catalog ? cardError(r.error, r.putError, r.catalog.runtimes) : r.error;
-              return error && <div className="role__error" role="alert">{error}</div>;
+              return error && <div className="role__error" role="alert">{te(error)}</div>;
             })()}
             <button
               type="button"
@@ -105,7 +107,7 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, g
             {r.result && (
               <div className="role__result">
                 {r.result.map((x) => (
-                  <div className="role__result-row" key={x.label}><span>{x.label}</span><b>{x.value}</b></div>
+                  <div className="role__result-row" key={x.label}><span>{x.label}</span><b>{te(x.value)}</b></div>
                 ))}
               </div>
             )}
@@ -124,6 +126,7 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, g
 /** Seletor do papel local com o catálogo do daemon: modelos baixados por runtime e uma linha de status por runtime. */
 function LocalModelField({ role: r, onSetField }: { readonly role: RoleVM; readonly onSetField: ProvidersProps['onSetField'] }) {
   const i18n = useI18n();
+  const te = useDaemonError();
   const { t } = i18n;
   if (!r.catalog) return null;
   const runtime = roleRuntime(r.runtime, r.endpoint);
@@ -147,7 +150,7 @@ function LocalModelField({ role: r, onSetField }: { readonly role: RoleVM; reado
           {lines.map((l) => (
             <li key={l.kind} className={`role__runtime${l.kind === runtime ? ' role__runtime--current' : ''}`}>
               <span>{l.text}</span>
-              {l.error && <span className="role__runtime-error">{l.error}</span>}
+              {l.error && <span className="role__runtime-error">{te(l.error)}</span>}
             </li>
           ))}
         </ul>

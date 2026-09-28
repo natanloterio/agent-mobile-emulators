@@ -80,9 +80,10 @@ export function selectSelected(tiles: readonly TileVM[], sel: number): TileVM {
 
 export interface Stat { readonly value: string; readonly label: string }
 
-export function selectGoalStats(tiles: readonly TileVM[], fleetSize: number, showCost: boolean, i18n: I18n = PT): readonly Stat[] {
+/** `killed`: com o kill switch acionado ninguém está rodando, mesmo que o estado do tile ainda diga `running`. */
+export function selectGoalStats(tiles: readonly TileVM[], fleetSize: number, showCost: boolean, i18n: I18n = PT, killed = false): readonly Stat[] {
   const { t, fmt } = i18n;
-  const running = tiles.filter((d) => d.state === 'running').length;
+  const running = killed ? 0 : tiles.filter((d) => d.state === 'running').length;
   const needs = selectNeedsCount(tiles);
   const total = tiles.reduce((a, d) => a + d.cost, 0);
   return [
@@ -95,6 +96,16 @@ export function selectGoalStats(tiles: readonly TileVM[], fleetSize: number, sho
 export function selectGoalPct(tiles: readonly TileVM[]): number {
   const done = tiles.reduce((a, d) => a + d.steps, 0);
   return Math.round((done / (tiles.length * TASKS_PER_IDENTITY)) * 100);
+}
+
+const ATTENTION: Readonly<Record<string, number>> = { needs: 0, offline: 1 };
+/**
+ * Ordem de exibição do Cockpit: quem precisa de alguém primeiro, para não ficar abaixo da dobra numa frota de 8.
+ * Só a ordem muda; cada tile guarda o próprio `index` (abrir o device segue certo).
+ */
+export function byAttention<T extends { readonly state: string }>(tiles: readonly T[]): readonly T[] {
+  const rank = (t: T) => ATTENTION[t.state] ?? 2;
+  return tiles.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t);
 }
 
 /** Mesmo recorte da lista "Precisam de você" do Relatório: contador e lista nunca discordam. */
@@ -207,6 +218,7 @@ function snapshotLabel(i: number, { t, fmt }: I18n): string {
 function actionForActive(d: Identity, i: number, diskPct: number, { t }: I18n): string {
   if (d.state === 'needs') return t('identities.action.open');
   if (i === 9) return t('identities.action.restore');
+  if (d.error?.includes('≠')) return t('identities.action.acceptVersion');
   if (diskPct > 70) return t('identities.action.rebaseline');
   return '';
 }

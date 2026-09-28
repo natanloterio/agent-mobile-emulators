@@ -63,7 +63,10 @@
   position: relative; border: none; min-height: 52px; border-radius: var(--radius-control);
   font-size: 12px; padding: 6px 2px; background: transparent; color: var(--color-white);
   display: flex; align-items: center; justify-content: center;
+  /* Rótulos inteiros ("Fournisseurs", "Proveedores") não podem invadir o botão vizinho em 390 px. */
+  min-width: 0; text-align: center; line-height: 1.15; overflow-wrap: anywhere; hyphens: auto;
 }
+@media (max-width: 400px) { .bottomnav__btn { font-size: 11px; } }
 .bottomnav__btn--active { background: var(--color-green); color: var(--color-black); }
 .bottomnav__badge {
   position: absolute; top: 3px; right: 5px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
@@ -82,13 +85,7 @@
 .killbanner__accent { color: var(--color-green); }
 
 .sidebar__foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
-.langselect { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: inherit; }
-.langselect__label { opacity: 0.8; }
-.langselect__select { font: inherit; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: var(--radius-sm, 8px); padding: 4px 8px; cursor: pointer; }
-.langselect__select option { color: #111; }
-.langselect--compact { margin-left: auto; }
 
 /* Topo mobile em duas linhas: logo + idioma em cima, medidores embaixo (numa linha só não cabem em 390 px). */
 .topbar { flex-wrap: wrap; row-gap: 8px; }
-.topbar .langselect--compact { order: 2; margin-left: auto; }
 .topbar__meters { order: 3; flex-basis: 100%; justify-content: space-between; }

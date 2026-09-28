@@ -3,6 +3,7 @@ import { Heading } from '../components/Heading';
 import { Notice } from '../components/Notice';
 import { localizePastRow } from '../data/goals';
 import { useI18n } from '../i18n/I18nProvider';
+import { useDaemonError } from '../i18n/useDaemonError';
 import type { RequestStatus } from '../state/fleetReducer';
 import type { PastGoalRow } from '../state/liveSelectors';
 import type { CostRow, ReportCard, TileVM } from '../state/selectors';
@@ -25,11 +26,12 @@ interface ReportProps {
 
 function PastGoals({ rows, req }: { readonly rows: readonly PastGoalRow[] | null; readonly req: RequestStatus }) {
   const i18n = useI18n();
+  const te = useDaemonError();
   const { t } = i18n;
   return (
     <div className="card card--white">
       <div className="report__list-head"><Heading size="h4">{t('report.past.title')}</Heading></div>
-      {req.error && <Notice>{t('report.past.failed', { error: req.error })}</Notice>}
+      {req.error && <Notice>{t('report.past.failed', { error: te(req.error) })}</Notice>}
       {rows === null && !req.error && <span className="report__empty">{t('report.past.loading')}</span>}
       {rows?.length === 0 && <span className="report__empty">{t('report.past.empty')}</span>}
       {rows?.map((row) => localizePastRow(row, i18n)).map((g) => (
