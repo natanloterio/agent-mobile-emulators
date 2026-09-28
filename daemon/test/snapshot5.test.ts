@@ -49,6 +49,12 @@ describe('snapshot do incremento 5', () => {
     expect(buildSnapshot(db, false, { booting: () => new Set(['conta1']) }).identities[0].booting).toBe(true);
     expect(buildSnapshot(db, false).identities[0].booting).toBe(false);
   });
+  it('diz se o emulador está no adb agora (fonte online); sem fonte, o campo não vem', () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    expect(buildSnapshot(db, false, { online: () => new Set(['emulator-5554']) }).identities[0].online).toBe(true);
+    expect(buildSnapshot(db, false, { online: () => new Set() }).identities[0].online).toBe(false);
+    expect(buildSnapshot(db, false).identities[0].online).toBeUndefined();
+  });
   it('traz o estado do AVD-base quando a fonte existe; sem fonte, null', () => {
     const db = openDb(':memory:');
     expect(buildSnapshot(db, false, { baseAvd: () => ({ name: 'tapflock_golden', found: false, running: false }) }).baseAvd).toEqual({ name: 'tapflock_golden', found: false, running: false });

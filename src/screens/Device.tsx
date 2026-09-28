@@ -31,6 +31,8 @@ interface DeviceProps {
   readonly onResolve: () => void;
   /** Só no vivo: "Marcar como banida" (POST /ban). */
   readonly onBan?: () => void;
+  /** Desliga o emulador (só no vivo, com o aparelho no adb). */
+  readonly onShutdown?: () => void;
   /** Só no vivo e com controle: gesto na tela → POST /input. */
   readonly onInput?: (g: InputGesture) => void;
   readonly bus?: VideoBus | null;
@@ -133,6 +135,9 @@ export function Device(p: DeviceProps) {
             <Button variant="secondary" disabled={busy} onClick={p.onTogglePause}>
               {t(paused ? 'device.resume' : 'device.pause')}
             </Button>
+            {p.onShutdown && sel.live?.online && !sel.live.booting && sel.live.state !== 'running' && (
+              <Button variant="secondary" disabled={busy} onClick={p.onShutdown}>{t('identities.action.shutdown')}</Button>
+            )}
           </div>
           {p.errors.map((e) => <Notice key={e}>{te(e)}</Notice>)}
         </div>

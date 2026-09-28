@@ -207,6 +207,23 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     done(ctx, id.id);
   };
 
+  /**
+   * Desliga o emulador sem descartar nada (botão "Desligar"): `adb emu kill` fecha limpo e grava o disco. Recusa com
+   * trabalho em andamento (objetivo ou missão rodando) e durante o boot; o ciclo de vida vai para offline sem erro.
+   */
+  const shutdown: Action = async (ctx, id) => {
+    if (id.state === 'running') return ctx.send(409, { error: 'identidade rodando um objetivo' });
+    if (openMissionFor(ctx.db, id.id)?.state === 'running') return ctx.send(409, { error: 'identidade em missão; pause a missão antes' });
+    if (booting.has(id.id)) return ctx.send(409, { error: 'identidade já está ligando' });
+    if (!(await online(id))) return ctx.send(409, { error: 'emulador fora do adb: dê boot antes' });
+    try { await killEmulator(ops.adb, id.serial, { sleep: ops.killSleep }); } catch (e) { return fail(ctx, id, e); }
+    ops.supervisor?.stop(id.id);
+    // needs-human continua: desligar não resolve o que pediu gente (a missão segue esperando).
+    if (id.state !== 'needs-human' && id.state !== 'banned') setIdentityState(ctx.db, id.id, 'offline', { lastError: null });
+    ops.onIdentitiesChanged?.();
+    done(ctx, id.id);
+  };
+
   const discard: Action = async (ctx, id) => {
     if (id.state !== 'banned') return ctx.send(409, { error: 'só identidade banida pode ser descartada' });
     if (id.discardedAt) return ctx.send(409, { error: 'identidade já descartada' });
@@ -334,7 +351,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     ctx.send(200, { outcome: r.outcome, detail });
   };
 
-  const actions: Readonly<Record<string, Action>> = { login, pin, boot, 'login-done': loginDone, pause, resolve, ban, discard, restore, rebaseline, 'accept-version': acceptVersion };
+  const actions: Readonly<Record<string, Action>> = { login, pin, boot, 'login-done': loginDone, pause, resolve, ban, discard, restore, rebaseline, 'accept-version': acceptVersion, shutdown };
 
   const route: Route = async (ctx) => {
     if (ctx.method !== 'POST') return false;

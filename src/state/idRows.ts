@@ -8,7 +8,7 @@ import type { Tone } from './selectors';
 
 // Linhas da tela Identidades (spec inc. 5 §1): colunas reais do banco e ações ligadas às rotas §3.2.
 
-export type RowActionKind = 'open' | 'extra' | 'boot-window' | 'boot' | 'login' | 'pin' | 'discard' | 'restore' | 'rebaseline' | 'accept-version'
+export type RowActionKind = 'open' | 'extra' | 'boot-window' | 'boot' | 'login' | 'pin' | 'discard' | 'restore' | 'rebaseline' | 'accept-version' | 'shutdown'
   | 'creds' | 'autologin' | 'forget';
 export interface RowAction { readonly kind: RowActionKind; readonly label: string; readonly index?: number }
 
@@ -89,7 +89,10 @@ function liveRowActions(l: LiveIdentity, tileIndex: number, { t }: I18n, creds: 
   // Já ligando: outro Boot seria recusado (409); o botão volta quando o emulador terminar de subir.
   if ((lc === 'blank' || lc === 'provisioned') && !l.booting) out.push({ kind: 'boot-window', label: t('identities.action.bootWindow') });
   if (lc === 'blank' || lc === 'provisioned') out.push({ kind: 'login', label: t('identities.action.loginDone') });
-  if (lc === 'offline' && !l.booting) out.push({ kind: 'boot', label: t('identities.action.boot') });
+  // Boot pelo aparelho de fato: "idle" fica gravado depois de o emulador cair; sem o campo (daemon antigo), pelo ciclo.
+  const off = l.online === false || (l.online === undefined && lc === 'offline');
+  if (off && !l.booting && lc !== 'blank' && lc !== 'provisioned') out.push({ kind: 'boot', label: t('identities.action.boot') });
+  if (l.online === true && !l.booting && lc !== 'running') out.push({ kind: 'shutdown', label: t('identities.action.shutdown') });
   if (lc === 'needs-human') out.push({ kind: 'open', label: t('identities.action.open'), index: tileIndex });
   if (l.restoreUnsafe) out.push({ kind: 'restore', label: t('identities.action.restore') });
   // App alvo atualizou sozinho: sem isto a identidade ficava fora da frota sem nada a fazer na tela.

@@ -152,6 +152,23 @@ describe('ciclo de vida', () => {
     release(); await s.settle();
     expect([...s.booting()]).toEqual([]);
   });
+  it('shutdown: desliga limpo (adb emu kill), solta o supervisor e deixa offline sem erro', async () => {
+    const h = harness(); const s = await serve(h.db, h.ops);
+    setIdentityState(h.db, 'conta1', 'idle');
+    const r = await s.post('/identities/conta1/shutdown');
+    expect(r.status).toBe(200);
+    expect(h.log).toContain('emu emulator-5554 kill');
+    expect(h.log).toContain('sup-stop conta1');
+    expect(getIdentity(h.db, 'conta1')).toMatchObject({ state: 'offline', lastError: null });
+    expect(h.devices).not.toContain('emulator-5554');
+  });
+  it('shutdown recusado com objetivo rodando, ligando, ou já desligado', async () => {
+    const h = harness(); const s = await serve(h.db, h.ops);
+    setIdentityState(h.db, 'conta1', 'running');
+    expect((await s.post('/identities/conta1/shutdown')).status).toBe(409);
+    setIdentityState(h.db, 'conta1', 'idle'); h.devices.splice(0);
+    expect((await s.post('/identities/conta1/shutdown')).status).toBe(409);
+  });
   it('boot de identidade logada roda a sonda; erro de boot vai para last_error + offline', async () => {
     const h = harness({ boot: async () => { throw new Error('emulador não completou o boot em 180 s'); } }); const s = await serve(h.db, h.ops);
     expect((await s.post('/identities/conta1/boot', {})).status).toBe(202);

@@ -91,6 +91,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
     else if (a.kind === 'restore') void identity.restore(r.id, r.name);
     else if (a.kind === 'rebaseline') void identity.rebaseline(r.id);
     else if (a.kind === 'accept-version') void identity.acceptVersion(r.id);
+    else if (a.kind === 'shutdown') void identity.shutdown(r.id);
   };
 
   const cockpit = () => (
@@ -137,6 +138,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
             onTogglePause={() => (isLive ? void identity.pause(id, !d.paused) : actions.togglePause())}
             onResolve={() => (isLive ? void identity.resolve(id) : actions.resolveSelected())}
             onBan={isLive ? () => void identity.ban(id, sel.name, sel.error) : undefined}
+            onShutdown={isLive ? () => void identity.shutdown(id) : undefined}
             onInput={isLive ? (g) => void identity.input(id, g) : undefined}
             mission={m}
             missionBusy={mReq?.busy}

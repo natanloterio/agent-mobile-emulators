@@ -107,6 +107,7 @@ export const identities = defineMessages({
   'provision.pinLabel': 'PIN do aparelho (opcional)',
   'booting.pill': 'ligando…',
   'booting.note': 'Ligando o emulador. Leva 1–2 min.',
+  'action.shutdown': 'Desligar',
 }, {
   en: {
     'title': 'Identities',
@@ -211,6 +212,7 @@ export const identities = defineMessages({
     'provision.pinLabel': 'Device PIN (optional)',
     'booting.pill': 'starting…',
     'booting.note': 'Starting the emulator. Takes 1–2 min.',
+    'action.shutdown': 'Shut down',
   },
   es: {
     'title': 'Identidades',
@@ -315,6 +317,7 @@ export const identities = defineMessages({
     'provision.pinLabel': 'PIN del dispositivo (opcional)',
     'booting.pill': 'encendiendo…',
     'booting.note': 'Encendiendo el emulador. Tarda 1–2 min.',
+    'action.shutdown': 'Apagar',
   },
   fr: {
     'title': 'Identités',
@@ -419,6 +422,7 @@ export const identities = defineMessages({
     'provision.pinLabel': 'PIN de l’appareil (facultatif)',
     'booting.pill': 'démarrage…',
     'booting.note': 'Démarrage de l’émulateur. Compte 1 à 2 min.',
+    'action.shutdown': 'Éteindre',
   },
   de: {
     'title': 'Identitäten',
@@ -523,6 +527,7 @@ export const identities = defineMessages({
     'provision.pinLabel': 'Geräte-PIN (optional)',
     'booting.pill': 'startet…',
     'booting.note': 'Emulator wird gestartet. Dauert 1–2 Min.',
+    'action.shutdown': 'Ausschalten',
   },
   zh: {
     'title': '身份',
@@ -627,5 +632,6 @@ export const identities = defineMessages({
     'provision.pinLabel': '设备 PIN（可选）',
     'booting.pill': '启动中…',
     'booting.note': '正在启动模拟器，需要 1–2 分钟。',
+    'action.shutdown': '关机',
   },
 });
