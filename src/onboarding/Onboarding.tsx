@@ -44,7 +44,7 @@ export function Onboarding({ bridge, onDone, onClose }: OnboardingProps) {
   return (
     <div className="onb">
       <aside className="onb__rail">
-        <div className="onb__logo"><Logo size={28} /><span>Tapflock</span></div>
+        <div className="onb__logo"><Logo size={36} /><span>TapFlock</span></div>
         <ol className="onb__steps">
           {STEPS.map((s, i) => (
             <li key={s.title}>

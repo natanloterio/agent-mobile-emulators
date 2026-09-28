@@ -15,7 +15,7 @@ interface MobileChromeProps {
 export function MobileTopbar({ meters }: Pick<MobileChromeProps, 'meters'>) {
   return (
     <header className="topbar">
-      <div className="topbar__brand"><Logo size={24} /><span className="topbar__wordmark">Tapflock</span></div>
+      <div className="topbar__brand"><Logo size={30} /><span className="topbar__wordmark">TapFlock</span></div>
       <div className="topbar__meters">
         {meters.map((m) => (
           <span className="topbar__meter" key={m.label}><span>{m.label}</span><span>{m.value === '—' ? '—' : m.pct}</span></span>
