@@ -55,6 +55,9 @@ function createWindow(): void {
     minWidth: 360,
     minHeight: 640,
     title: PRODUCT_NAME,
+    // Linux e Windows usam este ícone na janela e na barra de tarefas; o do instalador vem de build/ (package.json).
+    // No macOS vale o do bundle. Em desenvolvimento o Vite serve public/, então o arquivo é lido de lá.
+    icon: path.join(here, '..', devServerUrl ? 'public' : 'dist', 'icon.png'),
     backgroundColor: '#ffffff',
     autoHideMenuBar: true,
     webPreferences: {
