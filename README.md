@@ -52,7 +52,20 @@ Enxame daemon (Node) ── SQLite (goals, tasks, steps, identities)
 
 ## Install
 
-Download the installer for your system from the [releases page](https://github.com/natanloterio/agent-mobile-emulators/releases):
+**macOS: one command, no Gatekeeper warning.** Paste this in Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/natanloterio/agent-mobile-emulators/master/scripts/install-macos.sh | bash
+```
+
+It picks the right build for your Mac (Apple Silicon or Intel), downloads it from the latest release, checks its
+SHA-256 against the one GitHub publishes, copies **Enxame** to **Applications** and opens it. Run it again to update.
+Files fetched by `curl` are not quarantined, so macOS doesn't block the app. The trade-off is that Apple's malware check
+doesn't run either, which is why the script verifies the checksum. Read [the script](scripts/install-macos.sh) before
+running it if you like. Options: `--version 0.1.0`, `--dest ~/Applications`, `--no-open`, and `--dmg <file>` to
+install a DMG you already downloaded (this also unblocks it).
+
+Or download the installer for your system from the [releases page](https://github.com/natanloterio/agent-mobile-emulators/releases):
 
 | System | File |
 |---|---|
@@ -62,7 +75,8 @@ Download the installer for your system from the [releases page](https://github.c
 | Windows x64 | `Enxame.Setup.0.1.0.exe` |
 
 **Unsigned builds.** The 0.1.0 installers are not code-signed, so the OS will warn you on first open:
-- **macOS**: drag **Enxame** to **Applications** and try to open it once (macOS blocks it). Then open
+- **macOS** (if you used the DMG instead of the command above): drag **Enxame** to **Applications** and try to open
+  it once (macOS blocks it). Then open
   **System Settings → Privacy & Security**, scroll down to the message about Enxame and click **Open Anyway**
   (on macOS 15 and later the old right-click → **Open** shortcut no longer works). Alternatively, run
   `xattr -dr com.apple.quarantine /Applications/Enxame.app` in Terminal.
