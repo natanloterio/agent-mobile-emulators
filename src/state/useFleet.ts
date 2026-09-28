@@ -5,6 +5,7 @@ import { createInitialState, fleetReducer, type FleetState } from './fleetReduce
 import { createCredentialActions, type CredentialActions } from './credentialActions';
 import { createGoalActions, type GoalActions } from './goalActions';
 import { createIdentityActions, type IdentityActions } from './identityActions';
+import { createFileActions, type FileActions } from './fileActions';
 import { createMissionActions, type MissionActions } from './missionActions';
 import { createProviderActions } from './providerActions';
 import { createSettingsActions, type SettingsActions } from './settingsActions';
@@ -56,6 +57,8 @@ export interface UseFleet {
   readonly credentials: CredentialActions;
   /** Missões (spec missões): iniciar e as transições pause/resume/continue/abandon. */
   readonly mission: MissionActions;
+  /** Arquivos entre aparelhos (spec arquivos): listar, guardar, enviar, apagar. */
+  readonly files: FileActions;
   /** Limites dos agentes (spec limites §UI): grava no daemon, sem reiniciar. */
   readonly settings: SettingsActions;
 }
@@ -126,6 +129,7 @@ export function useFleet(): UseFleet {
       identity: createIdentityActions({ ...deps, confirm }),
       credentials: createCredentialActions({ ...deps, confirm }),
       mission: createMissionActions({ ...deps, confirm, getLocale: () => i18nRef.current.locale }),
+      files: createFileActions({ ...deps, confirm, getLocale: () => i18nRef.current.locale }),
       settings: createSettingsActions(deps),
     };
   }, []);

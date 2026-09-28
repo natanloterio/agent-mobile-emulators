@@ -1,5 +1,18 @@
 # Changelog
 
+## Não lançado
+
+### Novo
+- Arquivos entre aparelhos: `adb pull` de Download/DCIM/Pictures/Movies/Documents para `<dados>/files/<id>/`, tipo pelos
+  bytes, teto de 500 MB, e `adb push` para `Pictures|Movies|Download/Tapflock` com aviso ao MediaStore. Rotas
+  `GET /files`, `GET /files/device/:id`, `POST /files/export`, `POST /files/:id/send`, `POST /files/:id/delete`; card
+  Arquivos no Device.
+- Missões ganham `file_export`, `file_import` e `file_list`; planejador e executor veem os arquivos guardados.
+- Sequência com arquivo (`POST /missions/chain`, Nova missão → Sequência com arquivo): uma missão por conta, na ordem.
+  A seguinte fica `waiting` até a anterior terminar; o daemon leva o arquivo dela (o exportado com o label da etapa, senão
+  o mais novo desde o início) para o celular da seguinte, deixa uma nota com o caminho e a lança. Sem arquivo, device
+  pausado ou envio falho, a seguinte pausa com o motivo; etapa abandonada pausa a seguinte.
+
 ## 0.3.0 — pré-lançamento
 
 ### Mudou

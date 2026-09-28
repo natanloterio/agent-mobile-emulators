@@ -83,8 +83,8 @@ export interface ProviderModelsResponse {
   readonly runtimes?: readonly RuntimeInfo[]; readonly entries?: readonly ModelEntry[];
 }
 export interface ProviderPatch { readonly mode?: 'nuvem' | 'local'; readonly model?: string; readonly endpoint?: string; readonly runtime?: LocalRuntime }
-/** Estado de uma missão (spec missões): aberta enquanto `running`/`awaiting-human`/`paused`. */
-export type MissionState = 'running' | 'awaiting-human' | 'paused' | 'done' | 'abandoned';
+/** Estado de uma missão (spec missões): aberta enquanto `running`/`awaiting-human`/`paused`/`waiting` (etapa esperando a anterior). */
+export type MissionState = 'running' | 'awaiting-human' | 'paused' | 'done' | 'abandoned' | 'waiting';
 export interface MissionSubtaskView {
   readonly seq: number; readonly objective: string; readonly state: string;
   readonly report: { readonly ok: boolean; readonly did: string; readonly blockers: string } | null;
@@ -99,7 +99,16 @@ export interface MissionView {
   readonly subtasks: readonly MissionSubtaskView[];
   readonly memory: readonly { readonly key: string; readonly value: string | null; readonly secret: boolean }[];
   readonly notes: readonly MissionNoteView[];
+  /** Sequência (spec arquivos): missão anterior que esta espera e label do arquivo que esta entrega. Ausentes em daemon antigo. */
+  readonly waitFor?: string | null; readonly handoffLabel?: string | null;
 }
+/** Arquivo guardado no host para passar entre aparelhos (spec arquivos). */
+export interface FleetFileView {
+  readonly id: string; readonly label: string; readonly name: string; readonly mime: string; readonly sizeBytes: number;
+  readonly sourceIdentityId: string | null; readonly sourceMissionId: string | null; readonly createdAt: string;
+}
+/** Arquivo nas pastas compartilhadas de um device (`GET /files/device/:id`); `mtime` em segundos. */
+export interface DeviceFileView { readonly path: string; readonly name: string; readonly size: number; readonly mtime: number }
 /** Limites de passos configuráveis na tela (spec limites §UI); ausente em daemon antigo. */
 export interface StepBudgets { readonly goal: number | null; readonly mission: number | null }
 /** Paralelismo local configurável na tela (spec paralelismo §UI); ausente em daemon antigo. */
@@ -112,6 +121,8 @@ export interface FleetSnapshot {
   readonly identities: readonly LiveIdentity[]; readonly providers?: Readonly<Record<LiveRoleKey, LiveProvider>>; readonly killed: boolean; readonly updatedAt: string;
   readonly goal?: GoalSummary | null; readonly host?: HostMetrics | null;
   readonly missions?: readonly MissionView[];
+  /** Arquivos guardados (spec arquivos); ausente em daemon antigo. */
+  readonly files?: readonly FleetFileView[];
   readonly stepBudgets?: StepBudgets;
   readonly localParallel?: LocalParallelStatus;
   /** AVD-base do provisionamento; ausente em daemon antigo. */

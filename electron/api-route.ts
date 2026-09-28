@@ -10,6 +10,12 @@ const ALLOWED: readonly { readonly method: 'GET' | 'POST' | 'PUT'; readonly path
   { method: 'POST', path: /^\/identities\/[A-Za-z0-9_-]{1,64}\/(?:pin|boot|login-done|pause|resolve|ban|discard|restore|rebaseline|accept-version|shutdown|control|input)$/ },
   // Missões (spec missões §API).
   { method: 'POST', path: /^\/missions$/ },
+  { method: 'POST', path: /^\/missions\/chain$/ },
+  // Arquivos entre aparelhos (spec arquivos §API).
+  { method: 'GET', path: /^\/files$/ },
+  { method: 'GET', path: /^\/files\/device\/[A-Za-z0-9_-]{1,64}$/ },
+  { method: 'POST', path: /^\/files\/export$/ },
+  { method: 'POST', path: /^\/files\/[A-Za-z0-9-]{1,64}\/(?:send|delete)$/ },
   { method: 'POST', path: /^\/missions\/[A-Za-z0-9-]{1,64}\/(?:pause|resume|continue|abandon|instruct)$/ },
   // Limites dos agentes (spec limites §UI): lidos e gravados direto pela tela, sem IPC dedicado.
   { method: 'GET', path: /^\/settings\/budgets$/ },

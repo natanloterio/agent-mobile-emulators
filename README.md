@@ -23,8 +23,8 @@ The interface speaks **English, Português, Español, Français, Deutsch and 中
 | Screen | What it does |
 |---|---|
 | **Cockpit** | Live video of every emulator in a grid, each tile showing its state, current task, steps and cost. Click a tile to zoom in. The **Kill switch** stops everything and leaves the devices as they are. |
-| **Novo objetivo** (New goal) | Type a goal and press **Decompor** (Decompose). The leader model picks a strategy (see [Running a goal](#running-a-goal)), writes one instruction per identity and runs a 5-signal readiness check on each device. **Iniciar e sair de perto** (Start and walk away) launches it. Alternatively, select **Missão** (Mission) to run a long goal with retry and credential handling. |
-| **Device** | One emulator full size. **Assumir controle** (Take control) pauses the agent and lets you tap, swipe and type on the device yourself. You can also pause the identity, send it back to the queue, or mark it banned. |
+| **Novo objetivo** (New goal) | Type a goal and press **Decompor** (Decompose). The leader model picks a strategy (see [Running a goal](#running-a-goal)), writes one instruction per identity and runs a 5-signal readiness check on each device. **Iniciar e sair de perto** (Start and walk away) launches it. Alternatively, select **Missão** (Mission) to run a long goal with retry and credential handling, or a **sequence** of missions on different accounts where the file one step downloads goes to the next (see [Passing a file from one device to another](#passing-a-file-from-one-device-to-another)). |
+| **Device** | One emulator full size. **Assumir controle** (Take control) pauses the agent and lets you tap, swipe and type on the device yourself. You can also pause the identity, send it back to the queue, or mark it banned. The **Arquivos** (Files) card keeps a file from this phone in Tapflock or sends a kept file to it. |
 | **Relatório** (Report) | Tasks done, items handled, who needs you, cost per identity, and past goals. |
 | **Identidades** (Identities) | Every identity with its lifecycle, app version, snapshot age, disk usage and ports. Provision new identities, boot them, log in, register a PIN, restore, re-baseline, or free the disk of a banned one. |
 | **Provedores** (Providers) | Which model plays each role (leader, worker, escalation), cloud or local, with a real **Testar conexão** (Test connection) that runs a tool call on a live device. |
@@ -235,6 +235,16 @@ A **mission** is a long goal for one identity, such as *"create an email account
 6. When the mission finishes with `account.<app>.username` and its password in memory, the account becomes the identity's login credential (and its @handle if it had none).
 
 ---
+
+### Passing a file from one device to another
+
+Missions can hand files between devices. The daemon does the copying with `adb pull` and `adb push`, so the file never goes through the model.
+
+- **Sequência com arquivo** (Sequence with a file). In **Nova missão**, pick this mode, then give each step an account and a mission, for example *step 1 on conta1: "download the photo from @brand's pinned post"* and *step 2 on conta2: "post the received photo with the caption 'New!'"*. Step 1 runs right away and step 2 waits (**Esperando a etapa anterior**, waiting for the previous step). When step 1 finishes, the daemon takes the file it saved (with `file_export`, or else the newest file in Download, DCIM, Pictures, Movies or Documents since the step started) and copies it to the next phone. Images go to the gallery (`Pictures/Tapflock`), videos to `Movies/Tapflock` and other files to `Download/Tapflock`. It then tells the next step's planner where the file is and starts that step. If there is no file to hand over, or the next device is paused or offline, the next step pauses and shows the reason.
+- **By hand.** On the **Device** screen, the **Arquivos** (Files) card lists the files on that phone. **Guardar** (Keep) stores one in Tapflock, and **Enviar para cá** (Send here) copies a stored file to the phone you are looking at.
+- **Inside any mission.** The worker has `file_export`, `file_import` and `file_list`, and the planner sees the list of stored files. You can also ask for this in plain words, for example *"import the file boleto.pdf and attach it to the email"*.
+
+Only shared storage is reachable (Download, DCIM, Pictures, Movies, Documents). Google Play images do not allow `adb root`, so an app's private files are out of reach. If the app only keeps a file internally, the mission has to use the app's own **Save** or **Share** first. Stored files live in `~/.local/share/tapflock/files/` (one folder per file) and are capped at 500 MB each. The type is detected from the file's bytes, not its extension, and nothing is ever opened or run on the host.
 
 ## Configuration
 

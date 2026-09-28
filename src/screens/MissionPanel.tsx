@@ -35,6 +35,8 @@ export function MissionPanel({ mission: m, busy, error, now, onAction, onInstruc
         </div>
       )}
       {m.state === 'paused' && m.humanReason && <Notice tone="warn">{t('mission.reason', { reason: m.humanReason })}</Notice>}
+      {m.state === 'waiting' && <Notice tone="warn">{t('files.mission.waitFor')}</Notice>}
+      {m.handoffLabel && open && <span className="muted-14">{t('files.mission.handoff', { label: m.handoffLabel })}</span>}
       {m.stalled && open && <Notice tone="warn">{t('mission.stalled')}</Notice>}
 
       <div className="mission__stats">

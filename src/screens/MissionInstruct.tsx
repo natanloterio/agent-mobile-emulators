@@ -22,7 +22,7 @@ export function MissionInstruct({ mission: m, busy, error, onInstruct, onResolve
   if (m.state === 'done' || m.state === 'abandoned') return null;
 
   const then = missionInstructThen(m.state);
-  const hint = m.state === 'running' ? t('mission.instruct.hint.running') : t('mission.instruct.hint.waiting');
+  const hint = m.state === 'running' ? t('mission.instruct.hint.running') : m.state === 'waiting' ? t('files.instruct.waiting') : t('mission.instruct.hint.waiting');
   const sendLabel = then === 'continue' ? t('mission.instruct.sendContinue') : then === 'resume' ? t('mission.instruct.sendResume') : t('mission.instruct.send');
   const send = () => {
     const trimmed = text.trim();

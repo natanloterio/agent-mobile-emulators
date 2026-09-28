@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
+import type { FleetFile } from '../db/files.js';
 import { listMemory, memoryGet, memoryPut, type SubtaskReport } from '../db/missions.js';
 import { VaultError, type Vault } from '../vault/vault.js';
 
@@ -77,12 +78,22 @@ export async function loadMissionSecrets(
   return vals.filter((v): v is string => typeof v === 'string');
 }
 
+/** Arquivos da frota vistos por uma missão (spec arquivos): já presos à identidade e ao início da missão. */
+export interface MissionFiles {
+  list(): readonly FleetFile[];
+  /** Sem `devicePath`: o arquivo mais novo das pastas compartilhadas desde o início da missão. */
+  exportFile(label: string, devicePath?: string): Promise<FleetFile>;
+  importFile(label: string): Promise<{ devicePath: string }>;
+}
+
 export interface MissionRunCtx {
   readonly missionId: string;
   readonly vault: Vault;
   readonly mask: SecretMask;
   /** Instruções do operador ainda não lidas (spec instruções): tira-as e já marca lidas com o seq desta subtarefa. Ausente = nenhuma. */
   readonly takeNotes?: () => readonly string[];
+  /** Arquivos entre aparelhos; ausente = sem as tools file_*. */
+  readonly files?: MissionFiles;
 }
 export interface MissionToolCtx extends MissionRunCtx {
   readonly db: DatabaseSync;
@@ -105,9 +116,35 @@ async function vaultCall<T>(ctx: MissionToolCtx, f: () => Promise<T>): Promise<T
 
 const KEY = z.string().regex(/^[A-Za-z0-9_.-]{1,80}$/, 'chave: letras, dígitos, ponto, _ e -, até 80');
 
+const fileOut = (f: FleetFile) => ({ label: f.label, name: f.name, mime: f.mime, size_bytes: f.sizeBytes });
+
+/** Tools de arquivo (spec arquivos): o daemon faz a cópia, o modelo só escolhe o label e, se quiser, o caminho. */
+function fileTools(files: MissionFiles): ToolSet {
+  return {
+    file_export: tool({
+      description:
+        'Guarda no Tapflock um arquivo deste celular para outra conta usar. Sem device_path, pega o arquivo mais novo baixado ou salvo nesta missão (Download, DCIM, Pictures, Movies, Documents). label = nome curto (ex.: foto.post, boleto.pdf).',
+      inputSchema: z.object({ label: KEY, device_path: z.string().min(1).max(400).optional() }),
+      execute: async ({ label, device_path }) => fileOut(await files.exportFile(label, device_path)),
+    }),
+    file_import: tool({
+      description:
+        'Copia para este celular um arquivo guardado no Tapflock (veja file_list). Imagem vai para a galeria (Pictures/Tapflock), vídeo para Movies/Tapflock, o resto para Download/Tapflock.',
+      inputSchema: z.object({ label: KEY }),
+      execute: async ({ label }) => ({ device_path: (await files.importFile(label)).devicePath }),
+    }),
+    file_list: tool({
+      description: 'Lista os arquivos guardados no Tapflock (label, nome, tipo, tamanho, conta de origem).',
+      inputSchema: z.object({}),
+      execute: async () => ({ files: files.list().map((f) => ({ ...fileOut(f), from: f.sourceIdentityId })) }),
+    }),
+  };
+}
+
 /** Tools do executor em modo missão (spec missões §Executor). Nenhuma devolve valor de segredo. */
 export function missionTools(ctx: MissionToolCtx): ToolSet {
   return {
+    ...(ctx.files ? fileTools(ctx.files) : {}),
     memory_put: tool({
       description:
         'Guarda um fato útil para as próximas subtarefas (ex.: email.address, email.inbox = "app Outlook"). Nunca guarde senha aqui: use secret_new.',

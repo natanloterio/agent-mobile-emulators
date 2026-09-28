@@ -1,7 +1,7 @@
 import { PT, type I18n } from '../i18n/translate';
 import type { FleetSnapshot, MissionView } from '../live/types';
 
-const OPEN = new Set(['running', 'awaiting-human', 'paused']);
+const OPEN = new Set(['running', 'awaiting-human', 'paused', 'waiting']);
 export const isOpenMission = (m: MissionView): boolean => OPEN.has(m.state);
 
 /** Missão a mostrar para a identidade: a aberta, senão a mais recente. O daemon já manda as abertas primeiro. */
@@ -19,6 +19,7 @@ export function missionInstructThen(state: MissionView['state']): 'continue' | '
 export function missionTaskLabel(m: MissionView, { t }: I18n = PT): string {
   if (m.state === 'awaiting-human') return t('mission.tile.awaiting', { reason: m.humanReason ?? '' });
   if (m.state === 'paused') return t('mission.tile.paused', { reason: m.humanReason ?? '' });
+  if (m.state === 'waiting') return t('mission.tile.waiting');
   if (m.current) return t('mission.tile.subtask', { n: m.current.seq, objective: m.current.objective });
   return t('mission.tile.planning');
 }

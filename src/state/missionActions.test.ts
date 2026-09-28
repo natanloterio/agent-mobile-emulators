@@ -20,6 +20,18 @@ describe('missionActions', () => {
     expect(await t.a.start(['conta1', 'conta3'], 'abra o youtube')).toBe(false);
     expect(t.actions.at(-1)).toEqual({ type: 'requestError', key: MISSION_START_KEY, message: 'Started on conta1. Did not start on: conta3 (identity paused)' });
   });
+  it('startChain manda as etapas aparadas e o idioma para /missions/chain', async () => {
+    const t = mk({ goalIds: ['m1', 'm2'] });
+    expect(await t.a.startChain([{ identityId: 'conta1', text: ' baixe a foto ' }, { identityId: 'conta2', text: 'poste a foto' }])).toBe(true);
+    expect(t.calls).toEqual([{ method: 'POST', path: '/missions/chain', body: { steps: [{ identityId: 'conta1', text: 'baixe a foto' }, { identityId: 'conta2', text: 'poste a foto' }], lang: 'en' } }]);
+  });
+  it('startChain com uma etapa, etapa sem identidade ou texto curto não chama o daemon', async () => {
+    const t = mk();
+    expect(await t.a.startChain([{ identityId: 'conta1', text: 'baixe a foto' }])).toBe(false);
+    expect(await t.a.startChain([{ identityId: 'conta1', text: 'baixe a foto' }, { identityId: '', text: 'poste' }])).toBe(false);
+    expect(await t.a.startChain([{ identityId: 'conta1', text: 'baixe a foto' }, { identityId: 'conta2', text: 'ab' }])).toBe(false);
+    expect(t.calls).toEqual([]);
+  });
   it('texto curto ou nenhuma identidade não chama o daemon', async () => {
     const t = mk();
     expect(await t.a.start(['conta2'], 'ab')).toBe(false);

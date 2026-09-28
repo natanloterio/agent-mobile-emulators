@@ -1,14 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
-export type MissionState = 'running' | 'awaiting-human' | 'paused' | 'done' | 'abandoned';
+/** `waiting` = etapa de uma sequência esperando a anterior terminar (spec arquivos). */
+export type MissionState = 'running' | 'awaiting-human' | 'paused' | 'done' | 'abandoned' | 'waiting';
 /** Estados em que a missão prende a identidade (spec missões §Ciclo de vida). */
-export const OPEN_MISSION_STATES: readonly MissionState[] = ['running', 'awaiting-human', 'paused'];
+export const OPEN_MISSION_STATES: readonly MissionState[] = ['running', 'awaiting-human', 'paused', 'waiting'];
 export type SubtaskState = 'running' | 'done' | 'failed' | 'needs-human' | 'interrupted';
 export interface SubtaskReport { readonly ok: boolean; readonly did: string; readonly blockers: string }
 export interface MissionRow {
   readonly id: string; readonly identityId: string; readonly text: string; readonly state: MissionState; readonly humanReason: string | null;
   readonly stalled: boolean; readonly lang: string; readonly costUsd: number; readonly createdAt: string; readonly finishedAt: string | null;
+  /** Missão anterior da sequência (esta espera ela terminar); null fora de sequência. */
+  readonly waitFor: string | null;
+  /** Label do arquivo que esta missão entrega à próxima da sequência; null se não entrega nada. */
+  readonly handoffLabel: string | null;
+  /** Início real (primeira vez em `running`); null enquanto a etapa espera. */
+  readonly runStartedAt: string | null;
 }
 export interface SubtaskRow {
   readonly id: string; readonly seq: number; readonly objective: string; readonly successCriteria: string; readonly state: string;
@@ -17,13 +24,15 @@ export interface SubtaskRow {
 export interface MemoryRow { readonly key: string; readonly value: string; readonly secret: boolean }
 
 const OPEN_SQL = OPEN_MISSION_STATES.map((s) => `'${s}'`).join(',');
-const COLS = 'id, identity_id, text, mission_state, human_reason, stalled, lang, cost_usd, created_at, finished_at';
+const COLS = 'id, identity_id, text, mission_state, human_reason, stalled, lang, cost_usd, created_at, finished_at, wait_for, handoff_label, run_started_at';
 
 function fromRow(x: Record<string, unknown>): MissionRow {
   return {
     id: String(x.id), identityId: String(x.identity_id), text: String(x.text), state: x.mission_state as MissionState,
     humanReason: (x.human_reason as string | null) ?? null, stalled: Number(x.stalled) === 1, lang: String(x.lang ?? 'pt'),
     costUsd: Number(x.cost_usd), createdAt: String(x.created_at), finishedAt: (x.finished_at as string | null) ?? null,
+    waitFor: (x.wait_for as string | null) ?? null, handoffLabel: (x.handoff_label as string | null) ?? null,
+    runStartedAt: (x.run_started_at as string | null) ?? null,
   };
 }
 
@@ -32,10 +41,19 @@ function parseReport(raw: unknown): SubtaskReport | null {
   try { const r = JSON.parse(raw) as SubtaskReport; return { ok: !!r.ok, did: String(r.did ?? ''), blockers: String(r.blockers ?? '') }; } catch { return null; }
 }
 
-export function createMission(db: DatabaseSync, identityId: string, text: string, lang: string): string {
+/** `waitFor` cria a missão em `waiting` (etapa de sequência); `handoffLabel` = arquivo que ela entrega à próxima. */
+export function createMission(db: DatabaseSync, identityId: string, text: string, lang: string, o: { waitFor?: string; handoffLabel?: string } = {}): string {
   const id = randomUUID();
-  db.prepare("insert into goal (id, text, pattern, state, mission_state, identity_id, lang) values (?, ?, 'mission', 'running', 'running', ?, ?)").run(id, text, identityId, lang);
+  const state: MissionState = o.waitFor ? 'waiting' : 'running';
+  db.prepare(`insert into goal (id, text, pattern, state, mission_state, identity_id, lang, wait_for, handoff_label, run_started_at)
+    values (?, ?, 'mission', 'running', ?, ?, ?, ?, ?, ${state === 'running' ? "datetime('now')" : 'null'})`)
+    .run(id, text, state, identityId, lang, o.waitFor ?? null, o.handoffLabel ?? null);
   return id;
+}
+
+/** Etapas esperando `missionId` terminar (a próxima da sequência). */
+export function waitingOn(db: DatabaseSync, missionId: string): readonly MissionRow[] {
+  return (db.prepare(`select ${COLS} from goal where pattern='mission' and wait_for=? and mission_state='waiting' order by created_at, rowid`).all(missionId) as Record<string, unknown>[]).map(fromRow);
 }
 
 export function getMission(db: DatabaseSync, id: string): MissionRow | null {
@@ -56,7 +74,9 @@ export function listMissions(db: DatabaseSync, limit = 20): readonly MissionRow[
 export function setMissionState(db: DatabaseSync, id: string, state: MissionState, humanReason: string | null = null): void {
   const goalState = state === 'done' ? 'done' : state === 'abandoned' ? 'failed' : 'running';
   const closed = state === 'done' || state === 'abandoned';
-  db.prepare(`update goal set mission_state=?, human_reason=?, state=?, finished_at=${closed ? "datetime('now')" : 'null'} where id=? and pattern='mission'`)
+  // run_started_at: a primeira vez em running (uma etapa que esperava começa agora, não quando a sequência foi criada).
+  const started = state === 'running' ? ", run_started_at=coalesce(run_started_at, datetime('now'))" : '';
+  db.prepare(`update goal set mission_state=?, human_reason=?, state=?, finished_at=${closed ? "datetime('now')" : 'null'}${started} where id=? and pattern='mission'`)
     .run(state, humanReason, goalState, id);
 }
 

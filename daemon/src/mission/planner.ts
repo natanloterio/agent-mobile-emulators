@@ -23,6 +23,8 @@ export interface PlannerInput {
   readonly memory: readonly MemoryRow[]; readonly subtasks: readonly SubtaskRow[]; readonly screen: string; readonly lang: Lang;
   /** Instruções do operador (spec instruções), mais recentes primeiro; `loop.ts` manda até 10. */
   readonly notes: readonly string[];
+  /** Arquivos guardados no Tapflock (spec arquivos), uma linha cada ("label: nome (tipo), de conta"); ausente = nenhum. */
+  readonly files?: readonly string[];
 }
 export interface PlannerDeps {
   readonly providers: ProviderConfig; readonly apiKey?: string; readonly model?: LanguageModel; readonly generate?: typeof generateText;
@@ -39,6 +41,7 @@ A cada chamada, olhe a missão, a memória, o histórico de subtarefas (com o re
 - "next": a próxima subtarefa. "objective" curto e acionável (uma etapa verificável, não a missão inteira); "success_criteria" diz como saber que deu certo; "rationale" em uma frase.
 - "done": a missão está cumprida, com evidência na memória ou na tela. "summary" em uma ou duas frases.
 - "human": só um humano resolve (captcha, verificação por telefone/SMS, "confirme que é você"), ou todos os caminhos razoáveis já falharam por isso. "reason" diz o que o humano precisa fazer.
+Arquivos: o executor tem file_export (guarda no Tapflock um arquivo baixado neste celular, para outra conta) e file_import (copia para este celular um arquivo guardado). Quando a missão precisa de um arquivo da lista, planeje uma subtarefa que o importe antes de usá-lo; quando outra conta vai usar um arquivo desta missão, planeje baixá-lo e exportá-lo com o label pedido.
 Regras: se uma subtarefa falhou, não repita o mesmo caminho do mesmo jeito — escolha outro (outro provedor, outro app, outra rota). Não proponha de novo o mesmo objetivo, site ou provedor de uma subtarefa que falhou (veja "Rotas que já falharam"), a menos que o relatório dela mostre que o bloqueio foi resolvido. Depois de uma falha, mude de rota (outro provedor, outro app, outro caminho) ou decida "human". Subtarefa "interrupted" foi cortada no meio: confira a tela antes de repetir. Nunca proponha contornar captcha ou verificação. Instruções do operador têm prioridade sobre o seu plano, exceto para contornar verificação humana.
 Escreva objective, success_criteria, rationale, summary e reason em ${LEADER_TEXTS[lang].promptName}. Campos que não se aplicam: "".`;
 
@@ -52,7 +55,8 @@ export function plannerPrompt(i: PlannerInput): string {
   const routes = failedRoutes.length ? failedRoutes.join('; ') : '(nenhuma)';
   // Instruções do operador (spec instruções): mais recentes primeiro, como `loop.ts` manda.
   const notes = i.notes.length ? i.notes.map((n) => `- ${n}`).join('\n') : '(nenhuma)';
-  return `Missão: ${i.missionText}\nInstruções do operador (siga-as antes do seu próprio plano; mais recentes primeiro):\n${notes}\nIdentidade: ${i.identity.name} (${i.identity.handle}), app alvo ${i.identity.appPackage}\nMemória:\n${mem}\nSubtarefas:\n${hist}\nRotas que já falharam: ${routes}\nTela atual:\n${i.screen}`;
+  const files = i.files?.length ? i.files.map((f) => `- ${f}`).join('\n') : '(nenhum)';
+  return `Missão: ${i.missionText}\nInstruções do operador (siga-as antes do seu próprio plano; mais recentes primeiro):\n${notes}\nIdentidade: ${i.identity.name} (${i.identity.handle}), app alvo ${i.identity.appPackage}\nMemória:\n${mem}\nArquivos guardados no Tapflock (o executor copia com file_import):\n${files}\nSubtarefas:\n${hist}\nRotas que já falharam: ${routes}\nTela atual:\n${i.screen}`;
 }
 
 function toDecision(o: z.infer<typeof PlannerOut>): PlannerDecision {
