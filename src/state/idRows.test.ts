@@ -52,6 +52,16 @@ describe('selectLiveIdRows — ações por estado', () => {
     const off = { bootCompleted: false, accessibility: false, mcpInitialize: false, toolsPresent: false, versionMatch: false };
     expect(kinds(rows([{ lifecycle: 'offline', signals: off }])[0].actions)).not.toContain('accept-version');
   });
+  it('aparelho ligado oferece Desligar; desligado oferece Boot mesmo com o ciclo gravado dizendo idle', () => {
+    expect(kinds(rows([{ lifecycle: 'idle', online: true }])[0].actions)).toContain('shutdown');
+    expect(kinds(rows([{ lifecycle: 'idle', online: false }])[0].actions)).toContain('boot');
+    expect(kinds(rows([{ lifecycle: 'idle', online: false }])[0].actions)).not.toContain('shutdown');
+    // Ligando ou rodando objetivo: nem um nem outro.
+    expect(kinds(rows([{ lifecycle: 'idle', online: true, booting: true }])[0].actions)).not.toContain('shutdown');
+    expect(kinds(rows([{ lifecycle: 'running', online: true }])[0].actions)).not.toContain('shutdown');
+    // Daemon antigo (sem o campo): como antes.
+    expect(kinds(rows([{ lifecycle: 'idle' }])[0].actions)).not.toContain('shutdown');
+  });
   it('blank/provisioned → subir com janela e login feito; offline → subir; needs-human → abrir device', () => {
     expect(kinds(rows([{ lifecycle: 'blank' }])[0].actions)).toEqual(['boot-window', 'login']);
     expect(kinds(rows([{ lifecycle: 'provisioned' }])[0].actions)).toEqual(['boot-window', 'login']);

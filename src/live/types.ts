@@ -14,6 +14,8 @@ export interface LiveIdentity {
   readonly signals?: ProbeSignals | null;
   /** Emulador subindo agora (boot em segundo plano); ausente em daemon antigo. */
   readonly booting?: boolean;
+  /** Emulador no adb agora; ausente em daemon antigo. */
+  readonly online?: boolean;
   readonly hasPin?: boolean;
 }
 export interface ProbeSignals {

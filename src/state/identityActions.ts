@@ -19,6 +19,7 @@ export interface IdentityActions {
   readonly restore: (id: string, name: string) => Promise<boolean>;
   readonly rebaseline: (id: string) => Promise<boolean>;
   readonly acceptVersion: (id: string) => Promise<boolean>;
+  readonly shutdown: (id: string) => Promise<boolean>;
   readonly setControl: (id: string, on: boolean) => Promise<boolean>;
   readonly input: (id: string, gesture: InputGesture) => Promise<boolean>;
 }
@@ -76,6 +77,7 @@ export function createIdentityActions(deps: IdentityActionDeps): IdentityActions
     restore: (id, name) => confirmed(t('identities.confirm.restore', { name }), () => post(id, 'restore', { confirm: true })),
     rebaseline: (id) => post(id, 'rebaseline'),
     acceptVersion: (id) => post(id, 'accept-version'),
+    shutdown: (id) => post(id, 'shutdown'),
     setControl: (id, on) => post(id, 'control', { on }),
     input: queueInput,
   };

@@ -201,6 +201,9 @@ const basePrep = wireBasePreparer({ db, adb, supervisor: emulators, missions, va
 // Também o que esperava uma verificação: sem o loop do preparo vivo, ninguém mais gravaria a versão nem desligaria a base.
 if (['running', 'needs-human'].includes(readBasePrep(db).state)) writeBasePrep(db, { ...readBasePrep(db), state: 'failed', error: 'o preparo foi interrompido; tente de novo' });
 
+// Quem está no adb agora: a tela mostra Desligar/Boot pelo aparelho de fato, não pelo ciclo de vida gravado.
+let onlineSerials: ReadonlySet<string> = new Set();
+
 const daemonToken = randomUUID();
 const server = await startServer({
   db, token: daemonToken, screen, video, port: portEnv ? Number(portEnv) : undefined, videoState: (id) => video.state(id),
@@ -208,6 +211,7 @@ const server = await startServer({
   localParallel: () => localParallelController.status(),
   baseAvd: () => ({ ...currentBaseAvd(), running: baseRunning, prep: readBasePrep(db) }),
   booting: () => identityRoutes.booting(),
+  online: () => onlineSerials,
   listLocal: (current) => localRuntimes.listAll(current),
   // Pela trava (ollama = single-flight + lock): descarregar não pode correr junto com um restart/reload em andamento.
   unloadLocal: (row) => ollama.unload(row.endpoint, row.model, row.runtime),
@@ -263,6 +267,14 @@ broadcast = () => server.broadcast();
 host.start(() => server.broadcast());
 // A base costuma ser criada no Android Studio com o app aberto: quando ela aparece, some, liga ou desliga, a tela
 // fica sabendo. Ligada, o provisionamento recusa (clone de disco em uso sai inconsistente) e o guia pede para fechar.
+const pollOnline = async () => {
+  const now = new Set(await adb.devices().catch(() => [] as readonly string[]));
+  const changed = now.size !== onlineSerials.size || [...now].some((s) => !onlineSerials.has(s));
+  onlineSerials = now;
+  if (changed) server.broadcast();
+};
+setInterval(() => { void pollOnline(); }, 5000).unref();
+void pollOnline();
 let baseRunning = false;
 let baseKey = '';
 const pollBase = async () => {
