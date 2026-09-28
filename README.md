@@ -64,7 +64,7 @@ It picks the right build for your Mac (Apple Silicon or Intel), downloads it fro
 SHA-256 against the one GitHub publishes, copies **Tapflock** to **Applications** and opens it. Run it again to update.
 Files fetched by `curl` are not quarantined, so macOS doesn't block the app. The trade-off is that Apple's malware check
 doesn't run either, which is why the script verifies the checksum. Read [the script](scripts/install-macos.sh) before
-running it if you like. Options: `--version 0.1.0`, `--dest ~/Applications`, `--no-open`, and `--dmg <file>` to
+running it if you like. Options: `--version 0.2.0`, `--dest ~/Applications`, `--no-open`, and `--dmg <file>` to
 install a DMG you already downloaded (this also unblocks it).
 
 Or download the installer for your system from the [releases page](https://github.com/natanloterio/tapflock/releases):
@@ -76,9 +76,9 @@ Or download the installer for your system from the [releases page](https://githu
 | macOS Apple Silicon | `Tapflock-<version>-arm64.dmg` |
 | Windows x64 | `Tapflock.Setup.<version>.exe` |
 
-Release 0.1.0 came out under the old name, so its files are called `Tapflock-0.1.0…` instead.
+Release 0.1.0 came out under the old name, so its files are called `Enxame-0.1.0…` instead.
 
-**Unsigned builds.** The 0.1.0 installers are not code-signed, so the OS will warn you on first open:
+**Unsigned builds.** The installers are not code-signed, so the OS will warn you on first open:
 - **macOS** (if you used the DMG instead of the command above): drag **Tapflock** to **Applications** and try to open
   it once (macOS blocks it). Then open
   **System Settings → Privacy & Security**, scroll down to the message about Tapflock and click **Open Anyway**

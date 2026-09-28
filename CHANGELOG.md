@@ -2,6 +2,8 @@
 
 ## Não lançado
 
+## 0.2.0 — pré-lançamento
+
 ### Mudou
 - O projeto agora se chama **Tapflock** (antes, Enxame). App, instaladores, repositório, pasta de dados
   (`~/.local/share/tapflock`), serviço no chaveiro, variáveis de ambiente (`TAPFLOCK_*`) e AVDs novos (`tapflock_*`).
@@ -65,6 +67,14 @@
   novo" retoma de onde parou.
 - O guia manual de Android Studio saiu das telas (Identidades, passo Pronto, Cockpit vazio).
 - A linha reservada `base` (portas e token do celular-base) fica fora da frota: snapshot, objetivos, testes de provedor.
+
+### Limitações conhecidas
+- O preparo automático do celular-base foi validado de ponta a ponta só no Linux. No macOS e no Windows (avdmanager
+  pelo cmd, imagem arm64 no Apple Silicon) está coberto por testes automatizados, sem rodada em máquina real.
+- A remoção da conta Google pelas Configurações foi escrita e testada contra o formato real das telas do Android 14,
+  mas ainda não rodou num aparelho com conta (o celular-base de teste já estava sem conta).
+- Com modelo local pequeno, o login do Google na missão pode pedir ajuda humana (passkey, código); o cartão avisa.
+- Instaladores sem assinatura; traduções es/fr/de/zh sem revisão nativa.
 
 ### Consistência
 - Botão desabilitado agora parece desabilitado (antes era igual ao ativo).
