@@ -4,6 +4,8 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
+![Tapflock Cockpit: a live grid of emulators, each showing its state, current task, steps and cost](docs/images/cockpit.png)
+
 You describe a goal in plain language, such as *"Reply to the comments from the last 24 hours on every account"*. Tapflock splits it into tasks, hands one to each emulator, and runs them without step-by-step supervision. Later you come back to see what was done, what it cost, and which accounts need a human.
 
 Each emulator is an **identity**: one Android Virtual Device (AVD) tied to one account, which keeps its own app data and history over time. It is built for automating apps that have no API.
@@ -64,7 +66,7 @@ It picks the right build for your Mac (Apple Silicon or Intel), downloads it fro
 SHA-256 against the one GitHub publishes, copies **Tapflock** to **Applications** and opens it. Run it again to update.
 Files fetched by `curl` are not quarantined, so macOS doesn't block the app. The trade-off is that Apple's malware check
 doesn't run either, which is why the script verifies the checksum. Read [the script](scripts/install-macos.sh) before
-running it if you like. Options: `--version 0.2.0`, `--dest ~/Applications`, `--no-open`, and `--dmg <file>` to
+running it if you like. Options: `--version 0.3.0`, `--dest ~/Applications`, `--no-open`, and `--dmg <file>` to
 install a DMG you already downloaded (this also unblocks it).
 
 Or download the installer for your system from the [releases page](https://github.com/natanloterio/tapflock/releases):

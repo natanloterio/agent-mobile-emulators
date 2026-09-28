@@ -1,7 +1,7 @@
 {
   "name": "tapflock",
   "productName": "Tapflock",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Tapflock: cockpit para um enxame de emuladores Android dirigidos por agentes",
   "license": "AGPL-3.0-only",
   "author": "Natan Loterio <natan@gaiahub.ai>",
