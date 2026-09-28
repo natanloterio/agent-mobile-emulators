@@ -110,7 +110,11 @@ export interface FleetSnapshot {
   readonly missions?: readonly MissionView[];
   readonly stepBudgets?: StepBudgets;
   readonly localParallel?: LocalParallelStatus;
+  /** AVD-base do provisionamento; ausente em daemon antigo. */
+  readonly baseAvd?: BaseAvdStatus | null;
 }
+/** `running` ausente em daemon da versão anterior a esta. */
+export interface BaseAvdStatus { readonly name: string; readonly found: boolean; readonly running?: boolean }
 /** Poster (último screencap PNG, base64) de uma identidade; casado por id (spec inc. 4 §4.3). */
 export interface LiveFrame { readonly id: string; readonly at: string; readonly png: string }
 /** Access unit H.264 Annex B (base64); `key` traz SPS+PPS+IDR. */
@@ -133,6 +137,23 @@ export interface TapflockBridge {
   readonly login?: (id: string) => Promise<LoginResult>;
   /** Onboarding de primeira execução; ausente em preload antigo e no navegador. */
   readonly setup?: SetupBridge;
+  /** Chave da Anthropic depois do onboarding; ausente em preload antigo e no navegador. */
+  readonly anthropicKey?: AnthropicKeyBridge;
+  /** Subida do daemon (estado e nova tentativa); ausente em preload antigo e no navegador. */
+  readonly daemon?: DaemonBridge;
+}
+/** Espelha DaemonStatus de electron/daemon-wait.ts; chega como `unknown` e é validado em src/live/daemonStatus.ts. */
+export type DaemonStatus =
+  | { readonly state: 'starting' | 'ok' }
+  | { readonly state: 'failed'; readonly reason: 'exited' | 'timeout' | 'other'; readonly exitCode: number | null; readonly logPath: string | null; readonly detail: string };
+export interface AnthropicKeyBridge {
+  readonly status: () => Promise<unknown>;
+  readonly set: (key: string) => Promise<void>;
+}
+export interface DaemonBridge {
+  readonly status: () => Promise<unknown>;
+  readonly retry: () => Promise<boolean>;
+  readonly onStatus: (cb: (s: unknown) => void) => () => void;
 }
 export interface CredentialsAvailability { readonly ok: boolean; readonly reason: string | null }
 /** Por id de identidade; nunca a senha. */

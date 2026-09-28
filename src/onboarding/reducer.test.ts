@@ -38,4 +38,9 @@ describe('onboardingReducer', () => {
     const s = onboardingReducer({ ...INITIAL_STATE, step: 2, finishing: true }, { type: 'finish-done' });
     expect([s.step, s.finishing]).toEqual([3, false]);
   });
+  it('erro do fim não sobrevive a voltar de passo nem a uma instalação nova', () => {
+    const failed = { ...INITIAL_STATE, step: 2 as const, finishError: 'x' };
+    expect(onboardingReducer(failed, { type: 'go', step: 1 }).finishError).toBeNull();
+    expect(onboardingReducer(failed, { type: 'install-start' }).finishError).toBeNull();
+  });
 });

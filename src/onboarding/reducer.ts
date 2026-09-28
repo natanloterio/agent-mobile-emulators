@@ -45,7 +45,8 @@ export function onboardingReducer(s: OnboardingState, a: OnboardingAction): Onbo
         model: s.modelTouched ? s.model : defaultModel(gpu),
       };
     }
-    case 'go': return { ...s, step: a.step };
+    // Erro do fim é do fim: voltar de passo ou instalar de novo começa sem ele.
+    case 'go': return { ...s, step: a.step, finishError: null };
     case 'pick-mode': return { ...s, mode: a.mode, modeTouched: true };
     case 'pick-model': {
       const entry = LOCAL_MODELS.find((m) => m.id === a.model);
@@ -55,7 +56,7 @@ export function onboardingReducer(s: OnboardingState, a: OnboardingAction): Onbo
     case 'set-key': return { ...s, apiKey: a.key, keyTest: 'idle' };
     case 'key-test-start': return { ...s, keyTest: 'busy' };
     case 'key-test-done': return { ...s, keyTest: a.result };
-    case 'install-start': return { ...s, installing: true, installError: null };
+    case 'install-start': return { ...s, installing: true, installError: null, finishError: null };
     case 'install-failed': return { ...s, installError: a.error };
     case 'install-end': return { ...s, installing: false };
     case 'job': return { ...s, jobs: { ...s.jobs, [a.event.id]: a.event } };

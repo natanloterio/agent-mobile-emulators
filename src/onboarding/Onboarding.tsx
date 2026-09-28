@@ -1,7 +1,9 @@
 import { Button } from '../components/Button';
+import { DaemonBanner } from '../components/DaemonBanner';
 import { Logo } from '../components/Logo';
 import { useI18n } from '../i18n/I18nProvider';
 import type { MessageKey } from '../i18n/messages';
+import { useDaemonStatus } from '../live/daemonStatus';
 import type { SetupBridge } from '../live/types';
 import { CheckStep } from './CheckStep';
 import { InstallStep } from './InstallStep';
@@ -32,6 +34,9 @@ export function Onboarding({ bridge, onDone, onClose }: OnboardingProps) {
   const { t } = i18n;
   const { state, actions } = useOnboarding(bridge, !onClose);
   const footer = footerView(state, i18n);
+  // O fim do onboarding sobe o daemon: se foi ele que falhou, o motivo traduzido vale mais que o texto cru do erro.
+  const daemon = useDaemonStatus();
+  const daemonFailed = state.step === 2 && state.finishError && daemon.status?.state === 'failed' ? daemon.status : null;
   // Só dá para voltar a passos anteriores; o passo 4 só chega pelo fim da instalação.
   const canJump = (i: number) => i < state.step && !state.installing && !state.finishing && state.step < 3;
 
@@ -62,13 +67,14 @@ export function Onboarding({ bridge, onDone, onClose }: OnboardingProps) {
       </aside>
       <div className="onb__main">
         <div className="onb__content">
+          {daemonFailed && <DaemonBanner status={daemonFailed} retrying={state.finishing} onRetry={actions.next} />}
           {state.step === 0 && <CheckStep state={state} onRecheck={() => void actions.check()} />}
           {state.step === 1 && <ModelsStep state={state} onMode={actions.pickMode} onModel={actions.pickModel} onKey={actions.setKey} onTestKey={() => void actions.testKey()} />}
           {state.step === 2 && <InstallStep state={state} onRetry={() => void actions.install()} onOtherModel={() => actions.go(1)} />}
           {state.step === 3 && <ReadyStep state={state} onCreate={() => onDone('ids')} />}
         </div>
         <footer className="onb__footer">
-          <span className="onb__hint" role="status">{footer.hint}</span>
+          <span className={`onb__hint${footer.error ? ' onb__hint--error' : ''}`} role={footer.error ? 'alert' : 'status'}>{footer.hint}</span>
           <div className="onb__actions">
             {onClose && state.step < 3 && (
               <Button variant="ghost" disabled={state.installing || state.finishing} onClick={onClose}>{t('onboarding.nav.close')}</Button>

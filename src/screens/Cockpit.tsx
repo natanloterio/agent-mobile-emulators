@@ -18,24 +18,26 @@ interface CockpitProps {
   readonly showCost: boolean;
   readonly fullTiles: boolean;
   readonly isMobile: boolean;
-  /** Modo vivo sem identidades: 'connecting' (sem snapshot ainda) ou 'empty'. */
-  readonly empty: 'connecting' | 'empty' | null;
+  /** Modo vivo sem identidades: 'connecting' (sem snapshot ainda), 'down' (o daemon não subiu; o banner explica) ou 'empty'. */
+  readonly empty: 'connecting' | 'down' | 'empty' | null;
   readonly killError: string | null;
   readonly onOpen: (index: number) => void;
   readonly onKill: () => void;
   readonly onNew: () => void;
   readonly onProvision: () => void;
   readonly bus?: VideoBus | null;
+  /** Vivo, sem AVD-base: o primeiro passo é prepará-lo (o CTA vai para Identidades, onde está o guia). */
+  readonly baseMissing?: boolean;
 }
 
-function EmptyFleet({ connecting, onProvision }: { readonly connecting: boolean; readonly onProvision: () => void }) {
+function EmptyFleet({ connecting, baseMissing, onProvision }: { readonly connecting: boolean; readonly baseMissing: boolean; readonly onProvision: () => void }) {
   const { t } = useI18n();
   if (connecting) return <div className="card card--white empty"><span className="empty__title">{t('cockpit.empty.connecting')}</span></div>;
   return (
     <div className="card card--white empty">
       <span className="empty__title">{t('cockpit.empty.title')}</span>
-      <span>{t('cockpit.empty.body')}</span>
-      <Button onClick={onProvision}>{t('cockpit.empty.cta')}</Button>
+      <span>{t(baseMissing ? 'cockpit.empty.bodyBase' : 'cockpit.empty.body')}</span>
+      <Button onClick={onProvision}>{t(baseMissing ? 'identities.base.blocked' : 'cockpit.empty.cta')}</Button>
     </div>
   );
 }
@@ -81,16 +83,19 @@ export function Cockpit(p: CockpitProps) {
       <header className="screen__header">
         <div className="screen__title">
           <Heading size={isMobile ? 'h3' : 'h2'}>{t('shell.nav.cockpit')}</Heading>
-          <p className="screen__lede">{t('cockpit.lede')}</p>
+          {!empty && <p className="screen__lede">{t('cockpit.lede')}</p>}
         </div>
-        <div className="screen__actions">
-          <Button variant="secondary" onClick={p.onKill}>Kill switch</Button>
-          <Button onClick={p.onNew}>{t('cockpit.newGoal')}</Button>
-        </div>
+        {/* Sem frota não há o que parar nem a quem dar objetivo: o único próximo passo é o do cartão vazio. */}
+        {!empty && (
+          <div className="screen__actions">
+            <Button variant="secondary" onClick={p.onKill}>Kill switch</Button>
+            <Button onClick={p.onNew}>{t('cockpit.newGoal')}</Button>
+          </div>
+        )}
       </header>
       {killError && <Notice>{t('cockpit.killFailed', { error: killError })}</Notice>}
 
-      <section className="card card--grey card--shadow goal">
+      {!empty && <section className="card card--grey card--shadow goal">
         <div className="goal__text">
           <span className="goal__kicker">{goalHeader.kicker}</span>
           <span className="goal__title">{goalHeader.title}</span>
@@ -102,10 +107,10 @@ export function Cockpit(p: CockpitProps) {
             <span className="goal__label">{s.label}</span>
           </div>
         ))}
-      </section>
+      </section>}
 
-      {empty ? (
-        <EmptyFleet connecting={empty === 'connecting'} onProvision={p.onProvision} />
+      {empty === 'down' ? null : empty ? (
+        <EmptyFleet connecting={empty === 'connecting'} baseMissing={!!p.baseMissing} onProvision={p.onProvision} />
       ) : (
         <section className="tiles">
           {tiles.map((t) => (

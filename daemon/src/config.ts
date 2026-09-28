@@ -17,6 +17,17 @@ export function pickBaseAvd(envBase: string | undefined, avdHome: string, exists
   if (envBase) return envBase;
   return [GOLDEN_AVD, LEGACY_GOLDEN_AVD].find((avd) => exists(path.join(avdHome, `${avd}.avd`))) ?? 'mcp_test_playstore';
 }
+export interface BaseAvdStatus { readonly name: string; readonly found: boolean }
+/** Com o emulador da base ligado (o snapshot mede; o provisionamento recusa enquanto isso). */
+export interface BaseAvdLive extends BaseAvdStatus { readonly running: boolean }
+/** Base que o provisionamento vai clonar e se ela existe; sem nenhuma, o nome sugerido é a dourada. */
+export function baseAvdStatus(envBase: string | undefined, avdHome: string, exists: (p: string) => boolean = existsSync): BaseAvdStatus {
+  const name = pickBaseAvd(envBase, avdHome, exists);
+  if (exists(path.join(avdHome, `${name}.avd`))) return { name, found: true };
+  return { name: envBase ?? GOLDEN_AVD, found: false };
+}
+/** Relido a cada chamada: a base criada no Android Studio com o daemon já rodando vale sem reiniciar. */
+export const currentBaseAvd = (): BaseAvdStatus => baseAvdStatus(brandEnv(process.env, 'AVD_BASE'), AVD_HOME);
 const AVD_HOME = process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd');
 
 /** Caminhos que o onboarding (electron/setup) grava em `<dados>/setup.json`; o daemon só lê. */

@@ -14,6 +14,8 @@ export interface SetupIpcDeps {
   readonly runners: (localModel: string, ollamaBin: string, log: (line: string) => void) => JobRunners;
   readonly testKey: (key: string) => Promise<KeyTestResult>;
   readonly finish: (req: FinishRequest, ollamaBin: string | null) => Promise<void>;
+  /** Já há chave da Anthropic (ambiente ou cofre do daemon)? Só o sim/não; nunca a chave. */
+  readonly keyConfigured: () => Promise<boolean>;
 }
 
 const UNSUPPORTED = 'plataforma sem suporte ao onboarding';
@@ -32,9 +34,9 @@ export function registerSetupIpc(d: SetupIpcDeps): void {
     return { completed: finished || s.completed, supported: s.supported };
   });
   d.handle('tapflock:setup:check', async () => {
-    const r = await d.probe();
+    const [r, keyConfigured] = await Promise.all([d.probe(), d.keyConfigured().catch(() => false)]);
     ollamaBin = r.ollamaBin;
-    return r.report;
+    return { ...r.report, keyConfigured };
   });
   d.handle('tapflock:setup:install', async (_e, raw) => {
     const req = InstallRequestSchema.parse(raw);

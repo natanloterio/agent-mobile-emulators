@@ -100,7 +100,7 @@ export function ModelsStep({ state, onMode, onModel, onKey, onTestKey }: ModelsS
               </button>
               {keyMsg[state.keyTest] && <span role="status" className={state.keyTest === 'ok' ? 'onb-ok' : 'onb-bad'}>{t(keyMsg[state.keyTest]!)}</span>}
             </div>
-            {!state.apiKey.trim() && <small>{t('onboarding.key.empty')}</small>}
+            {!state.apiKey.trim() && <small>{t(state.report?.keyConfigured ? 'onboarding.key.alreadySaved' : state.mode === 'nuvem' ? 'onboarding.key.emptyCloud' : 'onboarding.key.empty')}</small>}
           </div>
         )}
       </div>

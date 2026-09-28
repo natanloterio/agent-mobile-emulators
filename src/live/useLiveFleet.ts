@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { FleetSnapshot, LiveFrame } from './types';
+import type { BaseAvdStatus, FleetSnapshot, LiveFrame } from './types';
 import { createVideoBus, type VideoBus } from './videoBus';
 
 export interface LiveFleet { readonly snap: FleetSnapshot | null; readonly frames: Readonly<Record<string, LiveFrame>>; readonly bus: VideoBus | null }
@@ -17,4 +17,11 @@ export function useLiveFleet(): LiveFleet {
     return () => { offSnap(); offFrame?.(); offVideo?.(); };
   }, [bus]);
   return { snap, frames, bus };
+}
+
+/** Só o AVD-base do snapshot (o onboarding não precisa de vídeo nem de posters). */
+export function useBaseAvd(): BaseAvdStatus | null {
+  const [base, setBase] = useState<BaseAvdStatus | null>(null);
+  useEffect(() => window.tapflock?.onSnapshot?.((s) => setBase(s.baseAvd ?? null)), []);
+  return base;
 }

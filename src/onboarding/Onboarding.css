@@ -18,6 +18,7 @@
 .onb__content { flex: 1; padding: 40px 48px 32px; display: flex; flex-direction: column; gap: 28px; max-width: 1040px; width: 100%; line-height: 1.4; font-size: 16px; }
 .onb__footer { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; padding: 16px 48px; border-top: 1px solid var(--color-dark); background: var(--color-white); }
 .onb__hint { color: var(--color-dark-2); font-size: 15px; }
+.onb__hint--error { color: var(--color-danger); font-weight: var(--weight-medium); }
 .onb__actions { display: flex; gap: 10px; }
 .onb__actions .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 

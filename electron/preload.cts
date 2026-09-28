@@ -22,6 +22,10 @@ ipcRenderer.on('tapflock:video', (_e, p: Packet) => {
   gops.set(p.id, [...g, p]);
 });
 
+// Estado do daemon (subindo / pronto / falhou): a tela pode assinar depois da primeira transmissão.
+let lastDaemon: unknown = null;
+ipcRenderer.on('tapflock:daemon', (_e, s: unknown) => { lastDaemon = s; });
+
 contextBridge.exposeInMainWorld('tapflock', {
   platform: process.platform,
   version: '0.1.0',
@@ -43,6 +47,16 @@ contextBridge.exposeInMainWorld('tapflock', {
     for (const g of gops.values()) for (const p of g) cb(p);
     return () => ipcRenderer.removeListener('tapflock:video', listener);
   },
+  daemon: {
+    status: () => ipcRenderer.invoke('tapflock:daemon:status'),
+    retry: () => ipcRenderer.invoke('tapflock:daemon:retry'),
+    onStatus: (cb: (s: unknown) => void) => {
+      const listener = (_e: unknown, data: unknown) => cb(data);
+      ipcRenderer.on('tapflock:daemon', listener);
+      if (lastDaemon !== null) cb(lastDaemon);
+      return () => ipcRenderer.removeListener('tapflock:daemon', listener);
+    },
+  },
   startGoal: (text: string) => ipcRenderer.invoke('tapflock:startGoal', text),
   kill: () => ipcRenderer.invoke('tapflock:kill'),
   resume: () => ipcRenderer.invoke('tapflock:resume'),
@@ -58,6 +72,11 @@ contextBridge.exposeInMainWorld('tapflock', {
     clear: (id: string) => ipcRenderer.invoke('tapflock:credentials:clear', id),
   },
   login: (id: string) => ipcRenderer.invoke('tapflock:login', id),
+  // Chave da Anthropic em Provedores: status diz só se há chave e de onde veio.
+  anthropicKey: {
+    status: () => ipcRenderer.invoke('tapflock:anthropicKey:status'),
+    set: (key: string) => ipcRenderer.invoke('tapflock:anthropicKey:set', key),
+  },
   // Onboarding (spec onboarding): verificação, instalação com eventos e fim; nada aqui recebe senha além da chave, que vai direto ao main.
   setup: {
     status: () => ipcRenderer.invoke('tapflock:setup:status'),

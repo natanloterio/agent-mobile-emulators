@@ -1,4 +1,6 @@
 import { useEffect, useMemo } from 'react';
+import { baseBlocksProvision, baseStage } from './components/baseAvdStage';
+import { DaemonBanner } from './components/DaemonBanner';
 import { KillBanner } from './components/KillBanner';
 import { MobileBottomNav, MobileTopbar } from './components/MobileChrome';
 import { Sidebar } from './components/Sidebar';
@@ -10,6 +12,7 @@ import { kvCacheLeftGiB, liveVram, vramEmulatorShare } from './lib/resources';
 import { vramMeasured } from './lib/platformMeters';
 import { useIsMobile } from './lib/useIsMobile';
 import { liveRoles } from './live/merge';
+import { useDaemonStatus } from './live/daemonStatus';
 import { useLiveFleet } from './live/useLiveFleet';
 import { Cockpit } from './screens/Cockpit';
 import { Device } from './screens/Device';
@@ -52,6 +55,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
   useEffect(() => { if (startScreen) actions.go(startScreen); }, [startScreen]);
   const isMobile = useIsMobile();
   const { snap: live, frames, bus } = useLiveFleet();
+  const daemon = useDaemonStatus();
   const i18n = useI18n();
   const { t } = i18n;
 
@@ -90,12 +94,13 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
       showCost={SHOW_COST}
       fullTiles={FULL_TILES}
       isMobile={isMobile}
-      empty={view.empty}
+      empty={view.empty === 'connecting' && daemon.status?.state === 'failed' ? 'down' : view.empty}
       killError={requestOf(state, 'kill').error}
       onOpen={actions.openDevice}
       onKill={() => (isLive ? void goal.kill() : actions.kill())}
       onNew={() => actions.go('new')}
       onProvision={() => actions.go('ids')}
+      baseMissing={isLive && baseBlocksProvision(baseStage(live?.baseAvd, false))}
     />
   );
 
@@ -176,6 +181,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
               : selectIdRows(state, fleetSize, i18n)}
             isMobile={isMobile}
             provisionReq={requestOf(state, 'provision')}
+            baseAvd={isLive ? live?.baseAvd : undefined}
             onProvision={(pin) => (isLive ? void identity.provision(pin) : actions.provision())}
             onAction={onRowAction}
             onLoginDone={(id, handle) => void identity.loginDone(id, handle)}
@@ -228,6 +234,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
         <Sidebar screen={state.screen} needsCount={view.needsCount} meters={view.meters} host={view.host} onNavigate={actions.go} />
       )}
       <main className="main">
+        {daemon.status?.state === 'failed' && <DaemonBanner status={daemon.status} retrying={daemon.retrying} onRetry={daemon.retry} />}
         {view.killed && (
           <KillBanner onResume={() => (isLive ? void goal.resume() : actions.resume())} busy={resumeReq.busy} error={resumeReq.error} />
         )}

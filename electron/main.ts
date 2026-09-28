@@ -4,7 +4,8 @@ import { access, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { connectSnapshots, daemonSpawnSpec, ensureDaemon, post, request, waitForInfo, type DaemonInfo } from './daemon-bridge.js';
+import { connectSnapshots, daemonLogPath, daemonSpawnSpec, ensureDaemon, post, request, waitForInfo, type DaemonInfo } from './daemon-bridge.js';
+import { failedStatus, type DaemonStatus } from './daemon-wait.js';
 import { createDaemonGate } from './daemon-gate.js';
 import { assertId, createCredentialVault } from './credentials.js';
 import { migrateLegacyCredentials, parseCredentialsResponse } from './credentials-migrate.js';
@@ -15,6 +16,7 @@ import { loginViaDaemon } from './login.js';
 import { apiRoute } from './api-route.js';
 import { providerRoute } from './provider-route.js';
 import { testAnthropicKey } from './setup/anthropic-key.js';
+import { AnthropicKeySchema } from './setup/requests.js';
 import { finishSetup } from './setup/finish.js';
 import { nodeHardwareDeps } from './setup/hardware.js';
 import { registerSetupIpc } from './setup/ipc.js';
@@ -117,31 +119,46 @@ Promise.all([app.whenReady(), dataMigration]).then(() => {
   ipcMain.handle('tapflock:credentials:set', (_e, id: string, username: string, password: string) => { assertId(id); return daemon('PUT', `/identities/${id}/credentials`, { username, password }); });
   ipcMain.handle('tapflock:credentials:clear', (_e, id: string) => { assertId(id); return daemon('DELETE', `/identities/${id}/credentials`); });
   ipcMain.handle('tapflock:login', (_e, id: string) => loginViaDaemon(id, { post: (p, body) => daemon('POST', p, body) }));
+  // Chave da Anthropic depois do onboarding (tela Provedores): canal próprio, fora do genérico; a resposta nunca traz a chave.
+  ipcMain.handle('tapflock:anthropicKey:status', () => daemon('GET', '/settings/anthropic-key'));
+  ipcMain.handle('tapflock:anthropicKey:set', (_e, raw: unknown) => daemon('PUT', '/settings/anthropic-key', { key: AnthropicKeySchema.parse(raw) }));
   ipcMain.handle('tapflock:getProviderModels', (_e, role: string) => gate.use((info) => request(info, 'GET', providerRoute(role, 'models'))));
 
   const projectRoot = path.join(here, '..');
   const broadcast = (ch: string, d: unknown) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send(ch, d); };
 
+  // Estado do daemon para a tela: sem isso uma falha na subida deixava "Conectando ao daemon…" para sempre.
+  let daemonStatus: DaemonStatus = { state: 'starting' };
+  const setDaemonStatus = (s: DaemonStatus) => { daemonStatus = s; broadcast('tapflock:daemon', s); };
+
   // Sobe o daemon uma vez (idempotente); falhou, a próxima chamada tenta de novo.
   let daemonStart: Promise<void> | null = null;
   const startDaemon = (): Promise<void> => {
     daemonStart ??= (async () => {
+      setDaemonStatus({ state: 'starting' });
       const dotenvPath = path.join(projectRoot, '.env');
-      ensureDaemon(daemonSpawnSpec({
+      const child = ensureDaemon(daemonSpawnSpec({
         isPackaged: app.isPackaged, appPath: app.getAppPath(), resourcesPath: process.resourcesPath, execPath: process.execPath,
         env: process.env, dotenv: !app.isPackaged && existsSync(dotenvPath) ? readFileSync(dotenvPath, 'utf8') : null,
       }));
-      const info = await waitForInfo();
+      const info = await waitForInfo(child);
       gate.set(info);
+      setDaemonStatus({ state: 'ok' });
       void migrateCredentials();
       connectSnapshots(info, {
         onSnapshot: (data) => { lastSnapshot = data; broadcast('tapflock:snapshot', data); },
         onFrame: (f) => { const id = (f as { id?: unknown })?.id; if (typeof id === 'string') lastFrames.set(id, f); broadcast('tapflock:frame', f); },
         onVideo: (p) => { gop.push(p as never); broadcast('tapflock:video', p); },
       });
-    })().catch((e: Error) => { gate.fail(e.message); console.error('[tapflock] sem daemon:', e.message); daemonStart = null; throw e; });
+    })().catch((e: Error) => {
+      gate.fail(e.message); console.error('[tapflock] sem daemon:', e.message); daemonStart = null;
+      setDaemonStatus(failedStatus(e, daemonLogPath(app.isPackaged)));
+      throw e;
+    });
     return daemonStart;
   };
+  ipcMain.handle('tapflock:daemon:status', () => daemonStatus);
+  ipcMain.handle('tapflock:daemon:retry', () => startDaemon().then(() => true, () => false));
 
   // Onboarding (spec onboarding): leitura síncrona do setup.json para os canais existirem antes de a janela pedir.
   const platform = platformId();
@@ -168,6 +185,9 @@ Promise.all([app.whenReady(), dataMigration]).then(() => {
       daemon: (method, p, body) => daemon(method, p, body), now: () => new Date().toISOString(),
       readSetup: () => readSetupFile(paths.setupFile),
     }),
+    // Na primeira execução o daemon ainda não subiu: vale o ambiente; numa reabertura, o cofre dele.
+    keyConfigured: async () => !!process.env.ANTHROPIC_API_KEY?.trim()
+      || ((await daemon('GET', '/settings/anthropic-key').catch(() => null)) as { configured?: unknown } | null)?.configured === true,
   });
 });
 

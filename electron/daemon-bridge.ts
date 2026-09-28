@@ -4,6 +4,7 @@ import path from 'node:path';
 import { parseEnv } from 'node:util';
 import WebSocket from 'ws';
 import { dataDirFrom } from './brand.js';
+import { waitForDaemon } from './daemon-wait.js';
 import { dispatchWsMessage, type WsHandlers } from './ws-dispatch.js';
 
 // Mesmo diretório do daemon (TAPFLOCK_DATA_DIR): permite uma segunda instância isolada para verificação. Resolvido a
@@ -69,15 +70,26 @@ export function ensureDaemon(spec: DaemonSpawn): ChildProcess | null {
   }
 }
 
-export async function waitForInfo(timeoutMs = 15000): Promise<Info> {
-  const t0 = Date.now();
-  while (Date.now() - t0 < timeoutMs) {
-    const info = readInfo();
-    if (info && alive(info.pid)) return info;
-    await new Promise((r) => setTimeout(r, 250));
+/** Espera o daemon; com o `child` que acabamos de subir, a morte dele na subida falha na hora (DaemonStartError). */
+export async function waitForInfo(child: ChildProcess | null = null, timeoutMs = 15000): Promise<Info> {
+  let exitCode: number | null | undefined;
+  let spawnError: Error | undefined;
+  child?.once('exit', (code) => { exitCode = code; });
+  child?.once('error', (e) => { spawnError = e; });
+  try {
+    return await waitForDaemon({
+      read: readInfo, alive, exitCode: () => exitCode, spawnError: () => spawnError, timeoutMs,
+      sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: () => Date.now(),
+    });
+  } catch (e) {
+    // Sem resposta no prazo: não deixa o filho para trás (um "Tentar de novo" subiria outro ao lado dele).
+    if (child && child.exitCode === null) child.kill();
+    throw e;
   }
-  throw new Error('daemon não respondeu em 15 s');
 }
+
+/** Log do daemon (só existe empacotado; em desenvolvimento a saída vai para o terminal). */
+export const daemonLogPath = (isPackaged: boolean): string | null => (isPackaged ? path.join(dataDir(), 'daemon.log') : null);
 
 export function connectSnapshots(info: Info, h: WsHandlers): () => void {
   const ws = new WebSocket(`ws://127.0.0.1:${info.port}/ws?token=${info.token}`);

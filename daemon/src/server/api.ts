@@ -11,6 +11,8 @@ import type { RuntimeListing } from '../provider/runtimes/types.js';
 import type { LocalParallelStatus } from '../provider/local-parallel.js';
 import { buildSnapshot, listGoals, type HostMetrics, type SnapshotSources } from './snapshot.js';
 import { attachWs } from './ws.js';
+import { listenLoopback } from './listen.js';
+import type { BaseAvdLive } from '../config.js';
 
 export const GoalText = z.string().min(3).max(2000);
 /** `plan` é o GoalPlan devolvido por POST /goals/plan (spec inc. 5 §3.2); ausente, o daemon planeja antes. */
@@ -35,6 +37,7 @@ export interface ServerOpts {
   readonly host?: () => HostMetrics | null;
   /** Paralelismo local configurável (spec paralelismo §UI); ausente = default (wanted 1, nada aplicado). */
   readonly localParallel?: () => LocalParallelStatus;
+  readonly baseAvd?: () => BaseAvdLive;
   /** Rotas de outras frentes (spec inc. 5 §3.2): avaliadas antes do 404, na ordem; `true` = tratou. */
   readonly routes?: readonly Route[];
   /** Modelos baixados de todos os runtimes locais (spec runtimes-locais); ausente = só o Ollama pela API, como antes. */
@@ -93,7 +96,7 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
     if (code === 204 || body === undefined) { res.writeHead(code); res.end(); return; }
     res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body));
   };
-  const sources: SnapshotSources = { videoState: o.videoState, host: o.host, localParallel: o.localParallel };
+  const sources: SnapshotSources = { videoState: o.videoState, host: o.host, localParallel: o.localParallel, baseAvd: o.baseAvd };
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -175,7 +178,6 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
     }
   });
   const ws = attachWs(server, o.token, () => buildSnapshot(o.db, killed, sources), o.screen, o.video);
-  await new Promise<void>((r) => server.listen(o.port ?? 47800, '127.0.0.1', r));
-  const port = (server.address() as { port: number }).port;
+  const port = await listenLoopback(server, { port: o.port });
   return { port, broadcast: ws.broadcast, isKilled: () => killed, close: async () => { ws.close(); await new Promise<void>((r) => server.close(() => r())); } };
 }

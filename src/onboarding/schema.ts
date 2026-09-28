@@ -15,6 +15,8 @@ export const HardwareSchema = z.object({
 });
 export const SetupReportSchema = z.object({
   deps: z.array(DepStatusSchema), hardware: HardwareSchema, localModels: z.array(z.string()), imageAbi: z.enum(['x86_64', 'arm64-v8a']),
+  /** Chave da Anthropic já salva (ambiente ou cofre); ausente no main antigo. */
+  keyConfigured: z.boolean().optional(),
 });
 export const JobEventSchema = z.object({
   id: z.enum(JOB_IDS), state: z.enum(['wait', 'run', 'done', 'err']), doneMb: z.number(), totalMb: z.number(),
