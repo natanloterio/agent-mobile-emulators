@@ -1,5 +1,12 @@
 # Changelog
 
+## Não lançado
+
+### Mudou
+- Tema novo do TapFlock: símbolo (T em forma de pássaro, lima e branco) no quadrado escuro no ícone da janela, dos
+  instaladores (Linux/Windows/macOS) e no favicon; o mesmo símbolo e o nome "TapFlock" na barra lateral, no topo do
+  celular e no onboarding. Fontes em `design/brand/`. Screenshot do README refeita.
+
 ## 0.4.0 — pré-lançamento
 
 ### Novo
