@@ -3,7 +3,7 @@ on:
   push:
     tags: ['v*']
   pull_request:
-    paths: ['electron/**', 'daemon/**', 'src/**', 'package.json', 'package-lock.json', 'scripts/smoke.mjs', '.github/workflows/release.yml']
+    paths: ['electron/**', 'daemon/**', 'src/**', 'package.json', 'package-lock.json', 'scripts/smoke.mjs', 'scripts/install-macos.sh', '.github/workflows/release.yml']
 
 # Padrão mínimo; só o job `release` escreve.
 permissions:
@@ -45,6 +45,14 @@ jobs:
       - name: Smoke test do app empacotado
         timeout-minutes: 10
         run: node scripts/smoke.mjs "${{ matrix.exe }}"
+      # O instalador de uma linha do README (curl | bash) roda sobre o DMG recém-gerado: monta,
+      # copia o app e confere a assinatura ad-hoc, como faria na máquina de quem instala.
+      - name: Instalador do macOS sobre o DMG
+        if: runner.os == 'macOS'
+        timeout-minutes: 5
+        run: |
+          bash scripts/install-macos.sh --dmg release/*.dmg --dest "$RUNNER_TEMP/Applications" --no-open
+          test -x "$RUNNER_TEMP/Applications/Enxame.app/Contents/MacOS/Enxame"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: enxame-${{ matrix.os }}
