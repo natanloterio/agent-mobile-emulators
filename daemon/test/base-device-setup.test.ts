@@ -47,6 +47,16 @@ describe('freezeTargetApp', () => {
 });
 
 describe('googleAccountOnDevice', () => {
+  it('saída real do Android 14 sem conta: os tipos de autenticador (com.google…) não contam como conta', async () => {
+    const real = [
+      'User UserInfo{0:Owner:c13}:', '  Accounts: 0', '', '  RegisteredServicesCache: 4 services',
+      '    ServiceInfo: AuthenticatorDescription {type=com.google.android.gm.pop3}, ComponentInfo{com.google.android.gm/x}, uid 10144',
+      '    ServiceInfo: AuthenticatorDescription {type=com.google}, ComponentInfo{com.google.android.gms/y}, uid 10130',
+    ].join('\n');
+    expect(await googleAccountOnDevice({ shell: async () => real }, 's')).toBe(false);
+    const logged = real.replace('  Accounts: 0', '  Accounts: 1\n    Account {name=eu@gmail.com, type=com.google}');
+    expect(await googleAccountOnDevice({ shell: async () => logged }, 's')).toBe(true);
+  });
   it('acha conta com.google no dumpsys account; outras contas não contam', async () => {
     const with_ = { shell: async () => 'Accounts: 1\n  Account {name=eu@gmail.com, type=com.google}' };
     const without = { shell: async () => 'Accounts: 1\n  Account {name=x, type=com.whatsapp}' };
