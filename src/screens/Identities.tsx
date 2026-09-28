@@ -105,6 +105,18 @@ function RowActions({ row, logging, mobile, onPick, onLogin, onCancel, onSaveCre
   );
 }
 
+/** Ciclo de vida da linha; com o emulador subindo, diz isso (o ciclo só muda quando o boot termina). */
+function LifecyclePill({ row }: { readonly row: IdRow }) {
+  const { t } = useI18n();
+  if (!row.booting) return <Pill tone={lifecycleTone(row.lc)}>{row.lc}</Pill>;
+  return (
+    <span className="idrow__booting" role="status" title={t('identities.booting.note')}>
+      <Pill tone="green">{t('identities.booting.pill')}</Pill>
+      <span className="idrow__booting-note">{t('identities.booting.note')}</span>
+    </span>
+  );
+}
+
 export function Identities({ rows, isMobile, provisionReq, baseAvd, onProvision, onAction, onLoginDone, onRegisterPin, creds }: IdentitiesProps) {
   const { t } = useI18n();
   const te = useDaemonError();
@@ -175,7 +187,7 @@ export function Identities({ rows, isMobile, provisionReq, baseAvd, onProvision,
             <div className={`idcard${r.dimmed ? ' idcard--dimmed' : ''}`} key={r.key}>
               <div className="idcard__head">
                 <div className="idrow__id"><span className="idcard__name">{r.name}</span><span className="idrow__handle">{r.handle}</span>{credLine(r)}</div>
-                <Pill tone={lifecycleTone(r.lc)}>{r.lc}</Pill>
+                <LifecyclePill row={r} />
               </div>
               <div className="idcard__grid">
                 <div className="idcard__cell"><span className="idcard__cell-label">{t('identities.col.app')}</span><span>{r.app} {r.version}</span></div>
@@ -198,7 +210,7 @@ export function Identities({ rows, isMobile, provisionReq, baseAvd, onProvision,
           {rows.map((r) => (
             <div className={`idrow idrow--body${r.dimmed ? ' idrow--dimmed' : ''}`} key={r.key}>
               <div className="idrow__id"><span className="idrow__name">{r.name}</span><span className="idrow__handle">{r.handle}</span>{credLine(r)}</div>
-              <Pill tone={lifecycleTone(r.lc)}>{r.lc}</Pill>
+              <LifecyclePill row={r} />
               <span>{r.app} <span className="idrow__version">{r.version}</span></span>
               <span>{r.snap}</span>
               <div className="idrow__disk"><span className="idrow__disk-label">{r.disk}</span><DiskBar pct={r.diskPct} /></div>

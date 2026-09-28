@@ -19,6 +19,8 @@ export function offlineOverlay(d: Identity, i18n: I18n = PT): string {
   if (d.state !== 'offline') return '';
   const { t } = i18n;
   const l = d.live;
+  // Boot em andamento: não é falha, é espera (o ciclo de vida só muda quando o emulador termina de subir).
+  if (l?.booting) return t('identities.booting.note');
   if (!l) return t('cockpit.overlay.versionChanged');
   const s = l.signals;
   if (s?.versionMatch === false) return t('cockpit.overlay.versionChanged');

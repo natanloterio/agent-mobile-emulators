@@ -49,7 +49,7 @@ async function serve(db: DatabaseSync, ops: IdentityOps) {
     const text = await r.text();
     return { status: r.status, body: text ? JSON.parse(text) as Record<string, unknown> : null };
   };
-  return { post, settle: ir.settle };
+  return { post, settle: ir.settle, booting: ir.booting };
 }
 
 describe('handle', () => {
@@ -141,6 +141,16 @@ describe('ciclo de vida', () => {
     await s.post('/identities/conta2/boot', {}); await s.settle();
     expect(getIdentity(h.db, 'conta2')).toMatchObject({ state: 'provisioned', lastError: null });
     expect(h.log).not.toContain('probe conta2');
+  });
+  it('boot: enquanto sobe, a identidade aparece como ligando; segundo Boot no mesmo aparelho é recusado', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+    const h = harness({ boot: async (id) => { await gate; return id; } }); const s = await serve(h.db, h.ops);
+    expect((await s.post('/identities/conta1/boot', {})).status).toBe(202);
+    expect([...s.booting()]).toEqual(['conta1']);
+    expect((await s.post('/identities/conta1/boot', {})).status).toBe(409);
+    release(); await s.settle();
+    expect([...s.booting()]).toEqual([]);
   });
   it('boot de identidade logada roda a sonda; erro de boot vai para last_error + offline', async () => {
     const h = harness({ boot: async () => { throw new Error('emulador não completou o boot em 180 s'); } }); const s = await serve(h.db, h.ops);

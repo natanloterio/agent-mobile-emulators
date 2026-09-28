@@ -20,6 +20,8 @@ export interface IdRow {
   readonly handle: string;
   /** Estado cru do ciclo (o banco usa também idle, offline, needs-human). */
   readonly lc: string;
+  /** Emulador ligando agora: a linha mostra isso no lugar do ciclo e some com os botões de subir. */
+  readonly booting?: boolean;
   readonly app: string;
   readonly version: string;
   readonly snap: string;
@@ -84,8 +86,10 @@ function liveRowActions(l: LiveIdentity, tileIndex: number, { t }: I18n, creds: 
   const lc = l.lifecycle ?? l.state;
   if (lc === 'banned') return [{ kind: 'discard', label: t('identities.action.discard') }];
   const out: RowAction[] = [];
-  if (lc === 'blank' || lc === 'provisioned') out.push({ kind: 'boot-window', label: t('identities.action.bootWindow') }, { kind: 'login', label: t('identities.action.loginDone') });
-  if (lc === 'offline') out.push({ kind: 'boot', label: t('identities.action.boot') });
+  // Já ligando: outro Boot seria recusado (409); o botão volta quando o emulador terminar de subir.
+  if ((lc === 'blank' || lc === 'provisioned') && !l.booting) out.push({ kind: 'boot-window', label: t('identities.action.bootWindow') });
+  if (lc === 'blank' || lc === 'provisioned') out.push({ kind: 'login', label: t('identities.action.loginDone') });
+  if (lc === 'offline' && !l.booting) out.push({ kind: 'boot', label: t('identities.action.boot') });
   if (lc === 'needs-human') out.push({ kind: 'open', label: t('identities.action.open'), index: tileIndex });
   if (l.restoreUnsafe) out.push({ kind: 'restore', label: t('identities.action.restore') });
   // App alvo atualizou sozinho: sem isto a identidade ficava fora da frota sem nada a fazer na tela.
@@ -123,7 +127,7 @@ export function selectLiveIdRows(
     const { disk, diskPct } = diskView(l.diskBytes, i18n);
     const req = requests[idKey(l.id)]; const cred = requests[credKey(l.id)]; const login = requests[loginKey(l.id)];
     return {
-      key: l.id, id: l.id, name: l.name, handle: l.handle || i18n.t('identities.handle.none'), lc: l.lifecycle ?? l.state,
+      key: l.id, id: l.id, name: l.name, handle: l.handle || i18n.t('identities.handle.none'), lc: l.lifecycle ?? l.state, booting: !!l.booting,
       app: appLabel(l.appPackage), version: l.appVersionName || '—',
       snap: snapshotLabel(l.snapshotTakenAt, l.restoreUnsafe ?? false, now, i18n), disk, diskPct,
       ports: l.consolePort && l.mcpHostPort ? `${l.consolePort} · ${l.mcpHostPort}` : '—',

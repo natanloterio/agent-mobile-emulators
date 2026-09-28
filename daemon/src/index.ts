@@ -207,6 +207,7 @@ const server = await startServer({
   host: () => host.read(),
   localParallel: () => localParallelController.status(),
   baseAvd: () => ({ ...currentBaseAvd(), running: baseRunning, prep: readBasePrep(db) }),
+  booting: () => identityRoutes.booting(),
   listLocal: (current) => localRuntimes.listAll(current),
   // Pela trava (ollama = single-flight + lock): descarregar não pode correr junto com um restart/reload em andamento.
   unloadLocal: (row) => ollama.unload(row.endpoint, row.model, row.runtime),
