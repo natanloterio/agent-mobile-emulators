@@ -10,4 +10,10 @@ describe('createDaemonGate', () => {
     g.set({ port: 47800 });
     await expect(g.use(async (i) => i.port)).resolves.toBe(47800);
   });
+  it('daemon que caiu depois de pronto: fail esquece a porta velha (erro legível em vez de ECONNREFUSED)', async () => {
+    const g = createDaemonGate<{ port: number }>();
+    g.set({ port: 47800 });
+    g.fail('o daemon parou');
+    await expect(g.use(async (i) => i.port)).rejects.toThrow(/daemon não conectado: o daemon parou/);
+  });
 });

@@ -108,11 +108,16 @@
 .empty { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 32px; }
 .empty__title { font-size: var(--type-h4); font-weight: var(--weight-medium); }
 
-/* Guia do celular-base (components/BaseAvdGuide.tsx). */
-.baseguide { display: flex; flex-direction: column; gap: 12px; padding: 28px 32px; }
-.baseguide__title { margin: 0; font-size: var(--type-h4); font-weight: var(--weight-medium); }
-.baseguide__lede { margin: 0; line-height: 1.4; }
-.baseguide__steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; line-height: 1.4; }
-.baseguide__note { margin: 0; font-size: 14px; color: var(--color-dark-2); line-height: 1.4; }
-@media (max-width: 760px) { .baseguide { padding: 20px; } }
-.baseguide--warn { border-width: 2px; box-shadow: 0 5px 0 0 var(--color-green); }
+/* Preparo do celular-base (components/BasePrepCard.tsx). */
+.baseprep { display: flex; flex-direction: column; gap: 14px; padding: 28px 32px; }
+.baseprep--ask { border-width: 2px; box-shadow: 0 5px 0 0 var(--color-green); }
+.baseprep__title { margin: 0; font-size: var(--type-h4); font-weight: var(--weight-medium); }
+.baseprep__lede, .baseprep__reason { margin: 0; line-height: 1.4; }
+.baseprep__reason { font-size: 15px; color: var(--color-dark-2); }
+.baseprep__phases { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 15px; color: var(--color-dark-2); }
+.baseprep__phase--now { color: var(--color-black); font-weight: var(--weight-medium); }
+.baseprep__mark { display: inline-block; width: 22px; }
+.baseprep__more { display: flex; gap: 8px; flex-wrap: wrap; }
+.baseprep__form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; }
+.baseprep__form label { display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+@media (max-width: 760px) { .baseprep { padding: 20px; } .baseprep__form { grid-template-columns: 1fr; } }

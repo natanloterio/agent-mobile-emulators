@@ -1,14 +1,19 @@
 import type { BaseAvdStatus } from '../live/types';
 
-export type BaseStage = 'missing' | 'running' | 'ready';
+/** `preparing`: o preparo automático está em andamento, parado esperando alguém, ou falhou (retomável). */
+export type BaseStage = 'missing' | 'preparing' | 'running';
 
-/** Estágio do celular-base; `null` quando não há o que mostrar (sem dado do daemon, ou base pronta e frota já criada). */
-export function baseStage(base: BaseAvdStatus | null | undefined, hasIdentities: boolean): BaseStage | null {
+const ACTIVE_PREP = new Set(['running', 'needs-google', 'needs-human', 'failed']);
+
+/** Estágio do celular-base; `null` quando está pronto (ou sem dado do daemon). */
+export function baseStage(base: BaseAvdStatus | null | undefined): BaseStage | null {
   if (!base) return null;
+  if (base.prep && ACTIVE_PREP.has(base.prep.state)) return 'preparing';
   if (!base.found) return 'missing';
+  // Ligada por fora do preparo: o clone de um disco em uso sai inconsistente.
   if (base.running) return 'running';
-  return hasIdentities ? null : 'ready';
+  return null;
 }
 
-/** Provisionar só com a base existente e desligada (clone de disco em uso sai inconsistente). */
-export const baseBlocksProvision = (stage: BaseStage | null): boolean => stage === 'missing' || stage === 'running';
+/** Provisionar só com a base pronta e desligada. */
+export const baseBlocksProvision = (stage: BaseStage | null): boolean => stage !== null;

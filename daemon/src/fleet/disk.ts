@@ -2,7 +2,7 @@ import { lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { CONFIG } from '../config.js';
-import { listIdentities, setIdentityFlags } from '../db/identities.js';
+import { listFleet, setIdentityFlags } from '../db/identities.js';
 import { isValidAvdName } from './avd.js';
 
 /** Ocupação em disco por identidade (spec inc. 5 §2): soma dos arquivos do diretório do AVD, cacheada. */
@@ -47,7 +47,7 @@ export function createDiskUsage(deps: { measure?: (dir: string) => Promise<numbe
 /** Uma passada do coletor: atualiza `disk_bytes` das identidades não descartadas. `true` se algo mudou (para broadcast). */
 export async function collectDisk(db: DatabaseSync, disk: DiskUsage): Promise<boolean> {
   let changed = false;
-  for (const id of listIdentities(db)) {
+  for (const id of listFleet(db)) {
     if (id.discardedAt) continue;
     try {
       const bytes = await disk.get(id.avdName);

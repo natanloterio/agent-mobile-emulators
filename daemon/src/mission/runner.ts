@@ -8,7 +8,8 @@ export class MissionError extends Error {
 }
 
 export interface MissionRunner {
-  start(identityId: string, text: string, lang: string): string;
+  /** `seed` roda entre criar e lançar: memória inicial (ex.: referência a um segredo do cofre) antes do primeiro passo. */
+  start(identityId: string, text: string, lang: string, seed?: (missionId: string) => void): string;
   pause(id: string): MissionState; resume(id: string): MissionState; continue(id: string): MissionState; abandon(id: string): MissionState;
   resumeAllOnStart(): number;
   settle(): Promise<void>;
@@ -47,7 +48,7 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
   const done = (_id: string, s: MissionState) => { d.onChange?.(); return s; };
 
   return {
-    start: (identityId, text, lang) => {
+    start: (identityId, text, lang, seed) => {
       const i = getIdentity(d.db, identityId);
       if (!i) throw new MissionError('identidade desconhecida', 404);
       if (d.isKilled()) throw new MissionError('kill switch acionado: retome antes de iniciar uma missão', 409);
@@ -56,6 +57,8 @@ export function createMissionRunner(d: MissionDeps & { readonly run?: typeof run
       if (i.state === 'running') throw new MissionError('identidade rodando um objetivo', 409);
       if (openMissionFor(d.db, identityId)) throw new MissionError('identidade já tem uma missão aberta', 409);
       const id = createMission(d.db, identityId, text, lang);
+      // Semente que falhou não pode deixar missão aberta órfã (prenderia a identidade: "já tem uma missão aberta").
+      try { seed?.(id); } catch (e) { setMissionState(d.db, id, 'abandoned'); throw e; }
       launch(id); d.onChange?.();
       return id;
     },

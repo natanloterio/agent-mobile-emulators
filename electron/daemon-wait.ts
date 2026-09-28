@@ -42,7 +42,7 @@ export async function waitForDaemon<I extends { pid: number }>(d: WaitDeps<I>): 
 /** O que a tela sabe do daemon: subindo, pronto, ou falhou (com motivo e onde está o log). */
 export type DaemonStatus =
   | { readonly state: 'starting' | 'ok' }
-  | { readonly state: 'failed'; readonly reason: DaemonFailure['reason'] | 'other'; readonly exitCode: number | null; readonly logPath: string | null; readonly detail: string };
+  | { readonly state: 'failed'; readonly reason: DaemonFailure['reason'] | 'stopped' | 'other'; readonly exitCode: number | null; readonly logPath: string | null; readonly detail: string };
 
 export function failedStatus(e: unknown, logPath: string | null): DaemonStatus {
   const detail = String((e as Error)?.message ?? e).slice(0, 300);

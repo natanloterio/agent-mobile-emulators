@@ -64,8 +64,32 @@ export function getIdentity(db: DatabaseSync, id: string): IdentityRow | null {
   return x ? fromRow(x) : null;
 }
 
+/**
+ * Linha reservada do celular-base enquanto o Tapflock o prepara (daemon/src/base): portas, token e boot passam pelo mesmo
+ * caminho das identidades, mas ela nunca entra na frota (snapshot, objetivos, testes de provedor).
+ */
+export const BASE_IDENTITY_ID = 'base';
+
 export function listIdentities(db: DatabaseSync): readonly IdentityRow[] {
   return (db.prepare('select * from identity order by id').all() as Record<string, unknown>[]).map(fromRow);
+}
+
+/**
+ * A linha é a do celular-base? Uma identidade de verdade chamada "base" (provisionada antes de o nome ficar reservado)
+ * tem o AVD `tapflock_base`/`enxame_base` e continua na frota, visível e descartável.
+ */
+export const isBaseRow = (i: Pick<IdentityRow, 'id' | 'avdName'>): boolean =>
+  i.id === BASE_IDENTITY_ID && !/^(tapflock|enxame)_base$/.test(i.avdName);
+
+/** Identidade da frota pelo id; a do celular-base não existe para as rotas da frota (só o preparo mexe nela). */
+export function getFleetIdentity(db: DatabaseSync, id: string): IdentityRow | null {
+  const row = getIdentity(db, id);
+  return row && !isBaseRow(row) ? row : null;
+}
+
+/** Identidades da frota: todas menos a do celular-base. */
+export function listFleet(db: DatabaseSync): readonly IdentityRow[] {
+  return listIdentities(db).filter((i) => !isBaseRow(i));
 }
 
 export function setIdentityState(

@@ -69,6 +69,20 @@ describe('emulador', () => {
     expect(polls).toBe(4);
   });
 
+  it('boot: adb recusado ("Permitir depuração USB?") → reinicia o servidor adb privado uma vez, sem ninguém clicar', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const h = supHarness(); let restarted = 0;
+    const adb = {
+      devices: async () => [],
+      getprop: async () => { if (!restarted) throw new Error('device unauthorized'); return '1'; },
+      deviceState: async () => (restarted ? 'device' : 'unauthorized'),
+      killServer: async () => { restarted += 1; },
+    };
+    const out = await bootEmulator(db, row, { window: true }, { adb, supervisor: h.sup, isPortFree: async () => true, sleep: async () => {} });
+    expect(out.serial).toBe('emulator-5556');
+    expect(restarted).toBe(1);
+  });
+
   it('boot: porta presa → lease novo, grava console/serial/mcp no banco e sobe na porta nova', async () => {
     const db = openDb(':memory:'); upsertIdentity(db, row);
     const h = supHarness();

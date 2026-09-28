@@ -41,6 +41,10 @@ function extraArgs(extras: Record<string, string | number | boolean>): readonly 
 
 export interface Adb {
   devices(): Promise<readonly string[]>;
+  /** Estado cru de um serial no `adb devices` (`device`, `unauthorized`, `offline`…); null quando não aparece. */
+  deviceState(serial: string): Promise<string | null>;
+  /** `adb kill-server` na porta privada; o próximo comando sobe outro com o ambiente deste processo. */
+  killServer(): Promise<void>;
   getprop(serial: string, key: string): Promise<string>;
   settingsGetSecure(serial: string, key: string): Promise<string>;
   versionName(serial: string, pkg: string): Promise<string | null>;
@@ -57,6 +61,8 @@ export interface Adb {
   emu(serial: string, args: readonly string[]): Promise<string>;
   /** `pm trim-caches 999G`: libera o cache dos apps antes do re-baseline (spec inc. 5 §3.2). */
   trimCaches(serial: string): Promise<void>;
+  /** `adb install -r -g`: reinstala por cima e já concede as permissões de runtime (preparo do celular-base). */
+  install(serial: string, apk: string): Promise<void>;
 }
 
 export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: Spawn; adbPath?: string; serverPort?: number } = {}): Adb {
@@ -88,6 +94,8 @@ export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: 
 
   return {
     devices: async () => (await run(['devices'])).split('\n').slice(1).filter((l) => l.endsWith('\tdevice')).map((l) => l.split('\t')[0]),
+    killServer: async () => { await run(['kill-server']); },
+    deviceState: async (serial) => (await run(['devices'])).split('\n').slice(1).map((l) => l.split('\t')).find(([s]) => s === serial)?.[1] ?? null,
     getprop: (serial, key) => shell(serial, ['getprop', key]),
     settingsGetSecure: (serial, key) => shell(serial, ['settings', 'get', 'secure', key]),
     versionName: async (serial, pkg) => /versionName=(\S+)/.exec(await shell(serial, ['dumpsys', 'package', pkg]))?.[1] ?? null,
@@ -108,5 +116,6 @@ export function createAdb(deps: { exec?: Exec; execBuffer?: ExecBuffer; spawn?: 
       return out;
     },
     trimCaches: async (serial) => { await shell(serial, ['pm', 'trim-caches', '999G']); },
+    install: async (serial, apk) => { await run(['-s', serial, 'install', '-r', '-g', apk]); },
   };
 }

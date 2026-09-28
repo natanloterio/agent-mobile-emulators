@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getIdentity, setIdentityFlags } from '../db/identities.js';
+import { getFleetIdentity, setIdentityFlags } from '../db/identities.js';
 import { AdbError } from '../device/adb.js';
 import { InputError, InputGestureSchema, type DeviceInput } from '../device/input.js';
 import type { Route } from './api.js';
@@ -17,7 +17,7 @@ export function controlRoutes(deps: { readonly input: Pick<DeviceInput, 'send'> 
     const m = ctx.method === 'POST' ? ROUTE.exec(ctx.url.pathname) : null;
     if (!m) return false;
     const id = decodeURIComponent(m[1]);
-    const identity = getIdentity(ctx.db, id);
+    const identity = getFleetIdentity(ctx.db, id);
     if (!identity) { ctx.send(404, { error: 'identidade desconhecida' }); return true; }
     const body = await ctx.body();
 

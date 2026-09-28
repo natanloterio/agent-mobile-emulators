@@ -3,10 +3,11 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { BRAND } from '../brand.js';
 import { CONFIG, currentBaseAvd } from '../config.js';
-import { getIdentity, listIdentities, setIdentityFlags, setIdentityState, upsertIdentity, type IdentityRow } from '../db/identities.js';
+import { BASE_IDENTITY_ID, getFleetIdentity, getIdentity, listIdentities, setIdentityFlags, setIdentityState, upsertIdentity, type IdentityRow } from '../db/identities.js';
 import { openMissionFor } from '../db/missions.js';
 import type { Adb } from '../device/adb.js';
 import { findRunningAvd } from '../device/running-avd.js';
+import { readBasePrep, readTargetVersion } from '../db/base-settings.js';
 import type { ProbeResult } from '../device/probe.js';
 import { killEmulator, loadSnapshot, saveSnapshot } from '../fleet/emulator.js';
 import type { Route, RouteCtx } from './api.js';
@@ -111,6 +112,9 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     const handle = body.handle === undefined ? NO_ACCOUNT : normalizeHandle(body.handle);
     if (handle === null) return ctx.send(400, { error: 'handle inválido' });
     // Serializado: lease de porta e escolha de nome não podem correr em paralelo.
+    if (body.name === BASE_IDENTITY_ID) return ctx.send(400, { error: `nome ${BASE_IDENTITY_ID} é reservado ao celular-base` });
+    // Base sendo montada (avdmanager escrevendo, emulador subindo, missão rodando): clonar agora copiaria disco pela metade.
+    if (['running', 'needs-google', 'needs-human'].includes(readBasePrep(ctx.db).state)) return ctx.send(409, { error: 'o celular-base ainda está sendo preparado' });
     const job = provisioning.then(async () => {
       const name = body.name ?? freeName(ctx.db);
       if (getIdentity(ctx.db, name)) return ctx.send(409, { error: `identidade ${name} já existe` });
@@ -125,7 +129,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
       try { await ops.clone(avdName); } catch (e) { return ctx.send(500, { error: `clone do AVD falhou: ${errMsg(e)}` }); }
       upsertIdentity(ctx.db, {
         id: name, name, handle, avdName, serial: `emulator-${ports.consolePort}`, consolePort: ports.consolePort, mcpHostPort: ports.mcpHostPort,
-        mcpToken: uuid(), deviceSlug: name, appPackage: CONFIG.targetApp.package, appVersionName: CONFIG.targetApp.versionName, state: 'provisioned',
+        mcpToken: uuid(), deviceSlug: name, appPackage: CONFIG.targetApp.package, appVersionName: readTargetVersion(ctx.db), state: 'provisioned',
       });
       // PIN pedido para a identidade: aplicado ao device no primeiro boot (o clone nasce sem credencial).
       const pin = body.pin ?? ops.defaultPin ?? null;
@@ -313,7 +317,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     if (!rawId) { await create(ctx); return true; }
     const act = actions[action];
     if (!act) return false; // /control, /input: Frente C
-    const id = getIdentity(ctx.db, decodeURIComponent(rawId));
+    const id = getFleetIdentity(ctx.db, decodeURIComponent(rawId));
     if (!id) { ctx.send(404, { error: 'identidade desconhecida' }); return true; }
     await act(ctx, id);
     return true;

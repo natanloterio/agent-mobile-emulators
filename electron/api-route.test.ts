@@ -40,3 +40,11 @@ describe('apiRoute', () => {
     expect(() => apiRoute('GET', '/settings/local/x')).toThrow();
   });
 });
+
+describe('rotas do celular-base', () => {
+  it('prepare e continue passam; google (senha) não passa pelo canal genérico', () => {
+    expect(apiRoute('POST', '/base/prepare')).toEqual({ method: 'POST', path: '/base/prepare' });
+    expect(apiRoute('POST', '/base/continue')).toEqual({ method: 'POST', path: '/base/continue' });
+    expect(() => apiRoute('PUT', '/base/google')).toThrow(/não permitida/);
+  });
+});

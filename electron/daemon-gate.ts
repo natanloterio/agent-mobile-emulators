@@ -12,7 +12,8 @@ export function createDaemonGate<I>(): DaemonGate<I> {
   let info: I | null = null; let error: string | null = null;
   return {
     set: (i) => { info = i; error = null; },
-    fail: (m) => { error = m; },
+    // Também esquece a conexão: um daemon que caiu depois de pronto deixaria as chamadas indo para a porta morta.
+    fail: (m) => { info = null; error = m; },
     use: (fn) => (info !== null ? fn(info)
       : Promise.reject(new Error(error ? `daemon não conectado: ${error}` : 'daemon não conectado ainda; tente de novo em instantes'))),
   };

@@ -5,10 +5,15 @@ import { brandEnv } from './brand.js';
 import { CONFIG, currentBaseAvd, loadEnv } from './config.js';
 import { findRunningAvd } from './device/running-avd.js';
 import { acquireInstanceLock } from './fleet/lock.js';
+import { saveGoogleAccount, seedGoogleMemory } from './base/google-account.js';
+import { wireBasePreparer } from './base/wire.js';
+import { IDLE_PREP, readBasePrep, writeBasePrep } from './db/base-settings.js';
+import { getMission, openMissionFor } from './db/missions.js';
+import { baseRoutes } from './server/routes-base.js';
 import { createAdb } from './device/adb.js';
 import { createDeviceInput } from './device/input.js';
 import { openDb } from './db/open.js';
-import { getIdentity, listIdentities, type IdentityRow } from './db/identities.js';
+import { BASE_IDENTITY_ID, getIdentity, listFleet, type IdentityRow } from './db/identities.js';
 import { isFleetIdle } from './db/tasks.js';
 import { readLocalParallel, readStepBudgets } from './db/settings.js';
 import { createScreenCapture } from './device/screen.js';
@@ -106,7 +111,7 @@ const emulators = createEmulatorSupervisor();
 const host = createHostMetrics({ gpu: createGpuSampler() });
 const disk = createDiskUsage();
 
-const liveTargets = () => listIdentities(db).filter((i) => !i.discardedAt).map(({ id, serial }) => ({ id, serial }));
+const liveTargets = () => listFleet(db).filter((i) => !i.discardedAt).map(({ id, serial }) => ({ id, serial }));
 const targets = liveTargets();
 const screen = createScreenCapture({ adb }); screen.start(targets);
 // Vídeo é a fonte principal; o screencap só corre enquanto o vídeo daquela identidade não está no ar (poster/fallback).
@@ -189,12 +194,19 @@ const missions = createMissionRunner({
   promote: (missionId) => promoteAccounts(missionId, { db, vault, snapshot: (i) => saveSnapshot(adb, i.serial) }),
 });
 
+// Celular-base sem Android Studio (daemon/src/base): o idioma é o da tela que pediu (a missão fala com o modelo nele).
+let baseLang = 'pt';
+const basePrep = wireBasePreparer({ db, adb, supervisor: emulators, missions, vault, onChange: () => broadcast?.(), lang: () => baseLang });
+// Preparo que estava rodando quando o daemon caiu: fica como falha retomável ("Tentar de novo" continua de onde parou).
+// Também o que esperava uma verificação: sem o loop do preparo vivo, ninguém mais gravaria a versão nem desligaria a base.
+if (['running', 'needs-human'].includes(readBasePrep(db).state)) writeBasePrep(db, { ...readBasePrep(db), state: 'failed', error: 'o preparo foi interrompido; tente de novo' });
+
 const daemonToken = randomUUID();
 const server = await startServer({
   db, token: daemonToken, screen, video, port: portEnv ? Number(portEnv) : undefined, videoState: (id) => video.state(id),
   host: () => host.read(),
   localParallel: () => localParallelController.status(),
-  baseAvd: () => ({ ...currentBaseAvd(), running: baseRunning }),
+  baseAvd: () => ({ ...currentBaseAvd(), running: baseRunning, prep: readBasePrep(db) }),
   listLocal: (current) => localRuntimes.listAll(current),
   // Pela trava (ollama = single-flight + lock): descarregar não pode correr junto com um restart/reload em andamento.
   unloadLocal: (row) => ollama.unload(row.endpoint, row.model, row.runtime),
@@ -213,11 +225,32 @@ const server = await startServer({
     goalsRoutes({ plan: (text, lang) => planGoal(text, planDeps(), lang) }), identityRoutes.route, controlRoutes({ input: createDeviceInput(adb) }),
     missionRoutes({ runner: missions, mask: missionMask }), credentialRoutes({ vault }), settingsRoutes(), anthropicKeyRoutes({ store: apiKeys }),
     localParallelRoutes({ controller: localParallelController }),
+    baseRoutes({
+      prepare: (lang) => { baseLang = lang; void basePrep.start(); },
+      // Conta trocada com a missão aberta: a senha já vem do cofre (atualizado); o e-mail da memória também muda.
+      saveGoogle: async (email, password) => {
+        await saveGoogleAccount(vault, email, password);
+        const open = openMissionFor(db, BASE_IDENTITY_ID);
+        if (open) seedGoogleMemory(db, open.id, email);
+      },
+      // Pausada (erro do modelo, kill switch, janela fechada) retoma; esperando humano continua. Depois o preparo volta a
+      // acompanhar (idempotente: se ele já está esperando a missão, é o mesmo).
+      continueMission: (missionId) => {
+        const m = getMission(db, missionId);
+        if (m?.state === 'paused') missions.resume(missionId); else missions.continue(missionId);
+        void basePrep.start();
+      },
+      reset: () => {
+        const open = openMissionFor(db, BASE_IDENTITY_ID);
+        if (open) missions.abandon(open.id);
+        writeBasePrep(db, IDLE_PREP);
+      },
+    }),
   ],
   onProviderTest: async (role) => {
     const model = readProviderConfig(db)[role].model;
     const fail = (error: string) => recordProviderTest(db, { role, model, latencyMs: 0, tokensPerSec: null, argsValid: false, warning: null, error, at: new Date().toISOString() });
-    const id = pickTestIdentity(listIdentities(db));
+    const id = pickTestIdentity(listFleet(db));
     if (!id) return fail('nenhuma identidade livre para o tool-call canônico (todas rodando, pausadas, controladas ou sem conta)');
     const probe = await ensureIdentityReady(db, id, { adb }); server.broadcast();
     if (!probe.ready) return fail(`${id.name} não pronta: ${probe.details.join('; ')}`);

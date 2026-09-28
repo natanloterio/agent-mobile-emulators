@@ -98,7 +98,7 @@ does the check report it as off. The app asks you to act only when it can't do s
 The onboarding also asks for your **Anthropic API key** (optional, for the cloud roles) and stores it in the OS
 keyring. No `.env` file is needed for the installed app.
 
-The **base AVD** is still created by hand on every system (see [Your first identity](#your-first-identity)).
+The **base phone** (the AVD every identity is copied from) is prepared by the app too, with no Android Studio: see [Your first identity](#your-first-identity).
 
 **Pre-release notice.** This is a pré-lançamento (pre-release). The full automatic install has only been validated
 by automated tests and a smoke test in CI on macOS and Windows, never end to end on a real machine. Please open an
@@ -110,12 +110,11 @@ issue if something doesn't work on your system.
 
 - **Linux, macOS or Windows** with a desktop session. This build was developed and tested on Ubuntu with an NVIDIA GPU; macOS and Windows support has not been tested on real machines yet.
 - **Android SDK** with the emulator, platform-tools and an **Android 14 (API 34) Google Play** system image: **x86_64** on Linux, Windows and Intel Macs, **arm64-v8a** on Apple Silicon Macs (they cannot run x86_64 images). The daemon uses the SDK the setup screen installed or found, else `ANDROID_HOME` or `ANDROID_SDK_ROOT`, or else at Android Studio's default location: `~/Android/Sdk` (Linux), `~/Library/Android/sdk` (macOS), `%LOCALAPPDATA%\Android\Sdk` (Windows).
-- **First-run setup screen.** On Linux x64, macOS (Intel and Apple Silicon) and Windows x64, the app checks the machine on first run and its **setup screen** installs what is missing without `sudo`/admin — see [Install](#install) for what it checks, installs and asks for on each system. It does not create the base AVD (see below). Run the check again any time from **Provedores → Verificar dependências**. On any other platform there is no setup screen: install everything in this list yourself.
+- **First-run setup screen.** On Linux x64, macOS (Intel and Apple Silicon) and Windows x64, the app checks the machine on first run and its **setup screen** installs what is missing without `sudo`/admin — see [Install](#install) for what it checks, installs and asks for on each system. The base phone is prepared afterwards, from the app (see below). Run the check again any time from **Provedores → Verificar dependências**. On any other platform there is no setup screen: install everything in this list yourself.
 - **Hardware acceleration** for the emulator: KVM on Linux, Hypervisor.framework on macOS (built in), WHPX or AEHD on Windows.
-- At least one **base AVD** with:
-  - the target app installed (Instagram by default);
-  - the **Android Remote Control MCP** app (`com.danielealbano.androidremotecontrolmcp.gms.debug`) installed, with its accessibility service enabled and auto-start on boot turned on;
-  - Play Store auto-updates turned off. The readiness check refuses a device whose app version changed.
+- A **base AVD** with the target app (Instagram by default) and the **Android Remote Control MCP** app
+  (`com.danielealbano.androidremotecontrolmcp.gms.debug`, accessibility service and auto-start on). **Tapflock prepares
+  it for you** (see [Your first identity](#your-first-identity)); an existing one can be reused with `TAPFLOCK_AVD_BASE`.
 - **Models:** an **Anthropic API key** for the cloud roles, **[Ollama](https://ollama.com)** and/or **[LM Studio](https://lmstudio.ai)** for local ones, or any mix. The key is optional: with every role set to a local model on the **Provedores** screen, Tapflock runs fully offline. The default local model is `gpt-oss:20b`.
 - An unlocked **OS keyring** for the daemon vault (passwords created by missions and login credentials): Credential Manager on Windows, Keychain on macOS, GNOME Keyring or KWallet (Secret Service) on Linux.
 
@@ -159,9 +158,20 @@ Opening `npm run dev` in a plain browser shows a **demo mode** with sample data.
 
 ## Your first identity
 
-1. **Prepare the base AVD.**
-   - By default new identities are cloned from an AVD named `tapflock_golden`. If it doesn't exist, `mcp_test_playstore` is used instead, and that AVD must be **stopped** while cloning.
-   - To create `tapflock_golden`, copy a stopped, ready AVD, or point `TAPFLOCK_AVD_BASE` at the AVD you want to use.
+1. **Prepare the base phone** (**Identidades → Preparar celular-base**). Tapflock does it by itself, in a visible
+   emulator window:
+   - creates the `tapflock_golden` AVD from the Android 14 Google Play image the setup screen installed (`avdmanager`,
+     with the bundled Java);
+   - downloads the Android Remote Control MCP app (v1.12.0, checked against a pinned sha256), installs it over adb and
+     turns on its accessibility service and auto-start on boot;
+   - asks once for a **Google account** (stored in the OS-keyring vault) and runs an agent mission on the base phone:
+     sign in to the Play Store, install Instagram, then **remove the Google account** from the phone so no identity
+     inherits it. If Google asks for a code or confirmation, the card says so: handle it in the emulator window and
+     press **Continuar**;
+   - records the installed Instagram version as the official one (new identities are checked against it), disables
+     the Play Store on the base so the app never updates itself, and shuts the emulator down.
+   An existing AVD can be used instead with `TAPFLOCK_AVD_BASE`; without `tapflock_golden`, `mcp_test_playstore` is
+   still picked up. Either way the base must be **stopped** while cloning.
 2. **Identidades → Provisionar identidade** (Provision identity).
    - Optionally type a **PIN** in the field next to the button. Tapflock copies the base AVD into a new one with its own ports, its own MCP token and its own lifecycle.
 3. **Subir com janela** (Start with window).

@@ -19,3 +19,9 @@ export const FinishRequestSchema = z.object({
   applyRoles: z.boolean(),
 }).strict();
 export type FinishRequest = z.infer<typeof FinishRequestSchema>;
+
+/** Conta Google do preparo do celular-base (mesmos limites da rota do daemon). */
+export const BaseGoogleSchema = z.object({
+  email: z.string().trim().min(3).max(254).regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'e-mail inválido'),
+  password: z.string().min(1).max(200),
+}).strict();
