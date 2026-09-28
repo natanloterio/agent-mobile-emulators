@@ -10,14 +10,14 @@ export const IdentityId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'identidade 
 const MAX_IDENTITIES = 50;
 /** Uma identidade (`identityId`, corpo antigo) ou várias (`identityIds`: a mesma missão em cada device). */
 const StartBody = z.union([
-  z.object({ identityId: IdentityId, text: GoalText, lang: z.enum(LANGS).optional() }).strict(),
-  z.object({ identityIds: z.array(IdentityId).min(1).max(MAX_IDENTITIES), text: GoalText, lang: z.enum(LANGS).optional() }).strict(),
+  z.object({ identityId: IdentityId, text: GoalText, lang: z.enum(LANGS).optional(), replace: z.boolean().optional() }).strict(),
+  z.object({ identityIds: z.array(IdentityId).min(1).max(MAX_IDENTITIES), text: GoalText, lang: z.enum(LANGS).optional(), replace: z.boolean().optional() }).strict(),
 ]);
 const MAX_STEPS = 10;
 /** Sequência (spec arquivos): 2 a 10 etapas, cada uma numa identidade; o arquivo de uma vai para a seguinte. */
 const ChainBody = z.object({
   steps: z.array(z.object({ identityId: IdentityId, text: GoalText }).strict()).min(2).max(MAX_STEPS),
-  lang: z.enum(LANGS).optional(),
+  lang: z.enum(LANGS).optional(), replace: z.boolean().optional(),
 }).strict();
 interface StartFail { readonly identityId: string; readonly error: string; readonly status: 404 | 409 }
 const ACTION = /^\/missions\/([A-Za-z0-9-]{1,64})\/(pause|resume|continue|abandon)$/;
@@ -41,23 +41,25 @@ export function missionRoutes(o: {
       const parsed = ChainBody.safeParse(await ctx.body());
       if (!parsed.success) { ctx.send(400, { error: parsed.error.issues.map((i) => i.message) }); return true; }
       const { steps, lang = 'pt' } = parsed.data;
-      guard(() => { const goalIds = o.runner.startChain(steps, lang); ctx.send(201, { goalIds }); ctx.broadcast(); });
+      guard(() => { const goalIds = o.runner.startChain(steps, lang, { replace: parsed.data.replace === true }); ctx.send(201, { goalIds }); ctx.broadcast(); });
       return true;
     }
     if (ctx.url.pathname === '/missions') {
       const parsed = StartBody.safeParse(await ctx.body());
       if (!parsed.success) { ctx.send(400, { error: parsed.error.issues.map((i) => i.message) }); return true; }
       const { text, lang = 'pt' } = parsed.data;
+      // replace: missão parada (pausada, esperando humano) da identidade é abandonada antes; rodando segue bloqueando.
+      const opts = { replace: parsed.data.replace === true };
       if ('identityId' in parsed.data) {
         const { identityId } = parsed.data;
-        guard(() => { const goalId = o.runner.start(identityId, text, lang); ctx.send(201, { goalId }); ctx.broadcast(); });
+        guard(() => { const goalId = o.runner.start(identityId, text, lang, undefined, opts); ctx.send(201, { goalId }); ctx.broadcast(); });
         return true;
       }
       // Cada identidade é uma missão independente: a recusa de uma (ocupada, pausada…) não barra as outras.
       const started: { identityId: string; goalId: string }[] = [];
       const failed: StartFail[] = [];
       for (const identityId of new Set(parsed.data.identityIds)) {
-        try { started.push({ identityId, goalId: o.runner.start(identityId, text, lang) }); }
+        try { started.push({ identityId, goalId: o.runner.start(identityId, text, lang, undefined, opts) }); }
         catch (e) {
           if (!(e instanceof MissionError)) throw e;
           failed.push({ identityId, error: e.message, status: e.status });

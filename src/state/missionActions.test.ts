@@ -32,6 +32,15 @@ describe('missionActions', () => {
     expect(await t.a.startChain([{ identityId: 'conta1', text: 'baixe a foto' }, { identityId: 'conta2', text: 'ab' }])).toBe(false);
     expect(t.calls).toEqual([]);
   });
+  it('start substituindo missão parada: pede confirmação e manda replace; recusada não chama o daemon', async () => {
+    const yes = mk({ started: [{ identityId: 'conta2', goalId: 'm1' }], failed: [] });
+    expect(await yes.a.start(['conta2'], 'abra o youtube', ['conta2'])).toBe(true);
+    expect(yes.calls).toEqual([{ method: 'POST', path: '/missions', body: { identityIds: ['conta2'], text: 'abra o youtube', lang: 'en', replace: true } }]);
+    const no = mk(undefined, false);
+    expect(await no.a.start(['conta2'], 'abra o youtube', ['conta2'])).toBe(false);
+    expect(await no.a.startChain([{ identityId: 'conta1', text: 'baixe' }, { identityId: 'conta2', text: 'poste' }], ['conta2'])).toBe(false);
+    expect(no.calls).toEqual([]);
+  });
   it('texto curto ou nenhuma identidade não chama o daemon', async () => {
     const t = mk();
     expect(await t.a.start(['conta2'], 'ab')).toBe(false);
