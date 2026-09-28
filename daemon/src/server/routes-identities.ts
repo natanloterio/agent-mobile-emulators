@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
+import { BRAND } from '../brand.js';
 import { CONFIG } from '../config.js';
 import { getIdentity, listIdentities, setIdentityFlags, setIdentityState, upsertIdentity, type IdentityRow } from '../db/identities.js';
 import { openMissionFor } from '../db/missions.js';
@@ -35,7 +36,7 @@ export interface IdentityOps {
   readonly unlock?: (identity: IdentityRow) => Promise<unknown>;
   /** Define o PIN no device (clone novo nasce da base sem credencial). */
   readonly setPin?: (identity: IdentityRow, pin: string) => Promise<void>;
-  /** PIN aplicado a identidade nova quando o corpo não traz um (ENXAME_DEFAULT_PIN). */
+  /** PIN aplicado a identidade nova quando o corpo não traz um (TAPFLOCK_DEFAULT_PIN). */
   readonly defaultPin?: string | null;
   /** Login fixo do Instagram (fleet/login.ts) com as credenciais que o main do Electron decifrou. */
   readonly login?: (identity: IdentityRow, creds: { username: string; password: string }) => Promise<{ outcome: 'logged-in' | 'already-logged-in' | 'needs-human'; detail: string }>;
@@ -49,7 +50,7 @@ export interface IdentityOps {
 const NAME = /^[A-Za-z0-9_]{1,32}$/;
 const HANDLE = /^@?[A-Za-z0-9._]{1,30}$/;
 const NO_ACCOUNT = 'sem conta';
-const AVD_PREFIX = 'enxame_';
+const AVD_PREFIX = `${BRAND}_`;
 const ROUTE = /^\/identities(?:\/([^/]+)\/([a-z-]+))?$/;
 
 const awaitingLogin = (id: IdentityRow) => id.state === 'provisioned' || id.state === 'blank' || id.handle === NO_ACCOUNT;

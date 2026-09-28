@@ -49,7 +49,7 @@ describe('adb isolado', () => {
   });
 });
 
-describe.skipIf(!process.env.ENXAME_INTEGRATION)('adb real (ENXAME_INTEGRATION=1)', () => {
+describe.skipIf(!process.env.TAPFLOCK_INTEGRATION)('adb real (TAPFLOCK_INTEGRATION=1)', () => {
   it('enxerga emulator-5554 com boot completo', async () => {
     const adb = createAdb();
     expect(await adb.devices()).toContain('emulator-5554');

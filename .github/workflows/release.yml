@@ -16,9 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-15-intel, script: 'dist:mac', arch: '--x64', exe: 'release/mac/Enxame.app/Contents/MacOS/Enxame', files: 'release/*.dmg' }
-          - { os: macos-15, script: 'dist:mac', arch: '--arm64', exe: 'release/mac-arm64/Enxame.app/Contents/MacOS/Enxame', files: 'release/*.dmg' }
-          - { os: windows-latest, script: 'dist:win', arch: '', exe: 'release/win-unpacked/Enxame.exe', files: 'release/*Setup*.exe' }
+          - { os: macos-15-intel, script: 'dist:mac', arch: '--x64', exe: 'release/mac/Tapflock.app/Contents/MacOS/Tapflock', files: 'release/*.dmg' }
+          - { os: macos-15, script: 'dist:mac', arch: '--arm64', exe: 'release/mac-arm64/Tapflock.app/Contents/MacOS/Tapflock', files: 'release/*.dmg' }
+          - { os: windows-latest, script: 'dist:win', arch: '', exe: 'release/win-unpacked/Tapflock.exe', files: 'release/*Setup*.exe' }
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -52,10 +52,10 @@ jobs:
         timeout-minutes: 5
         run: |
           bash scripts/install-macos.sh --dmg release/*.dmg --dest "$RUNNER_TEMP/Applications" --no-open
-          test -x "$RUNNER_TEMP/Applications/Enxame.app/Contents/MacOS/Enxame"
+          test -x "$RUNNER_TEMP/Applications/Tapflock.app/Contents/MacOS/Tapflock"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: enxame-${{ matrix.os }}
+          name: tapflock-${{ matrix.os }}
           path: ${{ matrix.files }}
           if-no-files-found: error
 

@@ -9,7 +9,7 @@ const data = { version: 1 as const, completedAt: '2026-09-27T12:00:00.000Z', pat
 describe('setup.json', () => {
   afterEach(() => { vi.restoreAllMocks(); });
   it('grava e lê de volta; cria o diretório', async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), 'enxame-setup-'));
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'tapflock-setup-'));
     const file = path.join(dir, 'sub', 'setup.json');
     await writeSetupFile(file, data);
     expect(await readSetupFile(file)).toEqual(data);
@@ -17,7 +17,7 @@ describe('setup.json', () => {
     expect(JSON.parse(await readFile(file, 'utf8')).version).toBe(1);
   });
   it('ausente ou inválido devolve null', async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), 'enxame-setup-'));
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'tapflock-setup-'));
     expect(await readSetupFile(path.join(dir, 'nada.json'))).toBeNull();
     await writeFile(path.join(dir, 'ruim.json'), '{"version":2}');
     expect(await readSetupFile(path.join(dir, 'ruim.json'))).toBeNull();
@@ -25,7 +25,7 @@ describe('setup.json', () => {
   });
   it('avisa no console quando o arquivo existe mas é inválido; ausente fica em silêncio', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const dir = await mkdtemp(path.join(os.tmpdir(), 'enxame-setup-'));
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'tapflock-setup-'));
     await readSetupFile(path.join(dir, 'nada.json'));
     readSetupFileSync(path.join(dir, 'nada.json'));
     expect(warn).not.toHaveBeenCalled();
@@ -37,7 +37,7 @@ describe('setup.json', () => {
     expect(String(warn.mock.calls[0][0])).toContain('setup.json');
   });
   it('recusa gravar formato errado', async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), 'enxame-setup-'));
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'tapflock-setup-'));
     await expect(writeSetupFile(path.join(dir, 's.json'), { ...data, paths: { sdkRoot: '', ollamaBin: null } })).rejects.toThrow();
   });
 });

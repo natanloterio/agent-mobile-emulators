@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { dataDirFrom } from '../brand.js';
 import { imageAbi, isWindows, platformId, type PlatformId } from './platform.js';
 
 /** Onde o onboarding lê e instala. Tudo no home da pessoa: nada pede sudo/admin. */
@@ -25,7 +27,7 @@ export function resolveSetupPaths(
   const win = isWindows(platform);
   const p = win ? path.win32 : path.posix;
   const exe = win ? '.exe' : '';
-  const dataDir = env.ENXAME_DATA_DIR || p.join(home, '.local', 'share', 'enxame');
+  const dataDir = dataDirFrom(env, home, existsSync, p);
   const toolsDir = p.join(dataDir, 'tools');
   const sdkRoot = savedSdkRoot || env.ANDROID_HOME || env.ANDROID_SDK_ROOT || defaultSdk(env, home, platform, p);
   const jreDir = p.join(toolsDir, 'jre');

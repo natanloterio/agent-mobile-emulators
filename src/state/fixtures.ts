@@ -6,7 +6,7 @@ export const liveId = (over: Partial<LiveIdentity> = {}): LiveIdentity => ({
   costUsd: 0.12, error: '', lastTools: [], video: 'streaming',
   lifecycle: 'running', paused: false, controlled: false, ledgerCount: 4, lastStepTokens: 1432,
   appPackage: 'com.instagram.android', appVersionName: '448.0.0.52.84', consolePort: 5554, mcpHostPort: 8080,
-  avdName: 'enxame_conta1', serial: 'emulator-5554', snapshotTakenAt: null, restoreUnsafe: false,
+  avdName: 'tapflock_conta1', serial: 'emulator-5554', snapshotTakenAt: null, restoreUnsafe: false,
   diskBytes: null, bannedReason: null, discardedAt: null, signals: null,
   ...over,
 });

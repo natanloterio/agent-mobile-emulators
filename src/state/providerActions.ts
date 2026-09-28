@@ -1,6 +1,6 @@
 import type { Dispatch } from 'react';
 import { modelFor } from '../data/providers';
-import type { EnxameBridge, ProviderPatch } from '../live/types';
+import type { TapflockBridge, ProviderPatch } from '../live/types';
 import type { ProviderMode, RoleKey } from '../types/fleet';
 import type { FleetAction } from './fleetReducer';
 
@@ -13,7 +13,7 @@ export const bridgeMessage = (e: Error) => e.message
   .replace(/^.*→ \d+: /, '')
   .replace(/^\{"error":"|"\}$/g, '');
 
-export type ProviderBridge = Partial<Pick<EnxameBridge, 'setProvider' | 'testProvider' | 'getProviderModels'>>;
+export type ProviderBridge = Partial<Pick<TapflockBridge, 'setProvider' | 'testProvider' | 'getProviderModels'>>;
 
 export interface ProviderActionDeps {
   readonly dispatch: Dispatch<FleetAction>;

@@ -89,7 +89,7 @@ describe('createGoalActions', () => {
   });
 
   it('resume e kill chamam a bridge e guardam erro legível', async () => {
-    const resume = vi.fn(() => Promise.reject(new Error("Error invoking remote method 'enxame:resume': Error: /resume → 500: {\"error\":\"boom\"}")));
+    const resume = vi.fn(() => Promise.reject(new Error("Error invoking remote method 'tapflock:resume': Error: /resume → 500: {\"error\":\"boom\"}")));
     const kill = vi.fn(() => Promise.resolve());
     const { actions, created } = setup({ resume, kill });
     await created.resume(); await created.kill();

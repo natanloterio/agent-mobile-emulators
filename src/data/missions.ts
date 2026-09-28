@@ -14,7 +14,7 @@ export function demoMission(i18n: I18n = PT): MissionView {
       { seq: 3, objective: t('mission.demo.sub3.objective'), state: 'needs-human', report: { ok: false, did: t('mission.demo.sub3.did'), blockers: t('mission.demo.sub3.blockers') }, costUsd: 0.11 },
     ],
     memory: [
-      { key: 'email.address', value: 'enxame.demo.2026@outlook.com', secret: false },
+      { key: 'email.address', value: 'tapflock.demo.2026@outlook.com', secret: false },
       { key: 'email.inbox', value: t('mission.demo.mem.inbox'), secret: false },
       { key: 'email.password', value: null, secret: true },
     ],

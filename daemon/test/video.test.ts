@@ -29,7 +29,7 @@ describe('scidFor / serverArgs', () => {
     // scrcpy faz Integer.parseInt(scid, 16): precisa caber em int32 com sinal ('probe' dava a949c530 antes da correção)
     for (const id of ['conta1', 'probe', 'B']) { expect(scidFor(id)).toMatch(/^[0-9a-f]{8}$/); expect(parseInt(scidFor(id), 16)).toBeLessThanOrEqual(0x7fffffff); }
     const a = serverArgs('0000abcd').join(' ');
-    expect(a).toMatch(/^CLASSPATH=\/data\/local\/tmp\/enxame-scrcpy-server\.jar app_process \/ com\.genymobile\.scrcpy\.Server 4\.1 /);
+    expect(a).toMatch(/^CLASSPATH=\/data\/local\/tmp\/tapflock-scrcpy-server\.jar app_process \/ com\.genymobile\.scrcpy\.Server 4\.1 /);
     for (const kv of ['scid=0000abcd', 'tunnel_forward=true', 'video=true', 'audio=false', 'control=false', 'raw_stream=true', 'cleanup=true', 'max_size=720', 'max_fps=30', 'video_bit_rate=2000000', 'video_codec_options=i-frame-interval:int=2']) expect(a).toContain(kv);
   });
 });
@@ -40,7 +40,7 @@ describe('createVideoStreams', () => {
     h.v.start([{ id: 'conta1', serial: 'emulator-5554' }]); await h.settle();
     expect(h.calls).toEqual([]); expect(h.v.state('conta1')).toBe('idle');
     h.v.setActive(true); await h.settle();
-    expect(h.calls).toEqual(['push emulator-5554 /repo/daemon/vendor/scrcpy-server-v4.1→/data/local/tmp/enxame-scrcpy-server.jar', `forward emulator-5554 27183 localabstract:scrcpy_${scidFor('conta1')}`]);
+    expect(h.calls).toEqual(['push emulator-5554 /repo/daemon/vendor/scrcpy-server-v4.1→/data/local/tmp/tapflock-scrcpy-server.jar', `forward emulator-5554 27183 localabstract:scrcpy_${scidFor('conta1')}`]);
     expect(h.children[0].args.join(' ')).toContain('raw_stream=true');
     h.sockets[0].write(Buffer.concat([SPS, PPS, IDR, P, END])); await h.settle();
     expect(pk.map((p) => [p.id, p.seq, p.key])).toEqual([['conta1', 0, true], ['conta1', 1, false]]);
@@ -68,7 +68,7 @@ describe('createVideoStreams', () => {
     expect(h.v.state('A')).toBe('retrying'); expect(h.v.state('B')).toBe('starting');
     expect(h.children[0].killed).toBe(true); expect(h.calls).toContain('forwardRemove a 27183'); expect(h.children[1].killed).toBe(false);
     h.waits.shift()?.(); await h.settle();                       // retryMs passou
-    expect(h.children.filter((c) => c.serial === 'a')).toHaveLength(2); expect(h.calls.filter((c) => c === 'push a /repo/daemon/vendor/scrcpy-server-v4.1→/data/local/tmp/enxame-scrcpy-server.jar')).toHaveLength(2); // push a cada sessão (o servidor apaga o jar)
+    expect(h.children.filter((c) => c.serial === 'a')).toHaveLength(2); expect(h.calls.filter((c) => c === 'push a /repo/daemon/vendor/scrcpy-server-v4.1→/data/local/tmp/tapflock-scrcpy-server.jar')).toHaveLength(2); // push a cada sessão (o servidor apaga o jar)
     h.v.stop();
   });
   it('setActive(false) mata os processos e remove os forwards; setActive(true) sobe de novo', async () => {

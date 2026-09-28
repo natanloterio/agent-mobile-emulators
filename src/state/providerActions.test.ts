@@ -52,7 +52,7 @@ describe('createProviderActions', () => {
     await flush();
     expect(ok.actions).toEqual([{ type: 'providerError', role: 'worker', message: null }]);
 
-    const err = new Error(`Error invoking remote method 'enxame:setProvider': Error: /providers/worker → 400: {"error":"endpoint precisa ser http(s)"}`);
+    const err = new Error(`Error invoking remote method 'tapflock:setProvider': Error: /providers/worker → 400: {"error":"endpoint precisa ser http(s)"}`);
     const bad = setup({ setProvider: vi.fn(() => Promise.reject(err)) });
     bad.created.setProviderField('worker', { endpoint: 'ftp://x' });
     await flush();

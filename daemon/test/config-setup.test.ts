@@ -33,8 +33,8 @@ describe('sdkRootFrom', () => {
 });
 
 describe('ollamaBinFrom', () => {
-  it('ENXAME_OLLAMA_BIN, depois setup.json, depois "ollama" do PATH', () => {
-    expect(ollamaBinFrom({ sdkRoot: null, ollamaBin: '/s/ollama' }, { ENXAME_OLLAMA_BIN: '/e/ollama' })).toBe('/e/ollama');
+  it('TAPFLOCK_OLLAMA_BIN, depois setup.json, depois "ollama" do PATH', () => {
+    expect(ollamaBinFrom({ sdkRoot: null, ollamaBin: '/s/ollama' }, { TAPFLOCK_OLLAMA_BIN: '/e/ollama' })).toBe('/e/ollama');
     expect(ollamaBinFrom({ sdkRoot: null, ollamaBin: '/s/ollama' }, {})).toBe('/s/ollama');
     expect(ollamaBinFrom(none, {})).toBe('ollama');
   });

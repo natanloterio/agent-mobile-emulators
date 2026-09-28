@@ -1,10 +1,10 @@
 import { PT, type T } from '../i18n/translate';
-import type { EnxameBridge } from '../live/types';
+import type { TapflockBridge } from '../live/types';
 import { track, type TrackDeps } from './apiRequest';
 import { bridgeMessage } from './providerActions';
 
 /** Fatia da bridge usada aqui; ausente no browser e em preload antigo. */
-export type CredentialBridge = Partial<Pick<EnxameBridge, 'credentials' | 'login'>>;
+export type CredentialBridge = Partial<Pick<TapflockBridge, 'credentials' | 'login'>>;
 
 export interface CredentialActionDeps extends TrackDeps<CredentialBridge> {
   readonly confirm: (message: string) => boolean;

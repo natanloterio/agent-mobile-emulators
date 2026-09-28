@@ -46,7 +46,7 @@ export function parseSdkPercent(line: string): number | null {
 const pathOf = (d: RunnerDeps) => (isWindows(d.paths.platform) ? path.win32 : path.posix);
 
 /**
- * JAVA_HOME no JRE do Enxame quando ele existe; senão o Java que a pessoa já tem.
+ * JAVA_HOME no JRE do Tapflock quando ele existe; senão o Java que a pessoa já tem.
  * No Windows a chave costuma ser `Path`: reusa a que existir, senão o filho recebe duas e uma delas some.
  */
 async function sdkEnv(d: RunnerDeps): Promise<NodeJS.ProcessEnv> {
@@ -109,7 +109,7 @@ async function extractArchive(d: RunnerDeps, a: Pinned, file: string, dest: stri
   await d.run('tar', [...flags, file, '-C', dest, ...(strip ? ['--strip-components=1'] : [])], { onLine: d.log });
 }
 
-/** JRE do Enxame; pulado quando já foi extraído antes. */
+/** JRE do Tapflock; pulado quando já foi extraído antes. */
 async function installJre(d: RunnerDeps, onBytes: (b: number) => void): Promise<void> {
   const a = artifactsFor(d.paths.platform).jre;
   const file = pathOf(d).join(d.paths.downloadsDir, a.format === 'zip' ? 'jre.zip' : 'jre.tar.gz');

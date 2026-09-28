@@ -11,8 +11,8 @@ import { readProviderConfig, updateProvider } from '../../src/provider/config.js
 import { createOllamaSupervisor, type ChildLike } from '../../src/provider/ollama.js';
 import { testProvider } from '../../src/provider/probe.js';
 
-const on = !!process.env.ENXAME_INTEGRATION;
-const reason = !on ? 'ENXAME_INTEGRATION não definido' : daemonAlive(CONFIG.daemonInfoPath) ? 'daemon vivo disputa device e Ollama' : null;
+const on = !!process.env.TAPFLOCK_INTEGRATION;
+const reason = !on ? 'TAPFLOCK_INTEGRATION não definido' : daemonAlive(CONFIG.daemonInfoPath) ? 'daemon vivo disputa device e Ollama' : null;
 
 // O supervisor recusa spawn sob vitest sem injeção (guarda dos testes unitários); aqui o spawn real é explícito.
 const realSpawn = (cmd: string, args: readonly string[], opts: { env: NodeJS.ProcessEnv; stdio: unknown }): ChildLike =>
@@ -22,7 +22,7 @@ const ownProcesses = () => readdirSync('/proc').filter((d) => /^\d+$/.test(d)).f
   try { return /ollama\0serve/.test(readFileSync(`/proc/${p}/cmdline`, 'utf8')) && readFileSync(`/proc/${p}/environ`, 'utf8').includes('OLLAMA_CONTEXT_LENGTH=32768'); } catch { return false; }
 });
 
-describe.skipIf(!!reason)(`Ollama real (ENXAME_INTEGRATION=1)${reason ? ` — pulado: ${reason}` : ''}`, () => {
+describe.skipIf(!!reason)(`Ollama real (TAPFLOCK_INTEGRATION=1)${reason ? ` — pulado: ${reason}` : ''}`, () => {
   it('ensure → running e nosso; testProvider(worker) real → args válidos sem aviso; stop() limpa', async () => {
     const db = openDb(CONFIG.dbPath); const adb = createAdb(); const sup = createOllamaSupervisor({ spawn: realSpawn });
     const id = getIdentity(db, 'conta1'); expect(id).toBeTruthy();

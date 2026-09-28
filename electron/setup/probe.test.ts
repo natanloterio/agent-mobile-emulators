@@ -76,7 +76,7 @@ describe('probeDeps', () => {
     const r = await probeDeps(paths, fake({}));
     expect(r.deps.find((d) => d.id === 'kvm')).toMatchObject({ state: 'user', fix: 'kvm-bios' });
   });
-  it('Ollama instalado pelo Enxame tem preferência sobre o do PATH', async () => {
+  it('Ollama instalado pelo Tapflock tem preferência sobre o do PATH', async () => {
     const r = await probeDeps(paths, fake({ exec: { [`${paths.ollamaBin} --version`]: 'ollama version is 0.34.4', 'ollama --version': 'ollama version is 0.12.3' } }));
     expect(r.ollamaBin).toBe(paths.ollamaBin);
     expect(r.deps.find((d) => d.id === 'ollama')?.version).toBe('0.34.4');
@@ -85,11 +85,11 @@ describe('probeDeps', () => {
 
 describe('probeDeps: Java do sdkmanager', () => {
   const sdkOf = async (d: ProbeDeps) => (await probeDeps(paths, d)).deps.find((x) => x.id === 'sdk');
-  it('sdkmanager sem JRE do Enxame e sem Java ≥ 17: sdk fica para instalar (só o JRE)', async () => {
+  it('sdkmanager sem JRE do Tapflock e sem Java ≥ 17: sdk fica para instalar (só o JRE)', async () => {
     expect(await sdkOf(fake({ files: [paths.sdkmanager] }))).toMatchObject({ state: 'todo', sizeMb: 47 });
     expect(await sdkOf(fake({ files: [paths.sdkmanager], exec: { 'java -version': 'java version "1.8.0_392"' } }))).toMatchObject({ state: 'todo' });
   });
-  it('sdkmanager com Java ≥ 17 no PATH ou com o JRE do Enxame: ok', async () => {
+  it('sdkmanager com Java ≥ 17 no PATH ou com o JRE do Tapflock: ok', async () => {
     expect(await sdkOf(fake({ files: [paths.sdkmanager], exec: { 'java -version': 'openjdk version "17.0.12"' } }))).toMatchObject({ state: 'ok' });
     expect(await sdkOf(fake({ files: [paths.sdkmanager, paths.javaBin] }))).toMatchObject({ state: 'ok' });
   });
@@ -142,7 +142,7 @@ describe('aceleração por sistema', () => {
 
 describe('macOS: Ollama e Java', () => {
   const mac = resolveSetupPaths({}, '/Users/u', null, 'darwin-arm64');
-  it('procura o Ollama do Homebrew e do app depois do Enxame e antes do PATH', async () => {
+  it('procura o Ollama do Homebrew e do app depois do Tapflock e antes do PATH', async () => {
     const calls: { cmd: string }[] = [];
     await probeDeps(mac, fake({ calls }));
     const bins = calls.filter((c) => c.cmd.endsWith(' --version')).map((c) => c.cmd.replace(/ --version$/, ''));
@@ -150,13 +150,13 @@ describe('macOS: Ollama e Java', () => {
     const r = await probeDeps(mac, fake({ exec: { '/opt/homebrew/bin/ollama --version': 'ollama version is 0.12.3' } }));
     expect(r.ollamaBin).toBe('/opt/homebrew/bin/ollama');
   });
-  it('não roda java -version (o stub do macOS abre diálogo): sem o JRE do Enxame, sdk fica para instalar', async () => {
+  it('não roda java -version (o stub do macOS abre diálogo): sem o JRE do Tapflock, sdk fica para instalar', async () => {
     const calls: { cmd: string }[] = [];
     const r = await probeDeps(mac, fake({ files: [mac.sdkmanager], exec: { 'java -version': 'openjdk version "21.0.4"' }, calls }));
     expect(calls.some((c) => c.cmd.startsWith('java'))).toBe(false);
     expect(r.deps.find((d) => d.id === 'sdk')).toMatchObject({ state: 'todo' });
   });
-  it('Linux continua procurando só no Enxame e no PATH', async () => {
+  it('Linux continua procurando só no Tapflock e no PATH', async () => {
     const calls: { cmd: string }[] = [];
     await probeDeps(paths, fake({ calls }));
     expect(calls.filter((c) => c.cmd.endsWith(' --version')).map((c) => c.cmd)).toEqual([`${paths.ollamaBin} --version`, 'ollama --version']);

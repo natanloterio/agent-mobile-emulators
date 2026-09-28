@@ -4,7 +4,7 @@
 // `mac.identity` é `null` e o electron-builder não assina nada por conta própria. Mas no Apple
 // Silicon todo binário precisa de ao menos uma assinatura ad-hoc: o electron-builder já alterou o
 // Info.plist e outros arquivos do bundle nesta etapa (doPack), o que invalida a assinatura original
-// do Electron. Sem reassinar aqui, `Enxame.app` fica com uma assinatura inválida e o macOS recusa
+// do Electron. Sem reassinar aqui, `Tapflock.app` fica com uma assinatura inválida e o macOS recusa
 // abrir mesmo com "Abrir Mesmo Assim". Por isso assinamos com `codesign --sign -` (identidade "-" =
 // ad-hoc), sem `--timestamp` (não se aplica a ad-hoc e exige rede) e sem hardened runtime (que exigiria
 // entitlements extras para uma assinatura ad-hoc). Este hook roda para toda plataforma empacotada

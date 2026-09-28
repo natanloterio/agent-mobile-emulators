@@ -8,7 +8,7 @@ const isResult = (v: unknown): v is LoginResult =>
   typeof v === 'object' && v !== null && OUTCOMES.includes((v as LoginResult).outcome) && typeof (v as LoginResult).detail === 'string';
 
 /**
- * `enxame:login`: o daemon usa a credencial do próprio cofre (spec missões §Cofre); a senha não passa mais pelo main.
+ * `tapflock:login`: o daemon usa a credencial do próprio cofre (spec missões §Cofre); a senha não passa mais pelo main.
  * O id é validado antes de virar caminho.
  */
 export async function loginViaDaemon(id: string, { post }: { readonly post: (path: string, body: unknown) => Promise<unknown> }): Promise<LoginResult> {

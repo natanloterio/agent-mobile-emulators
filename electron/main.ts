@@ -9,6 +9,8 @@ import { createDaemonGate } from './daemon-gate.js';
 import { assertId, createCredentialVault } from './credentials.js';
 import { migrateLegacyCredentials, parseCredentialsResponse } from './credentials-migrate.js';
 import { createGopBuffer } from './gop-buffer.js';
+import { PRODUCT_NAME } from './brand.js';
+import { migrateDataDir, migrateUserData } from './legacy-migrate.js';
 import { loginViaDaemon } from './login.js';
 import { apiRoute } from './api-route.js';
 import { providerRoute } from './provider-route.js';
@@ -31,6 +33,13 @@ const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 // Deixamos o Chromium escolher a plataforma; o spike de 10 decoders decide o resto.
 app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
 
+// Troca de nome (Enxame → Tapflock): o perfil do Electron muda antes do ready (depois o Chromium já o abriu) e a pasta
+// de dados antes de qualquer leitura dela. Falhou, tudo segue no nome antigo e a próxima subida tenta de novo.
+migrateUserData(app.getPath('appData'));
+const dataMigration = migrateDataDir(process.env, os.homedir()).catch((e: unknown) => {
+  console.error('[tapflock] migração da pasta de dados falhou:', (e as Error).message);
+});
+
 // O daemon manda um snapshot ao conectar e depois só em eventos; guardamos o último para
 // reenviar a cada carga da janela (did-finish-load), senão a tela fica no mock até o próximo evento.
 let lastSnapshot: unknown = null;
@@ -45,7 +54,7 @@ function createWindow(): void {
     height: 900,
     minWidth: 360,
     minHeight: 640,
-    title: 'Enxame',
+    title: PRODUCT_NAME,
     backgroundColor: '#ffffff',
     autoHideMenuBar: true,
     webPreferences: {
@@ -57,9 +66,9 @@ function createWindow(): void {
   });
 
   win.webContents.on('did-finish-load', () => {
-    if (lastSnapshot !== null) win.webContents.send('enxame:snapshot', lastSnapshot);
-    for (const f of lastFrames.values()) win.webContents.send('enxame:frame', f);
-    for (const p of gop.replay()) win.webContents.send('enxame:video', p);
+    if (lastSnapshot !== null) win.webContents.send('tapflock:snapshot', lastSnapshot);
+    for (const f of lastFrames.values()) win.webContents.send('tapflock:frame', f);
+    for (const p of gop.replay()) win.webContents.send('tapflock:video', p);
   });
 
   if (devServerUrl) {
@@ -69,7 +78,7 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+Promise.all([app.whenReady(), dataMigration]).then(() => {
   // O design não tem barra de menu; atalhos de sistema continuam funcionando.
   Menu.setApplicationMenu(null);
   createWindow();
@@ -79,16 +88,16 @@ app.whenReady().then(() => {
 
   // Canais registrados já na subida: clique antes do daemon responder recebe "daemon não conectado", não um erro do Electron.
   const gate = createDaemonGate<DaemonInfo>();
-  ipcMain.handle('enxame:startGoal', (_e, text: string) => gate.use((info) => post(info, '/goals', { text })));
-  ipcMain.handle('enxame:kill', () => gate.use((info) => post(info, '/kill')));
-  ipcMain.handle('enxame:resume', () => gate.use((info) => post(info, '/resume')));
+  ipcMain.handle('tapflock:startGoal', (_e, text: string) => gate.use((info) => post(info, '/goals', { text })));
+  ipcMain.handle('tapflock:kill', () => gate.use((info) => post(info, '/kill')));
+  ipcMain.handle('tapflock:resume', () => gate.use((info) => post(info, '/resume')));
   // Canal genérico do incremento 5: só rotas da lista de permissão (electron/api-route.ts).
-  ipcMain.handle('enxame:api', (_e, method: string, pathname: string, body?: unknown) => {
+  ipcMain.handle('tapflock:api', (_e, method: string, pathname: string, body?: unknown) => {
     const r = apiRoute(method, pathname);
     return gate.use((info) => request(info, r.method, r.path, body));
   });
-  ipcMain.handle('enxame:setProvider', (_e, role: string, patch: unknown) => gate.use((info) => request(info, 'PUT', providerRoute(role, 'put'), patch)));
-  ipcMain.handle('enxame:testProvider', (_e, role: string) => gate.use((info) => request(info, 'POST', providerRoute(role, 'test'))));
+  ipcMain.handle('tapflock:setProvider', (_e, role: string, patch: unknown) => gate.use((info) => request(info, 'PUT', providerRoute(role, 'put'), patch)));
+  ipcMain.handle('tapflock:testProvider', (_e, role: string) => gate.use((info) => request(info, 'POST', providerRoute(role, 'test'))));
   // Credenciais no cofre do daemon (spec missões §Cofre): o main só repassa; nenhuma resposta traz senha.
   const legacyFile = path.join(app.getPath('userData'), 'credentials.json');
   const legacy = createCredentialVault({ safeStorage, file: legacyFile });
@@ -97,15 +106,15 @@ app.whenReady().then(() => {
   const migrateCredentials = () => migrateLegacyCredentials({
     legacy, post: (p, body) => daemon('POST', p, body),
     exists: () => access(legacyFile).then(() => true, () => false), remove: () => unlink(legacyFile),
-  }).then((r) => { if (r.migrated) console.log(`[enxame] ${r.migrated} credencial(is) migrada(s) para o cofre do daemon`); })
-    .catch((e: unknown) => console.error('[enxame] migração de credenciais falhou; o arquivo antigo foi mantido:', (e as Error).message));
+  }).then((r) => { if (r.migrated) console.log(`[tapflock] ${r.migrated} credencial(is) migrada(s) para o cofre do daemon`); })
+    .catch((e: unknown) => console.error('[tapflock] migração de credenciais falhou; o arquivo antigo foi mantido:', (e as Error).message));
   const credentials = async () => parseCredentialsResponse(await daemon('GET', '/credentials'));
-  ipcMain.handle('enxame:credentials:available', async () => (await credentials()).available);
-  ipcMain.handle('enxame:credentials:status', async () => (await credentials()).entries);
-  ipcMain.handle('enxame:credentials:set', (_e, id: string, username: string, password: string) => { assertId(id); return daemon('PUT', `/identities/${id}/credentials`, { username, password }); });
-  ipcMain.handle('enxame:credentials:clear', (_e, id: string) => { assertId(id); return daemon('DELETE', `/identities/${id}/credentials`); });
-  ipcMain.handle('enxame:login', (_e, id: string) => loginViaDaemon(id, { post: (p, body) => daemon('POST', p, body) }));
-  ipcMain.handle('enxame:getProviderModels', (_e, role: string) => gate.use((info) => request(info, 'GET', providerRoute(role, 'models'))));
+  ipcMain.handle('tapflock:credentials:available', async () => (await credentials()).available);
+  ipcMain.handle('tapflock:credentials:status', async () => (await credentials()).entries);
+  ipcMain.handle('tapflock:credentials:set', (_e, id: string, username: string, password: string) => { assertId(id); return daemon('PUT', `/identities/${id}/credentials`, { username, password }); });
+  ipcMain.handle('tapflock:credentials:clear', (_e, id: string) => { assertId(id); return daemon('DELETE', `/identities/${id}/credentials`); });
+  ipcMain.handle('tapflock:login', (_e, id: string) => loginViaDaemon(id, { post: (p, body) => daemon('POST', p, body) }));
+  ipcMain.handle('tapflock:getProviderModels', (_e, role: string) => gate.use((info) => request(info, 'GET', providerRoute(role, 'models'))));
 
   const projectRoot = path.join(here, '..');
   const broadcast = (ch: string, d: unknown) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send(ch, d); };
@@ -123,11 +132,11 @@ app.whenReady().then(() => {
       gate.set(info);
       void migrateCredentials();
       connectSnapshots(info, {
-        onSnapshot: (data) => { lastSnapshot = data; broadcast('enxame:snapshot', data); },
-        onFrame: (f) => { const id = (f as { id?: unknown })?.id; if (typeof id === 'string') lastFrames.set(id, f); broadcast('enxame:frame', f); },
-        onVideo: (p) => { gop.push(p as never); broadcast('enxame:video', p); },
+        onSnapshot: (data) => { lastSnapshot = data; broadcast('tapflock:snapshot', data); },
+        onFrame: (f) => { const id = (f as { id?: unknown })?.id; if (typeof id === 'string') lastFrames.set(id, f); broadcast('tapflock:frame', f); },
+        onVideo: (p) => { gop.push(p as never); broadcast('tapflock:video', p); },
       });
-    })().catch((e: Error) => { gate.fail(e.message); console.error('[enxame] sem daemon:', e.message); daemonStart = null; throw e; });
+    })().catch((e: Error) => { gate.fail(e.message); console.error('[tapflock] sem daemon:', e.message); daemonStart = null; throw e; });
     return daemonStart;
   };
 
@@ -138,7 +147,7 @@ app.whenReady().then(() => {
   const paths = resolveSetupPaths(process.env, os.homedir(), saved?.paths.sdkRoot ?? null, platform ?? undefined);
   const probe = () => probeSetup(paths, nodeProbeDeps(), nodeHardwareDeps());
   const startupP = decideStartup({ supported, saved, paths, probe, now: () => new Date().toISOString() }).then(async (s) => {
-    if (s.write) await writeSetupFile(paths.setupFile, s.write).catch((e: Error) => console.error('[enxame] setup.json:', e.message));
+    if (s.write) await writeSetupFile(paths.setupFile, s.write).catch((e: Error) => console.error('[tapflock] setup.json:', e.message));
     return s;
   });
   void startupP.then((s) => { if (s.completed) void startDaemon().catch(() => undefined); });

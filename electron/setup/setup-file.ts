@@ -15,14 +15,14 @@ export type SetupFileT = z.infer<typeof SetupFileSchema>;
 function parseOrWarn(file: string, read: () => string): SetupFileT | null {
   let text: string;
   try { text = read(); } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') console.warn(`[enxame] setup.json ilegível (${file}):`, (e as Error).message);
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') console.warn(`[tapflock] setup.json ilegível (${file}):`, (e as Error).message);
     return null;
   }
   try {
     const parsed = SetupFileSchema.safeParse(JSON.parse(text));
     if (parsed.success) return parsed.data;
-    console.warn(`[enxame] setup.json inválido (${file}), ignorado:`, parsed.error.issues.map((i) => i.message).join('; '));
-  } catch (e) { console.warn(`[enxame] setup.json inválido (${file}), ignorado:`, (e as Error).message); }
+    console.warn(`[tapflock] setup.json inválido (${file}), ignorado:`, parsed.error.issues.map((i) => i.message).join('; '));
+  } catch (e) { console.warn(`[tapflock] setup.json inválido (${file}), ignorado:`, (e as Error).message); }
   return null;
 }
 

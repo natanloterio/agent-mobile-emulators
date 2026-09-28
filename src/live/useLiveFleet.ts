@@ -8,9 +8,9 @@ export interface LiveFleet { readonly snap: FleetSnapshot | null; readonly frame
 export function useLiveFleet(): LiveFleet {
   const [snap, setSnap] = useState<FleetSnapshot | null>(null);
   const [frames, setFrames] = useState<Readonly<Record<string, LiveFrame>>>({});
-  const bus = useMemo(() => (window.enxame?.onVideo ? createVideoBus() : null), []);
+  const bus = useMemo(() => (window.tapflock?.onVideo ? createVideoBus() : null), []);
   useEffect(() => {
-    const bridge = window.enxame; if (!bridge?.onSnapshot) return;
+    const bridge = window.tapflock; if (!bridge?.onSnapshot) return;
     const offSnap = bridge.onSnapshot(setSnap);
     const offFrame = bridge.onFrame?.((f) => setFrames((prev) => ({ ...prev, [f.id]: f })));
     const offVideo = bus && bridge.onVideo ? bridge.onVideo((p) => bus.publish(p)) : undefined;

@@ -20,7 +20,7 @@ export function Sidebar({ screen, needsCount, meters, host, onNavigate }: Sideba
   const { t } = useI18n();
   return (
     <aside className="sidebar">
-      <div className="sidebar__brand"><Logo /><span className="sidebar__wordmark">Enxame</span></div>
+      <div className="sidebar__brand"><Logo /><span className="sidebar__wordmark">Tapflock</span></div>
       <nav className="sidebar__nav" aria-label={t('shell.nav.aria')}>
         {NAV_ITEMS.map((n) => (
           <button

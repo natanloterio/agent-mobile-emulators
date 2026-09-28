@@ -1,4 +1,4 @@
-<title>Enxame Onboarding</title>
+<title>Tapflock Onboarding</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
 <style>
   /* Tokens do Positivus, os mesmos de src/styles/tokens.css. O app é só tema claro; o mockup também. */
@@ -192,7 +192,7 @@
 </style>
 
 <div class="mockbar" role="region" aria-label="Controles do mockup">
-  <span><strong>Mockup</strong> · tela de primeira execução do Enxame</span>
+  <span><strong>Mockup</strong> · tela de primeira execução do Tapflock</span>
   <span>Cenário:</span>
   <div class="seg" id="scenario">
     <button type="button" data-v="parcial" aria-pressed="true">Máquina já usada</button>
@@ -205,7 +205,7 @@
   <aside class="rail">
     <div class="logo">
       <svg viewBox="0 0 35.252 35.252" width="28" height="28" aria-hidden="true"><path d="M 17.651 5.186 L 35.252 0 L 30.116 17.651 L 35.252 35.252 L 17.651 30.116 L 0 35.252 L 5.186 17.651 L 0 0 L 17.651 5.186 Z" fill="#B9FF66"></path></svg>
-      Enxame
+      Tapflock
     </div>
     <ol class="steps" id="steps"></ol>
     <div class="rail-foot">
@@ -239,7 +239,7 @@
   const DEPS = [
     { id: 'sdk', name: 'Android SDK', role: 'Base para criar e rodar os emuladores', where: '~/Android/Sdk', sizeMb: 150 },
     { id: 'emu', name: 'Android Emulator', role: 'Roda cada identidade como um celular', sizeMb: 380 },
-    { id: 'adb', name: 'platform-tools (adb)', role: 'Canal entre o Enxame e os emuladores', sizeMb: 14 },
+    { id: 'adb', name: 'platform-tools (adb)', role: 'Canal entre o Tapflock e os emuladores', sizeMb: 14 },
     { id: 'img', name: 'Android 14 · Google Play · x86_64', role: 'Sistema que cada identidade usa (API 34)', sizeMb: 1600 },
     { id: 'kvm', name: 'Aceleração de hardware (KVM)', role: 'Sem ela o emulador fica lento demais para os agentes' },
     { id: 'ollama', name: 'Ollama', role: 'Roda modelos de IA no seu computador', sizeMb: 1600 },
@@ -261,7 +261,7 @@
   SCENARIOS.erro = SCENARIOS.parcial;
 
   const MODELS = [
-    { id: 'gpt-oss:20b', sizeGb: 13, vramGb: 14, note: 'Padrão do Enxame. Bom em chamar ferramentas.', tag: 'Recomendado' },
+    { id: 'gpt-oss:20b', sizeGb: 13, vramGb: 14, note: 'Padrão do Tapflock. Bom em chamar ferramentas.', tag: 'Recomendado' },
     { id: 'qwen3:14b', sizeGb: 9.3, vramGb: 11, note: 'Mais leve. Sobra espaço para outro modelo.' },
     { id: 'qwen3:32b', sizeGb: 20, vramGb: 22, note: 'Mais capaz, ocupa quase toda a placa.' },
     { id: 'gpt-oss:120b', sizeGb: 65, vramGb: 66, note: 'Não cabe nos 24 GB da sua placa.', tooBig: true },
@@ -325,7 +325,7 @@
     return `
       <div class="head">
         <h1 class="heading">Vamos deixar sua máquina pronta</h1>
-        <p class="lede">O Enxame precisa do Android e de um modelo de IA para funcionar. Verificamos o que já está instalado. O que faltar, a gente baixa e configura para você.</p>
+        <p class="lede">O Tapflock precisa do Android e de um modelo de IA para funcionar. Verificamos o que já está instalado. O que faltar, a gente baixa e configura para você.</p>
       </div>
       <div class="summary">
         <div class="stat stat--ok"><span class="label">Prontos</span><b>${count('ok')}</b><span>de ${deps.length} itens</span></div>
@@ -492,7 +492,7 @@
     return `
       <div class="head">
         <h1 class="heading">Tudo pronto</h1>
-        <p class="lede">A máquina tem tudo que o Enxame precisa. Falta criar a primeira identidade: um emulador ligado a uma conta sua.</p>
+        <p class="lede">A máquina tem tudo que o Tapflock precisa. Falta criar a primeira identidade: um emulador ligado a uma conta sua.</p>
       </div>
       <div class="ready">
         <div class="card card--grey"><span class="label">Instalado e testado</span><ul class="checklist" style="margin-top:14px">${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>

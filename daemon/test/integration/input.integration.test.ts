@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createAdb } from '../../src/device/adb.js';
 import { createDeviceInput, parseWmSize, quoteSh } from '../../src/device/input.js';
 
-const reason = process.env.ENXAME_INTEGRATION ? null : 'ENXAME_INTEGRATION não definido';
+const reason = process.env.TAPFLOCK_INTEGRATION ? null : 'TAPFLOCK_INTEGRATION não definido';
 const SERIAL = 'emulator-5554';
 
-describe.skipIf(!!reason)(`input real no emulador (ENXAME_INTEGRATION=1)${reason ? ` — pulado: ${reason}` : ''}`, () => {
+describe.skipIf(!!reason)(`input real no emulador (TAPFLOCK_INTEGRATION=1)${reason ? ` — pulado: ${reason}` : ''}`, () => {
   it('wm size é legível e o escape do sh preserva o texto byte a byte', async () => {
     const adb = createAdb();
     expect(parseWmSize(await adb.shell(SERIAL, ['wm', 'size']))).not.toBeNull();

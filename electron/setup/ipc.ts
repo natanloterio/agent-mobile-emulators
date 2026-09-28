@@ -27,29 +27,29 @@ export function registerSetupIpc(d: SetupIpcDeps): void {
   // novo com o daemon já rodando, porque `d.status()` só reflete o que foi decidido na subida do main.
   let finished = false;
 
-  d.handle('enxame:setup:status', async () => {
+  d.handle('tapflock:setup:status', async () => {
     const s = await d.status();
     return { completed: finished || s.completed, supported: s.supported };
   });
-  d.handle('enxame:setup:check', async () => {
+  d.handle('tapflock:setup:check', async () => {
     const r = await d.probe();
     ollamaBin = r.ollamaBin;
     return r.report;
   });
-  d.handle('enxame:setup:install', async (_e, raw) => {
+  d.handle('tapflock:setup:install', async (_e, raw) => {
     const req = InstallRequestSchema.parse(raw);
     if (!(await d.status()).supported) throw new Error(UNSUPPORTED);
     if (running) throw new Error('instalação já em andamento');
-    const log = (line: string) => d.send('enxame:setup:log', line);
+    const log = (line: string) => d.send('tapflock:setup:log', line);
     const bin = req.jobs.includes('ollama') ? d.paths.ollamaBin : (ollamaBin ?? d.paths.ollamaBin);
     running = runJobs(req.jobs, d.runners(req.localModel, bin, log), (ev) => {
       if (ev.id === 'ollama' && ev.state === 'done') ollamaBin = d.paths.ollamaBin;
-      d.send('enxame:setup:job', ev);
+      d.send('tapflock:setup:job', ev);
     });
     try { await running; } finally { running = null; }
   });
-  d.handle('enxame:setup:testKey', async (_e, raw) => d.testKey(AnthropicKeySchema.parse(raw)));
-  d.handle('enxame:setup:finish', async (_e, raw) => {
+  d.handle('tapflock:setup:testKey', async (_e, raw) => d.testKey(AnthropicKeySchema.parse(raw)));
+  d.handle('tapflock:setup:finish', async (_e, raw) => {
     const req = FinishRequestSchema.parse(raw);
     if (!(await d.status()).supported) throw new Error(UNSUPPORTED);
     if (running) throw new Error('instalação em andamento');

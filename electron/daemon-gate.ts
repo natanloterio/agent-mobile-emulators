@@ -1,6 +1,6 @@
 /**
  * Canais IPC existem desde a subida do app; antes de o daemon responder eles falham com mensagem legível
- * (antes: "No handler registered for 'enxame:…'", porque o registro só acontecia depois do daemon).
+ * (antes: "No handler registered for 'tapflock:…'", porque o registro só acontecia depois do daemon).
  */
 export interface DaemonGate<I> {
   set(info: I): void;

@@ -1,5 +1,25 @@
 # Changelog
 
+## Não lançado
+
+### Mudou
+- O projeto agora se chama **Tapflock** (antes, Enxame). App, instaladores, repositório, pasta de dados
+  (`~/.local/share/tapflock`), serviço no chaveiro, variáveis de ambiente (`TAPFLOCK_*`) e AVDs novos (`tapflock_*`).
+
+### Migração
+- Na primeira execução, a pasta `~/.local/share/enxame` vira `~/.local/share/tapflock` (o daemon antigo, se ainda
+  estiver rodando, é parado antes), o banco `enxame.sqlite` vira `tapflock.sqlite` e os caminhos do `setup.json` são
+  atualizados. Se não der para mover (arquivo aberto no Windows, por exemplo), tudo segue no nome antigo e a próxima
+  execução tenta de novo.
+- A chave do cofre é copiada do serviço `enxame` para `tapflock` no chaveiro do sistema (a antiga fica, para uma
+  versão anterior ainda abrir o cofre); o perfil do Electron (idioma
+  escolhido) passa de `Enxame` para `Tapflock`.
+- Identidades existentes seguem com os AVDs `enxame_*` e os snapshots `enxame`; a base `enxame_golden` ainda é usada
+  quando não existe `tapflock_golden`. Variáveis `ENXAME_*` continuam valendo quando a `TAPFLOCK_*` correspondente
+  não está definida.
+- O `.deb` substitui o pacote `enxame`; o instalador de uma linha do macOS remove o `Enxame.app` antigo. No Windows,
+  desinstale o Enxame pelas Configurações.
+
 ## 0.1.0 — pré-lançamento
 
 Primeira versão pública.

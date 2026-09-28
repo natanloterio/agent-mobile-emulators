@@ -11,11 +11,11 @@ type Phase =
 
 /**
  * Decide entre o onboarding (primeira execução, spec onboarding) e o app. Sem a ponte de setup (navegador, preload
- * antigo) ou se o main não responder, abre o app como antes: o onboarding nunca pode trancar quem já usa o Enxame.
+ * antigo) ou se o main não responder, abre o app como antes: o onboarding nunca pode trancar quem já usa o Tapflock.
  * O atalho de Provedores só aparece onde o onboarding tem suporte (Linux x86_64); "Voltar ao app" volta a Provedores.
  */
 export function Root() {
-  const setup = window.enxame?.setup;
+  const setup = window.tapflock?.setup;
   const [phase, setPhase] = useState<Phase>(() => (setup ? { kind: 'loading' } : { kind: 'app', startScreen: null }));
   const [supported, setSupported] = useState(false);
 
