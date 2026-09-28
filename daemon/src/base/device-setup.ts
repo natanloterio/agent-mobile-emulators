@@ -33,8 +33,12 @@ export async function freezeTargetApp(adb: Pick<Adb, 'shell'>, serial: string): 
   await adb.shell(serial, ['pm', 'disable-user', '--user', '0', PLAY_STORE]);
 }
 
-/** Conta do tipo `com.google` registrada no aparelho (`dumpsys account`). */
+/**
+ * Conta do tipo `com.google` registrada no aparelho (`dumpsys account`). Só as linhas `Account {name=…, type=…}`
+ * contam: a mesma saída lista os tipos de autenticador instalados (`AuthenticatorDescription {type=com.google}`)
+ * mesmo com `Accounts: 0`.
+ */
 export async function googleAccountOnDevice(adb: Pick<Adb, 'shell'>, serial: string): Promise<boolean> {
   const out = await adb.shell(serial, ['dumpsys', 'account']);
-  return /type=com\.google\b/.test(out);
+  return /Account \{name=[^,}]+, type=com\.google\}/.test(out);
 }
