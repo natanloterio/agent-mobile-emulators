@@ -38,11 +38,11 @@ export function onboardingReducer(s: OnboardingState, a: OnboardingAction): Onbo
     case 'check-start': return { ...s, checking: true, checkError: null };
     case 'check-failed': return { ...s, checking: false, checkError: a.error };
     case 'check-done': {
-      const gpu = a.report.hardware.gpu;
+      const { gpu, diskFreeGiB } = a.report.hardware;
       return {
         ...s, checking: false, checkError: null, report: a.report,
-        mode: s.modeTouched ? s.mode : defaultMode(gpu),
-        model: s.modelTouched ? s.model : defaultModel(gpu),
+        mode: s.modeTouched ? s.mode : defaultMode(gpu, diskFreeGiB),
+        model: s.modelTouched ? s.model : defaultModel(gpu, diskFreeGiB),
       };
     }
     // Erro do fim é do fim: voltar de passo ou instalar de novo começa sem ele.

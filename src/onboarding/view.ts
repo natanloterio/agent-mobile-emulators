@@ -1,6 +1,6 @@
 import { daemonErrorText } from '../i18n/daemonErrors';
 import type { I18n } from '../i18n/translate';
-import { LOCAL_MODELS, RAM_PER_EMULATOR_GIB, THREADS_PER_EMULATOR, VRAM_SYSTEM_GIB, type ModelEntry, type SetupMode } from './catalog';
+import { LOCAL_MODELS, RAM_PER_EMULATOR_GIB, THREADS_PER_EMULATOR, VRAM_SYSTEM_GIB, type ModelEntry, type SetupMode, DISK_MARGIN_GIB } from './catalog';
 import type { OnboardingState } from './reducer';
 import { JOB_IDS, type DepId, type DepStatus, type Gpu, type Hardware, type JobEvent, type JobId, type SetupReport, type UserFix } from './schema';
 
@@ -53,12 +53,18 @@ export function modelFit(m: ModelEntry, gpu: Gpu): ModelFit {
   if (need > gpu.totalGiB) return 'too-big';
   return need > gpu.totalGiB * 0.9 ? 'tight' : 'fits';
 }
-export function defaultModel(gpu: Gpu): string {
-  const fitting = LOCAL_MODELS.filter((m) => modelFit(m, gpu) !== 'too-big');
-  const pick = fitting.find((m) => m.recommended) ?? [...fitting].sort((a, b) => b.vramGb - a.vramGb)[0];
-  return (pick ?? LOCAL_MODELS[1]).id;
+/** Modelos que cabem na memória de vídeo e no disco livre (com folga para o resto da instalação). */
+function fittingModels(gpu: Gpu, diskFreeGiB: number): readonly ModelEntry[] {
+  return LOCAL_MODELS.filter((m) => modelFit(m, gpu) !== 'too-big' && m.sizeGb + DISK_MARGIN_GIB <= diskFreeGiB);
 }
-export const defaultMode = (gpu: Gpu): SetupMode => (gpu ? 'misto' : 'nuvem');
+/** O recomendado se cabe; senão o maior que cabe; se nenhum cabe, o menor (o modo cai para Só nuvem em `defaultMode`). */
+export function defaultModel(gpu: Gpu, diskFreeGiB = Infinity): string {
+  const fitting = fittingModels(gpu, diskFreeGiB);
+  const pick = fitting.find((m) => m.recommended) ?? [...fitting].sort((a, b) => b.vramGb - a.vramGb)[0];
+  return (pick ?? [...LOCAL_MODELS].sort((a, b) => a.vramGb - b.vramGb)[0]).id;
+}
+/** Misto só quando algum modelo local cabe na máquina e no disco; senão Só nuvem, que não baixa modelo. */
+export const defaultMode = (gpu: Gpu, diskFreeGiB = Infinity): SetupMode => (gpu && fittingModels(gpu, diskFreeGiB).length ? 'misto' : 'nuvem');
 
 export interface VramBar { readonly systemPct: number; readonly modelPct: number; readonly freeGiB: number; readonly totalGiB: number }
 export function vramBar(m: ModelEntry, gpu: Gpu): VramBar | null {
@@ -125,7 +131,11 @@ export function footerView(s: OnboardingState, i18n: I18n): FooterView {
       : t('onboarding.hint.download', { size });
     const action = jobs.length ? t('onboarding.nav.install') : t('onboarding.nav.continue');
     if (cloudKeyMissing(s)) return { ...base, action, disabled: true, error: true, hint: t('onboarding.hint.cloudNeedsKey') };
-    return { ...base, action, disabled: tooBig, hint };
+    // Botão travado sempre diz por quê: modelo que não cabe na memória, ou download maior que o disco livre.
+    const gpu = s.report.hardware.gpu;
+    if (tooBig) return { ...base, action, disabled: true, error: true, hint: t('onboarding.hint.modelTooBig', { model: s.model, vram: gpu ? `${i18n.fmt.decimal(gpu.totalGiB)} GB` : '—' }) };
+    if (jobs.length && lowDisk) return { ...base, action, disabled: true, error: true, hint };
+    return { ...base, action, disabled: false, hint };
   }
   if (s.step === 2) {
     if (s.finishing) return { ...base, action: t('onboarding.nav.finishing'), disabled: true, hint: '' };
