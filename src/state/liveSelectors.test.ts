@@ -38,6 +38,11 @@ describe('liveSelectors — cockpit', () => {
     expect(tileOf({ state: 'running' }).overlay).toBe('');
     expect(offlineOverlay({ name: 'x', handle: '', state: 'offline', task: '', steps: 0, budget: 0, cost: 0, error: '' })).toMatch(/app atualizou/);
   });
+  it('offline ligando: tile diz "ligando…" e o aviso do boot, em vez do motivo do offline', () => {
+    const t = tileOf({ state: 'offline', signals: null, error: 'adb: device offline', booting: true });
+    expect(t.stateLabel).toBe('ligando…');
+    expect(t.overlay).toBe('Ligando o emulador. Leva 1–2 min.');
+  });
   it('tile vivo: app e versão reais, rascunho = tarefa real, rótulo de stream pelo estado do vídeo', () => {
     const t = tileOf({ task: 'Levantar DMs', video: 'retrying' });
     expect(t.app).toBe('Instagram'); expect(t.version).toBe('448.0.0.52.84');

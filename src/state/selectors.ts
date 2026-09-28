@@ -55,7 +55,7 @@ export function decorateTile(d: Identity, index: number, killed: boolean, i18n: 
     index,
     effState,
     // Estados crus do daemon ficam como estão; só "pausado" é português.
-    stateLabel: effState === 'paused' ? t('common.state.paused') : STATE_LABEL[effState],
+    stateLabel: effState === 'paused' ? t('common.state.paused') : d.live?.booting ? t('identities.booting.pill') : STATE_LABEL[effState],
     pillTone: STATE_TONE[effState],
     pillGreenBorder: needs,
     cardTone: needs ? 'dark' : d.state === 'running' ? 'grey' : 'white',

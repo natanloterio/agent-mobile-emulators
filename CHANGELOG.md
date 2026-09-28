@@ -2,6 +2,11 @@
 
 ## Não lançado
 
+### Mudou
+- Boot com retorno visual: enquanto o emulador sobe (1–2 min em segundo plano), a identidade aparece como
+  "ligando…" em Identidades e no Cockpit, com o aviso do tempo; o botão de subir some até terminar e um segundo Boot
+  no mesmo aparelho é recusado. Antes a tela seguia em "offline" sem sinal de que algo acontecia.
+
 ## 0.2.0 — pré-lançamento
 
 ### Mudou

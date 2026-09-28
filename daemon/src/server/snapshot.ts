@@ -14,6 +14,8 @@ export interface IdentitySnapshot {
   readonly id: string; readonly name: string; readonly handle: string; readonly state: string; readonly task: string;
   readonly steps: number; readonly budget: number | null; readonly costUsd: number; readonly error: string; readonly lastTools: readonly ToolRow[];
   readonly degraded: boolean; readonly genMs: number; readonly earlyStopRemaining: number;
+  /** Emulador subindo agora (boot em segundo plano, 1–2 min); o ciclo de vida só muda no fim. */
+  readonly booting?: boolean;
   /** Estado do stream de vídeo do daemon: a UI mostra "ao vivo" por ele, não pela chegada de pacotes (tela parada não gera pacote). */
   readonly video: VideoState;
   // Incremento 5 (spec §3.1).
@@ -63,6 +65,7 @@ export interface FleetSnapshot {
 }
 export interface SnapshotSources {
   readonly videoState?: (id: string) => VideoState;
+  readonly booting?: () => ReadonlySet<string>;
   readonly host?: () => HostMetrics | null;
   readonly localParallel?: () => LocalParallelStatus;
   readonly baseAvd?: () => BaseAvdLive;
@@ -86,7 +89,7 @@ export function isRestoreUnsafe(snapshotTakenAt: string | null | undefined, now:
 type TaskRow = { id: string; instruction: string; state: string; cost_usd: number; degraded: number; early_stop_remaining: number | null };
 type StepRow = { idx: number; tool: string | null; result_excerpt: string | null; input_tokens: number | null; output_tokens: number | null; provider: string | null };
 
-function identitySnapshot(db: DatabaseSync, id: IdentityRow, budgets: StepBudgets, videoState?: (id: string) => VideoState): IdentitySnapshot {
+function identitySnapshot(db: DatabaseSync, id: IdentityRow, budgets: StepBudgets, videoState?: (id: string) => VideoState, booting?: ReadonlySet<string>): IdentitySnapshot {
   const task = db.prepare('select id, instruction, state, cost_usd, degraded, early_stop_remaining from task where identity_id=? order by created_at desc, rowid desc limit 1').get(id.id) as TaskRow | undefined;
   const agg = task ? (db.prepare('select count(*) as n, coalesce(sum(gen_ms), 0) as g from step where task_id=?').get(task.id) as { n: number; g: number }) : { n: 0, g: 0 };
   const steps = task ? (db.prepare('select idx, tool, result_excerpt, input_tokens, output_tokens, provider from step where task_id=? order by idx desc limit 6').all(task.id) as StepRow[]) : [];
@@ -104,7 +107,7 @@ function identitySnapshot(db: DatabaseSync, id: IdentityRow, budgets: StepBudget
     appPackage: id.appPackage, appVersionName: id.appVersionName, consolePort: id.consolePort, mcpHostPort: id.mcpHostPort,
     avdName: id.avdName, serial: id.serial, snapshotTakenAt: id.snapshotTakenAt ?? null, restoreUnsafe: isRestoreUnsafe(id.snapshotTakenAt),
     diskBytes: id.diskBytes ?? null, bannedReason: id.bannedReason ?? null, discardedAt: id.discardedAt ?? null,
-    signals: id.lastSignals ?? null, hasPin: !!id.lockPin,
+    signals: id.lastSignals ?? null, hasPin: !!id.lockPin, booting: booting?.has(id.id) ?? false,
   };
 }
 
@@ -142,7 +145,9 @@ export function currentGoal(db: DatabaseSync): GoalSummary | null {
 export function buildSnapshot(db: DatabaseSync, killed: boolean, sources?: SnapshotSources | ((id: string) => VideoState)): FleetSnapshot {
   const src: SnapshotSources = typeof sources === 'function' ? { videoState: sources } : (sources ?? {});
   const stepBudgets = readStepBudgets(db);
-  const identities = listFleet(db).map((id) => identitySnapshot(db, id, stepBudgets, src.videoState));
+  let booting: ReadonlySet<string> | undefined;
+  try { booting = src.booting?.(); } catch { booting = undefined; }
+  const identities = listFleet(db).map((id) => identitySnapshot(db, id, stepBudgets, src.videoState, booting));
   const cfg = readProviderConfig(db); const tests = lastProviderTests(db);
   const providers = Object.fromEntries((Object.keys(cfg) as RoleKey[]).map((k) => [k, { ...cfg[k], lastTest: tests[k] ?? null }])) as Record<RoleKey, ProviderSnapshot>;
   let host: HostMetrics | null = null;

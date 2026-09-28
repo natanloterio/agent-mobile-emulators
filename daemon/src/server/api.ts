@@ -33,6 +33,7 @@ export interface ServerOpts {
   readonly screen?: ScreenCapture; readonly video?: VideoStreams;
   /** Estado do stream por identidade, publicado no snapshot (`identities[].video`); ausente = 'idle'. */
   readonly videoState?: (id: string) => VideoState;
+  readonly booting?: () => ReadonlySet<string>;
   /** Métricas do host publicadas no snapshot (spec inc. 5 §3.1); ausente = null. */
   readonly host?: () => HostMetrics | null;
   /** Paralelismo local configurável (spec paralelismo §UI); ausente = default (wanted 1, nada aplicado). */
@@ -96,7 +97,7 @@ export async function startServer(o: ServerOpts): Promise<RunningServer> {
     if (code === 204 || body === undefined) { res.writeHead(code); res.end(); return; }
     res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body));
   };
-  const sources: SnapshotSources = { videoState: o.videoState, host: o.host, localParallel: o.localParallel, baseAvd: o.baseAvd };
+  const sources: SnapshotSources = { videoState: o.videoState, booting: o.booting, host: o.host, localParallel: o.localParallel, baseAvd: o.baseAvd };
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');

@@ -44,6 +44,11 @@ describe('snapshot do incremento 5', () => {
     const s = buildSnapshot(db, false, { host: () => { throw new Error('x'); } });
     expect(s.host).toBeNull(); expect(s.goal).toBeNull();
   });
+  it('marca a identidade que está ligando (fonte do boot em segundo plano)', () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    expect(buildSnapshot(db, false, { booting: () => new Set(['conta1']) }).identities[0].booting).toBe(true);
+    expect(buildSnapshot(db, false).identities[0].booting).toBe(false);
+  });
   it('traz o estado do AVD-base quando a fonte existe; sem fonte, null', () => {
     const db = openDb(':memory:');
     expect(buildSnapshot(db, false, { baseAvd: () => ({ name: 'tapflock_golden', found: false, running: false }) }).baseAvd).toEqual({ name: 'tapflock_golden', found: false, running: false });

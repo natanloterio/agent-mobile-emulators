@@ -72,7 +72,7 @@ const errMsg = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 300);
 
 type Action = (ctx: RouteCtx, id: IdentityRow) => Promise<void>;
 
-export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle(): Promise<void> } {
+export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle(): Promise<void>; booting(): ReadonlySet<string> } {
   const clock = () => ops.now?.() ?? new Date();
   const now = () => clock().toISOString();
   const uuid = ops.uuid ?? randomUUID;
@@ -80,6 +80,8 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
   const base = () => ops.baseAvd ?? currentBaseAvd().name;
   const snap = ops.snapshotName ?? CONFIG.avd.snapshotName;
   const pending = new Set<Promise<void>>();
+  /** Identidades com o emulador subindo agora (boot em segundo plano); vai no snapshot para a tela mostrar. */
+  const booting = new Set<string>();
   let provisioning: Promise<unknown> = Promise.resolve();
 
   const background = (job: () => Promise<void>) => {
@@ -143,7 +145,11 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
   const boot: Action = async (ctx, id) => {
     const body = await parse(ctx, BootBody); if (!body) return;
     if (id.state === 'banned' || id.discardedAt) return ctx.send(409, { error: `identidade ${id.state}${id.discardedAt ? ' e descartada' : ''}` });
+    if (booting.has(id.id)) return ctx.send(409, { error: 'identidade já está ligando' });
+    // O boot leva 1–2 min em segundo plano: sem isto a tela seguia em "offline", sem sinal de que algo acontecia.
+    booting.add(id.id);
     ctx.send(202, { booting: true });
+    ctx.broadcast();
     background(async () => {
       try {
         const booted = await ops.boot(id, { window: body.window ?? false });
@@ -162,7 +168,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
         ops.onIdentitiesChanged?.();
       } catch (e) {
         setIdentityState(ctx.db, id.id, 'offline', { lastError: errMsg(e) });
-      }
+      } finally { booting.delete(id.id); }
       ctx.broadcast();
     });
   };
@@ -344,5 +350,5 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     return true;
   };
 
-  return { route, settle: async () => { while (pending.size) await Promise.all([...pending]); } };
+  return { route, settle: async () => { while (pending.size) await Promise.all([...pending]); }, booting: (): ReadonlySet<string> => booting };
 }

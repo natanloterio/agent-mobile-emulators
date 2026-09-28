@@ -12,6 +12,8 @@ export interface LiveIdentity {
   readonly avdName?: string; readonly serial?: string; readonly snapshotTakenAt?: string | null; readonly restoreUnsafe?: boolean;
   readonly diskBytes?: number | null; readonly bannedReason?: string | null; readonly discardedAt?: string | null;
   readonly signals?: ProbeSignals | null;
+  /** Emulador subindo agora (boot em segundo plano); ausente em daemon antigo. */
+  readonly booting?: boolean;
   readonly hasPin?: boolean;
 }
 export interface ProbeSignals {
