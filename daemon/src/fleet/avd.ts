@@ -1,6 +1,6 @@
 import { cp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { CONFIG } from '../config.js';
+import { CONFIG, currentBaseAvd } from '../config.js';
 import { setIniKeys } from './ini.js';
 
 /** Provisionamento por clone do AVD-base (spec inc. 5 §2): cópia do diretório + `.ini` reescrito. */
@@ -49,7 +49,7 @@ export async function cloneAvd(base: string, newName: string, deps: AvdDeps = {}
 export async function deleteAvd(name: string, deps: AvdDeps & { readonly base?: string } = {}): Promise<void> {
   const home = deps.home ?? CONFIG.avd.home;
   assertName(name);
-  if (name === (deps.base ?? CONFIG.avd.base)) throw new Error(`recusado: ${name} é o AVD-base`);
+  if (name === (deps.base ?? currentBaseAvd().name)) throw new Error(`recusado: ${name} é o AVD-base`);
   await rm(avdDir(home, name), { recursive: true, force: true });
   await rm(iniPath(home, name), { force: true });
 }

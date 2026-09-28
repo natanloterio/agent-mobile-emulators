@@ -117,6 +117,23 @@ describe('footerView', () => {
     expect(footerView({ ...done, finishing: true }, PT)).toMatchObject({ disabled: true, action: 'Configurando…' });
     expect(footerView({ ...done, finishError: '409' }, PT)).toMatchObject({ disabled: false, hint: 'Não deu para configurar os papéis: 409' });
   });
+  it('passo 2: "Só nuvem" sem chave não instala (os agentes não teriam modelo); com chave, instala', () => {
+    const noKey = footerView(st({ step: 1, mode: 'nuvem', apiKey: '  ' }), PT);
+    expect(noKey).toMatchObject({ disabled: true, error: true, hint: 'O modo Só nuvem precisa da chave da Anthropic. Cole a chave acima ou escolha outro modo.' });
+    expect(footerView(st({ step: 1, mode: 'nuvem', apiKey: 'sk-ant-x' }), PT)).toMatchObject({ disabled: false, error: false });
+    expect(footerView(st({ step: 1, mode: 'nuvem', apiKey: 'sk-ant-x', keyTest: 'invalid' }), PT)).toMatchObject({ disabled: true, error: true });
+    expect(footerView(st({ step: 1, mode: 'misto', apiKey: '' }), PT)).toMatchObject({ disabled: false, error: false });
+    // Chave já salva (reabertura, ou ANTHROPIC_API_KEY no ambiente): campo vazio não trava.
+    expect(footerView(st({ step: 1, mode: 'nuvem', apiKey: '', report: { ...partial, keyConfigured: true } }), PT)).toMatchObject({ disabled: false, error: false });
+  });
+  it('erros no rodapé vêm marcados como erro; o fim que falhou oferece tentar de novo', () => {
+    const done = st({ step: 2, model: 'qwen3:14b', jobs: { img: { id: 'img', state: 'done', doneMb: 1600, totalMb: 1600, error: null } } });
+    expect(footerView({ ...done, finishError: '409' }, PT)).toMatchObject({ error: true, action: 'Tentar de novo' });
+    expect(footerView({ ...done, installError: 'x' }, PT)).toMatchObject({ error: true });
+    expect(footerView(done, PT)).toMatchObject({ error: false });
+    // Instalando de novo com um erro velho do fim: espera a instalação, sem "Tentar de novo".
+    expect(footerView({ ...done, installing: true, finishError: '409' }, PT)).toMatchObject({ disabled: true, hint: 'Instalando…' });
+  });
   it('passo 4: abre o Cockpit, sem Voltar', () => {
     expect(footerView(st({ step: 3 }), PT)).toMatchObject({ action: 'Abrir o Cockpit', showBack: false, disabled: false });
   });

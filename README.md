@@ -233,7 +233,7 @@ A **mission** is a long goal for one identity, such as *"create an email account
 | `TAPFLOCK_MISSION_STEP_BUDGET` | `60` | Starting value for the agent-steps-per-mission-subtask limit (see below). `0` disables it (the subtask runs until it finishes, is paused or the kill switch is hit). |
 | `TAPFLOCK_LOCAL_CONTEXT` | `65536` | Context length for local models (Ollama and LM Studio). More context uses more VRAM. |
 | `TAPFLOCK_DATA_DIR` | `~/.local/share/tapflock` | Database, logs and `daemon.json`. |
-| `TAPFLOCK_PORT` | `47800` | Daemon HTTP/WebSocket port (loopback only). |
+| `TAPFLOCK_PORT` | `47800` | Daemon HTTP/WebSocket port (loopback only). Without it, a busy `47800` makes the daemon pick any free port; the app reads the real one from `daemon.json`. |
 | `TAPFLOCK_SCRCPY_PORT` | `27183` | First local port used for video streams. |
 | `ANDROID_AVD_HOME` | `~/.android/avd` | Where AVDs live. |
 

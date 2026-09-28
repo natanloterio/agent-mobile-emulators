@@ -21,6 +21,7 @@ function mk(over: Partial<SetupIpcDeps> = {}) {
     runners: () => runners,
     testKey: async () => ({ result: 'ok' }),
     finish: async (req, bin) => { finished.push([req, bin]); },
+    keyConfigured: async () => false,
     ...over,
   };
   registerSetupIpc(deps);
@@ -29,9 +30,13 @@ function mk(over: Partial<SetupIpcDeps> = {}) {
 }
 
 describe('registerSetupIpc', () => {
+  it('check diz se já há chave da Anthropic (cofre ou ambiente), para o onboarding não pedir de novo', async () => {
+    const { call } = mk({ keyConfigured: async () => true });
+    expect(await call('tapflock:setup:check')).toMatchObject({ keyConfigured: true });
+  });
   it('check devolve só o relatório; finish recebe o ollamaBin achado na verificação', async () => {
     const { call, finished } = mk();
-    expect(await call('tapflock:setup:check')).toEqual(report);
+    expect(await call('tapflock:setup:check')).toEqual({ ...report, keyConfigured: false });
     await call('tapflock:setup:finish', { mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: KEY, applyRoles: true });
     expect(finished).toEqual([[{ mode: 'misto', localModel: 'gpt-oss:20b', anthropicKey: KEY, applyRoles: true }, 'ollama']]);
   });

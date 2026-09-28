@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { BRAND } from '../brand.js';
-import { CONFIG } from '../config.js';
+import { CONFIG, currentBaseAvd } from '../config.js';
 import { getIdentity, listIdentities, setIdentityFlags, setIdentityState, upsertIdentity, type IdentityRow } from '../db/identities.js';
 import { openMissionFor } from '../db/missions.js';
 import type { Adb } from '../device/adb.js';
+import { findRunningAvd } from '../device/running-avd.js';
 import type { ProbeResult } from '../device/probe.js';
 import { killEmulator, loadSnapshot, saveSnapshot } from '../fleet/emulator.js';
 import type { Route, RouteCtx } from './api.js';
@@ -74,7 +75,8 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
   const clock = () => ops.now?.() ?? new Date();
   const now = () => clock().toISOString();
   const uuid = ops.uuid ?? randomUUID;
-  const base = ops.baseAvd ?? CONFIG.avd.base;
+  // Relido a cada uso: a base criada com o daemon rodando (guia do celular-base) vale sem reiniciar.
+  const base = () => ops.baseAvd ?? currentBaseAvd().name;
   const snap = ops.snapshotName ?? CONFIG.avd.snapshotName;
   const pending = new Set<Promise<void>>();
   let provisioning: Promise<unknown> = Promise.resolve();
@@ -115,9 +117,10 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
       const avdName = `${AVD_PREFIX}${name}`;
       // Copiar o qcow2 de um emulador vivo gera clone inconsistente: o AVD-base precisa estar parado.
       const devices = await ops.adb.devices();
-      const busy = listIdentities(ctx.db).find((i) => i.avdName === base && devices.includes(i.serial))
-        ?? await runningAvd(devices, base);
-      if (busy) return ctx.send(409, { error: `AVD-base ${base} em uso (${busy.serial}): pare esse emulador antes de provisionar` });
+      const baseName = base();
+      const busy = listIdentities(ctx.db).find((i) => i.avdName === baseName && devices.includes(i.serial))
+        ?? await findRunningAvd(ops.adb, devices, baseName);
+      if (busy) return ctx.send(409, { error: `AVD-base ${baseName} em uso (${busy.serial}): pare esse emulador antes de provisionar` });
       const ports = await ops.leasePorts(ctx.db);
       try { await ops.clone(avdName); } catch (e) { return ctx.send(500, { error: `clone do AVD falhou: ${errMsg(e)}` }); }
       upsertIdentity(ctx.db, {
@@ -131,15 +134,6 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     });
     provisioning = job.catch(() => undefined);
     await job;
-  }
-
-  /** Emulador aberto por fora (sem identidade no banco) também prende o AVD-base: pergunta o nome ao console de cada um. */
-  async function runningAvd(devices: readonly string[], avd: string): Promise<{ serial: string } | undefined> {
-    for (const serial of devices.filter((d) => d.startsWith('emulator-'))) {
-      const name = await ops.adb.emu(serial, ['avd', 'name']).then((o) => o.split(/\r?\n/)[0].trim()).catch(() => '');
-      if (name === avd) return { serial };
-    }
-    return undefined;
   }
 
   const boot: Action = async (ctx, id) => {
@@ -206,7 +200,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
   const discard: Action = async (ctx, id) => {
     if (id.state !== 'banned') return ctx.send(409, { error: 'só identidade banida pode ser descartada' });
     if (id.discardedAt) return ctx.send(409, { error: 'identidade já descartada' });
-    if (id.avdName === base) return ctx.send(409, { error: `${id.avdName} é o AVD-base; não é descartável` });
+    if (id.avdName === base()) return ctx.send(409, { error: `${id.avdName} é o AVD-base; não é descartável` });
     try {
       if (await online(id)) await killEmulator(ops.adb, id.serial, { sleep: ops.killSleep });
       ops.supervisor?.stop(id.id);

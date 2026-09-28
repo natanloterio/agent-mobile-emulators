@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { brandEnv } from './brand.js';
-import { CONFIG, loadEnv } from './config.js';
+import { CONFIG, currentBaseAvd, loadEnv } from './config.js';
+import { findRunningAvd } from './device/running-avd.js';
+import { acquireInstanceLock } from './fleet/lock.js';
 import { createAdb } from './device/adb.js';
 import { createDeviceInput } from './device/input.js';
 import { openDb } from './db/open.js';
@@ -61,6 +64,14 @@ const portEnv = brandEnv(process.env, 'PORT');
 delete process.env.ELECTRON_RUN_AS_NODE;
 const env = loadEnv();
 mkdirSync(CONFIG.dataDir, { recursive: true });
+// Um daemon por pasta de dados. O código de saída é o que o Electron entende como "já tem um rodando, espere o dele"
+// (electron/daemon-wait.ts EXIT_ALREADY_RUNNING).
+const instance = acquireInstanceLock(path.join(CONFIG.dataDir, 'daemon.lock'));
+if (!instance.ok) {
+  console.error(`[tapflock-daemon] outro daemon (pid ${instance.pid}) já usa ${CONFIG.dataDir}; saindo`);
+  process.exit(3);
+}
+process.on('exit', instance.release);
 const db = openDb(CONFIG.dbPath);
 // Nada em voo é retomado sozinho depois de uma queda (spec §4.3).
 const reconciled = reconcileOnStart(db);
@@ -113,7 +124,7 @@ process.on('exit', shutdown);
 
 const identityRoutes = createIdentityRoutes({
   adb, disk, supervisor: emulators,
-  clone: (avdName) => cloneAvd(CONFIG.avd.base, avdName),
+  clone: (avdName) => cloneAvd(currentBaseAvd().name, avdName),
   deleteAvd: (avdName) => deleteAvd(avdName),
   boot: (identity, opts) => bootEmulator(db, identity, opts, { adb, supervisor: emulators }),
   leasePorts: (d) => leasePorts(d),
@@ -183,6 +194,7 @@ const server = await startServer({
   db, token: daemonToken, screen, video, port: portEnv ? Number(portEnv) : undefined, videoState: (id) => video.state(id),
   host: () => host.read(),
   localParallel: () => localParallelController.status(),
+  baseAvd: () => ({ ...currentBaseAvd(), running: baseRunning }),
   listLocal: (current) => localRuntimes.listAll(current),
   // Pela trava (ollama = single-flight + lock): descarregar não pode correr junto com um restart/reload em andamento.
   unloadLocal: (row) => ollama.unload(row.endpoint, row.model, row.runtime),
@@ -214,7 +226,18 @@ const server = await startServer({
   },
 });
 broadcast = () => server.broadcast();
-host.start(() => server.broadcast()); // só em mudança relevante (RAM ±0,5 GiB, CPU ±5 pts, VRAM ±256 MiB)
+host.start(() => server.broadcast());
+// A base costuma ser criada no Android Studio com o app aberto: quando ela aparece, some, liga ou desliga, a tela
+// fica sabendo. Ligada, o provisionamento recusa (clone de disco em uso sai inconsistente) e o guia pede para fechar.
+let baseRunning = false;
+let baseKey = '';
+const pollBase = async () => {
+  const b = currentBaseAvd();
+  baseRunning = b.found ? !!(await findRunningAvd(adb, await adb.devices().catch(() => []), b.name)) : false;
+  const key = `${b.name}:${b.found}:${baseRunning}`;
+  if (key !== baseKey) { baseKey = key; server.broadcast(); }
+};
+setInterval(() => { void pollBase().catch(() => undefined); }, 5000).unref(); // só em mudança relevante (RAM ±0,5 GiB, CPU ±5 pts, VRAM ±256 MiB)
 stopDisk = startDiskCollector(db, disk, () => server.broadcast());
 writeFileSync(CONFIG.daemonInfoPath, JSON.stringify({ port: server.port, token: daemonToken, pid: process.pid }));
 console.log(`[tapflock-daemon] http://127.0.0.1:${server.port} · info em ${CONFIG.daemonInfoPath}`);

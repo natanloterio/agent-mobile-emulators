@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { CONFIG } from '../config.js';
+import { CONFIG, type BaseAvdLive } from '../config.js';
 import { listIdentities, type IdentityRow, type ProbeSignalsRow } from '../db/identities.js';
 import { openMissionFor } from '../db/missions.js';
 import { readStepBudgets, type StepBudgets } from '../db/settings.js';
@@ -58,11 +58,14 @@ export interface FleetSnapshot {
   readonly stepBudgets: StepBudgets;
   /** Paralelismo local configurável (spec paralelismo §UI): pedido, o que cada runtime confirma e se falta aplicar. */
   readonly localParallel: LocalParallelStatus;
+  /** AVD-base do provisionamento (nome e se existe); null quando o servidor não recebeu a fonte (testes). */
+  readonly baseAvd: BaseAvdLive | null;
 }
 export interface SnapshotSources {
   readonly videoState?: (id: string) => VideoState;
   readonly host?: () => HostMetrics | null;
   readonly localParallel?: () => LocalParallelStatus;
+  readonly baseAvd?: () => BaseAvdLive;
 }
 
 const DEFAULT_LOCAL_PARALLEL: LocalParallelStatus = { wanted: 1, applied: { ollama: null, lmstudio: null }, pending: false };
@@ -146,5 +149,7 @@ export function buildSnapshot(db: DatabaseSync, killed: boolean, sources?: Snaps
   try { host = src.host?.() ?? null; } catch { host = null; }
   let localParallel = DEFAULT_LOCAL_PARALLEL;
   try { localParallel = src.localParallel?.() ?? DEFAULT_LOCAL_PARALLEL; } catch { localParallel = DEFAULT_LOCAL_PARALLEL; }
-  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db), stepBudgets, localParallel };
+  let baseAvd: BaseAvdLive | null = null;
+  try { baseAvd = src.baseAvd?.() ?? null; } catch { baseAvd = null; }
+  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db), stepBudgets, localParallel, baseAvd };
 }

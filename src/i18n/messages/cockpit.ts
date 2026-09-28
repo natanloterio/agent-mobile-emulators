@@ -20,6 +20,7 @@ export const cockpit = defineMessages({
   'overlay.probeFailed': 'Sonda falhou: {signals}. Device fora da frota.',
   'overlay.offline': 'Offline: {reason}',
   'overlay.noAdb': 'emulador fora do adb.',
+  'empty.bodyBase': 'Cada identidade é a cópia de um celular-base que você prepara uma vez, e ele ainda não existe.',
 }, {
   en: {
     'lede': 'Click a device to zoom in and take control.',
@@ -35,6 +36,7 @@ export const cockpit = defineMessages({
     'overlay.versionChanged': 'Probe: the app updated itself. Device stays out of the fleet.',
     'overlay.probeFailed': 'Probe failed: {signals}. Device out of the fleet.',
     'overlay.offline': 'Offline: {reason}', 'overlay.noAdb': 'emulator not visible to adb.',
+    'empty.bodyBase': "Every identity is a copy of a base phone you prepare once, and it doesn't exist yet.",
   },
   es: {
     'lede': 'Haz clic en un dispositivo para ampliarlo y tomar el control.',
@@ -50,6 +52,7 @@ export const cockpit = defineMessages({
     'overlay.versionChanged': 'Sonda: la app se actualizó sola. El dispositivo no entra en la flota.',
     'overlay.probeFailed': 'La sonda falló: {signals}. Dispositivo fuera de la flota.',
     'overlay.offline': 'Offline: {reason}', 'overlay.noAdb': 'emulador fuera de adb.',
+    'empty.bodyBase': 'Cada identidad es una copia de un teléfono base que preparas una vez, y todavía no existe.',
   },
   fr: {
     'lede': 'Cliquez sur un appareil pour l’agrandir et en prendre le contrôle.',
@@ -65,6 +68,7 @@ export const cockpit = defineMessages({
     'overlay.versionChanged': 'Sonde : l’app s’est mise à jour seule. L’appareil reste hors de la flotte.',
     'overlay.probeFailed': 'Échec de la sonde : {signals}. Appareil hors de la flotte.',
     'overlay.offline': 'Offline : {reason}', 'overlay.noAdb': 'émulateur absent d’adb.',
+    'empty.bodyBase': 'Chaque identité est une copie d’un téléphone de base que vous préparez une fois, et il n’existe pas encore.',
   },
   de: {
     'lede': 'Klicke auf ein Gerät, um es zu vergrößern und die Steuerung zu übernehmen.',
@@ -80,6 +84,7 @@ export const cockpit = defineMessages({
     'overlay.versionChanged': 'Sonde: App hat sich selbst aktualisiert. Gerät bleibt außerhalb der Flotte.',
     'overlay.probeFailed': 'Sonde fehlgeschlagen: {signals}. Gerät außerhalb der Flotte.',
     'overlay.offline': 'Offline: {reason}', 'overlay.noAdb': 'Emulator für adb nicht sichtbar.',
+    'empty.bodyBase': 'Jede Identität ist eine Kopie eines Basis-Telefons, das du einmal vorbereitest, und es gibt es noch nicht.',
   },
   zh: {
     'lede': '点击设备即可放大并接管控制。',
@@ -95,5 +100,6 @@ export const cockpit = defineMessages({
     'overlay.versionChanged': '探测：应用已自行更新，该设备不加入设备群。',
     'overlay.probeFailed': '探测失败：{signals}。设备已移出设备群。',
     'overlay.offline': 'Offline：{reason}', 'overlay.noAdb': 'adb 中看不到模拟器。',
+    'empty.bodyBase': '每个身份都是你准备一次的基础手机的副本，而它还不存在。',
   },
 });

@@ -105,3 +105,12 @@
 .notice--warn { color: var(--color-dark); background: var(--color-green); }
 .empty { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 32px; }
 .empty__title { font-size: var(--type-h4); font-weight: var(--weight-medium); }
+
+/* Guia do celular-base (components/BaseAvdGuide.tsx). */
+.baseguide { display: flex; flex-direction: column; gap: 12px; padding: 28px 32px; }
+.baseguide__title { margin: 0; font-size: var(--type-h4); font-weight: var(--weight-medium); }
+.baseguide__lede { margin: 0; line-height: 1.4; }
+.baseguide__steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; line-height: 1.4; }
+.baseguide__note { margin: 0; font-size: 14px; color: var(--color-dark-2); line-height: 1.4; }
+@media (max-width: 760px) { .baseguide { padding: 20px; } }
+.baseguide--warn { border-width: 2px; box-shadow: 0 5px 0 0 var(--color-green); }

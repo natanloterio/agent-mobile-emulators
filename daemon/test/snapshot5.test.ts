@@ -44,6 +44,11 @@ describe('snapshot do incremento 5', () => {
     const s = buildSnapshot(db, false, { host: () => { throw new Error('x'); } });
     expect(s.host).toBeNull(); expect(s.goal).toBeNull();
   });
+  it('traz o estado do AVD-base quando a fonte existe; sem fonte, null', () => {
+    const db = openDb(':memory:');
+    expect(buildSnapshot(db, false, { baseAvd: () => ({ name: 'tapflock_golden', found: false, running: false }) }).baseAvd).toEqual({ name: 'tapflock_golden', found: false, running: false });
+    expect(buildSnapshot(db, false).baseAvd).toBeNull();
+  });
   it('restoreUnsafe: snapshot mais velho que o limite', () => {
     const now = sqliteUtcMs('2026-09-26 12:00:00');
     expect(isRestoreUnsafe('2026-09-01 12:00:00', now)).toBe(true);

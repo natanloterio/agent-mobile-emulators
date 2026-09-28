@@ -6,6 +6,7 @@ import type { GpuBarView } from '../lib/gpuBar';
 import type { ProviderPatch } from '../live/types';
 import type { RoleVM } from '../state/selectors';
 import type { ProviderMode, RoleKey } from '../types/fleet';
+import { AnthropicKeyCard } from './AnthropicKeyCard';
 import { BudgetsCard, type BudgetsCardProps } from './BudgetsCard';
 import { shouldSubmitEndpoint } from './endpointSubmit';
 import { cardError, localSelect, modelChoice, roleRuntime, runtimeLines } from './localModels';
@@ -112,6 +113,7 @@ export function Providers({ roles, fleetSize, kvLeft, vramEmuShare, vramTotal, g
         ))}
       </div>
 
+      <AnthropicKeyCard anyCloudRole={roles.some((r) => r.mode === 'nuvem')} />
       {budgets && <BudgetsCard {...budgets} />}
 
       <VramPanel gpu={gpu} showVram={showVram} fleetSize={fleetSize} kvLeft={kvLeft} vramEmuShare={vramEmuShare} vramTotal={vramTotal} />

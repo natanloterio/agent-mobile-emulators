@@ -20,6 +20,20 @@
 - O `.deb` substitui o pacote `enxame`; o instalador de uma linha do macOS remove o `Enxame.app` antigo. No Windows,
   desinstale o Enxame pelas Configurações.
 
+### Primeiro uso
+- O fim do onboarding que falhou (chave ou papéis) não conta mais como concluído: na próxima abertura o onboarding
+  volta, em vez de o app abrir com os papéis padrão e a escolha de modelos perdida.
+- "Só nuvem" sem chave da Anthropic não deixa instalar (os agentes não teriam modelo). Erros do rodapé do onboarding
+  aparecem em vermelho, e o fim que falhou oferece "Tentar de novo".
+- Celular-base (o AVD que toda identidade copia): o passo Pronto, o Cockpit vazio e Identidades mostram o que fazer
+  quando ele não existe ou está ligado, e Provisionar fica travado até ele existir e estar desligado. O daemon percebe
+  a base criada com o app aberto, sem reiniciar, e o guia fica visível até a primeira identidade.
+- Daemon que não sobe: a tela diz o motivo (fechou na subida ou não respondeu) e onde está o log, com "Tentar de
+  novo", em vez de ficar em "Conectando ao daemon…" para sempre. A porta padrão ocupada (por exemplo, pelo daemon de
+  uma versão anterior) não derruba mais o daemon: ele usa outra porta livre. Uma trava na pasta de dados
+  (`daemon.lock`) garante um daemon só por pasta; o segundo sai com código 3 e o app espera o que já roda.
+- Provedores ganhou o cartão da chave da Anthropic: diz se há chave e de onde veio, e testa antes de salvar.
+
 ## 0.1.0 — pré-lançamento
 
 Primeira versão pública.

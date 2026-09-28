@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
+import { BaseAvdGuide } from '../components/BaseAvdGuide';
+import { baseBlocksProvision, baseStage } from '../components/baseAvdStage';
 import { Button } from '../components/Button';
 import { Heading } from '../components/Heading';
 import { Notice } from '../components/Notice';
 import { Pill } from '../components/Pill';
 import { LIFECYCLE_ORDER } from '../data/identities';
 import { useI18n } from '../i18n/I18nProvider';
+import type { BaseAvdStatus } from '../live/types';
 import type { RequestStatus } from '../state/fleetReducer';
 import { lifecycleTone, type IdRow, type RowAction } from '../state/idRows';
 import './Identities.css';
@@ -13,6 +16,8 @@ interface IdentitiesProps {
   readonly rows: readonly IdRow[];
   readonly isMobile: boolean;
   readonly provisionReq: RequestStatus;
+  /** Só no vivo: AVD-base ausente trava o provisionamento e mostra o guia. */
+  readonly baseAvd?: BaseAvdStatus | null;
   readonly onProvision: (pin: string) => void;
   /** Ações de linha exceto "Login feito", que pede o @ num campo inline antes de chamar `onLoginDone`. */
   readonly onAction: (row: IdRow, action: RowAction) => void;
@@ -99,7 +104,7 @@ function RowActions({ row, logging, mobile, onPick, onLogin, onCancel, onSaveCre
   );
 }
 
-export function Identities({ rows, isMobile, provisionReq, onProvision, onAction, onLoginDone, onRegisterPin, creds }: IdentitiesProps) {
+export function Identities({ rows, isMobile, provisionReq, baseAvd, onProvision, onAction, onLoginDone, onRegisterPin, creds }: IdentitiesProps) {
   const { t } = useI18n();
   const [inline, setInline] = useState<{ key: string; kind: InlineKind } | null>(null);
   const [newPin, setNewPin] = useState('');
@@ -129,6 +134,9 @@ export function Identities({ rows, isMobile, provisionReq, onProvision, onAction
   const credLine = (r: IdRow) => r.credUser && <span className="idrow__cred">{t('identities.creds.saved', { username: r.credUser })}</span>;
   const loginNote = (r: IdRow) => r.loginNote && <Notice tone={r.loginNote.tone === 'ok' ? 'warn' : 'error'}>{r.loginNote.text}</Notice>;
 
+  const stage = baseStage(baseAvd, rows.length > 0);
+  const blocked = baseBlocksProvision(stage);
+
   return (
     <div className="screen">
       <header className="screen__header" style={{ alignItems: 'center' }}>
@@ -139,10 +147,13 @@ export function Identities({ rows, isMobile, provisionReq, onProvision, onAction
         <form className="ids__provision" onSubmit={(e) => { e.preventDefault(); onProvision(newPin); }}>
           <input className="idrow__input" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder={t('identities.provision.pinPlaceholder')}
             aria-label={t('identities.provision.pinAria')} inputMode="numeric" type="password" />
-          <Button type="submit" disabled={provisionReq.busy}>{t(provisionReq.busy ? 'identities.provision.busy' : 'identities.provision.submit')}</Button>
+          <Button type="submit" disabled={provisionReq.busy || blocked} title={stage === 'missing' ? t('identities.base.blocked') : stage === 'running' ? t('identities.base.closeFirst') : undefined}>
+            {t(provisionReq.busy ? 'identities.provision.busy' : 'identities.provision.submit')}
+          </Button>
         </form>
       </header>
       {provisionReq.error && <Notice>{t('identities.provision.failed', { error: provisionReq.error })}</Notice>}
+      {stage && baseAvd && <BaseAvdGuide name={baseAvd.name} stage={stage} />}
 
       <div className="ids__cycle">
         <span className="ids__cycle-label">{t('identities.cycle.label')}</span>
@@ -151,7 +162,7 @@ export function Identities({ rows, isMobile, provisionReq, onProvision, onAction
         ))}
       </div>
 
-      {rows.length === 0 && <div className="card card--white empty"><span className="empty__title">{t('identities.empty.title')}</span><span>{t('identities.empty.body')}</span></div>}
+      {rows.length === 0 && !stage && <div className="card card--white empty"><span className="empty__title">{t('identities.empty.title')}</span><span>{t('identities.empty.body')}</span></div>}
 
       {isMobile ? (
         <div className="ids__cards">

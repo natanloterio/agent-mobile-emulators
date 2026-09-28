@@ -69,3 +69,13 @@
 @media (max-width: 759px) {
   .budgets__input { width: 90px; }
 }
+
+/* Chave da Anthropic (AnthropicKeyCard). */
+.keycard { display: flex; flex-direction: column; gap: 14px; padding: 28px 32px; }
+.keycard .heading { align-self: flex-start; }
+.keycard__status { margin: 0; line-height: 1.4; }
+.keycard__row { display: flex; gap: 10px; flex-wrap: wrap; }
+.keycard__input { flex: 1 1 280px; }
+.keycard__ok, .keycard__bad { margin: 0; font-size: 15px; }
+.keycard__bad { color: var(--color-danger); }
+@media (max-width: 760px) { .keycard { padding: 20px; } }

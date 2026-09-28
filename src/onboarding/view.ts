@@ -91,13 +91,21 @@ export function ipcErrorText(e: unknown): string {
   return msg.replace(/^Error invoking remote method '[^']+': (?:\w*Error: )?/, '');
 }
 
-export interface FooterView { readonly action: string; readonly hint: string; readonly disabled: boolean; readonly showBack: boolean; readonly backDisabled: boolean }
+/** `error`: o aviso do rodapé é um erro (vermelho, anunciado na hora pelo leitor de tela). */
+export interface FooterView { readonly action: string; readonly hint: string; readonly disabled: boolean; readonly showBack: boolean; readonly backDisabled: boolean; readonly error: boolean }
+
+/** No "Só nuvem" os agentes também são o Claude: sem chave (ou com chave recusada) nada rodaria. */
+export const cloudKeyMissing = (s: Pick<OnboardingState, 'mode' | 'apiKey' | 'keyTest' | 'report'>): boolean => {
+  if (s.mode !== 'nuvem') return false;
+  if (s.apiKey.trim()) return s.keyTest === 'invalid';
+  return !s.report?.keyConfigured;
+};
 
 export function footerView(s: OnboardingState, i18n: I18n): FooterView {
   const { t } = i18n;
-  const base = { showBack: s.step > 0 && s.step < 3, backDisabled: s.step === 0 || s.installing || s.finishing };
+  const base = { showBack: s.step > 0 && s.step < 3, backDisabled: s.step === 0 || s.installing || s.finishing, error: false };
   if (!s.report) {
-    return { ...base, action: t('onboarding.nav.continue'), disabled: true, hint: s.checkError ? t('onboarding.check.failed', { error: s.checkError }) : t('onboarding.check.loading') };
+    return { ...base, action: t('onboarding.nav.continue'), disabled: true, error: !!s.checkError, hint: s.checkError ? t('onboarding.check.failed', { error: s.checkError }) : t('onboarding.check.loading') };
   }
   const rows = depRows(s.report, s.mode, s.model);
   const sum = summarize(rows);
@@ -114,14 +122,17 @@ export function footerView(s: OnboardingState, i18n: I18n): FooterView {
     const hint = !jobs.length ? t('onboarding.hint.nothing')
       : lowDisk ? t('onboarding.hint.diskLow', { size, free: `${i18n.fmt.decimal(s.report.hardware.diskFreeGiB)} GB` })
       : t('onboarding.hint.download', { size });
-    return { ...base, action: jobs.length ? t('onboarding.nav.install') : t('onboarding.nav.continue'), disabled: tooBig, hint };
+    const action = jobs.length ? t('onboarding.nav.install') : t('onboarding.nav.continue');
+    if (cloudKeyMissing(s)) return { ...base, action, disabled: true, error: true, hint: t('onboarding.hint.cloudNeedsKey') };
+    return { ...base, action, disabled: tooBig, hint };
   }
   if (s.step === 2) {
     if (s.finishing) return { ...base, action: t('onboarding.nav.finishing'), disabled: true, hint: '' };
     const totals = installTotals(jobs, s.jobs, sizesOf(rows));
     const cont = t('onboarding.nav.continue');
-    if (s.finishError) return { ...base, action: cont, disabled: false, hint: t('onboarding.hint.finishFailed', { error: s.finishError }) };
-    if (totals.failed || s.installError) return { ...base, action: cont, disabled: true, hint: t('onboarding.hint.error') };
+    if (s.installing) return { ...base, action: cont, disabled: true, hint: t('onboarding.hint.installing') };
+    if (totals.failed || s.installError) return { ...base, action: cont, disabled: true, error: true, hint: t('onboarding.hint.error') };
+    if (s.finishError) return { ...base, action: t('onboarding.nav.retry'), disabled: false, error: true, hint: t('onboarding.hint.finishFailed', { error: s.finishError }) };
     if (totals.allDone && !s.installing) return { ...base, action: cont, disabled: false, hint: t('onboarding.hint.done') };
     return { ...base, action: cont, disabled: true, hint: t('onboarding.hint.installing') };
   }
