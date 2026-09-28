@@ -1,6 +1,6 @@
 # Changelog
 
-## Não lançado
+## 0.3.0 — pré-lançamento
 
 ### Mudou
 - Botão Desligar em Identidades e no Device (`POST /identities/:id/shutdown`): fecha o emulador limpo, sem
