@@ -21,6 +21,10 @@ export interface PrepareDeps {
   /** Abre a missão do celular-base (com a memória da conta Google) e devolve o id. */
   readonly startMission: (id: IdentityRow, email: string) => string;
   readonly mission: (missionId: string) => MissionRow | null;
+  /** Encerra a missão (o objetivo já foi atingido no aparelho, mesmo que o modelo não tenha percebido). */
+  readonly endMission: (missionId: string) => void;
+  /** Tira a conta Google pelas Configurações, sem modelo de linguagem (daemon/src/base/google-remove.ts). */
+  readonly removeGoogle: (id: IdentityRow) => Promise<void>;
   /** Desliga a Play Store da base e o emulador. */
   readonly finish: (id: IdentityRow) => Promise<void>;
   readonly onChange: () => void;
@@ -28,6 +32,8 @@ export interface PrepareDeps {
 }
 
 const POLL_MS = 2000;
+/** A cada quantas voltas da espera o aparelho é conferido (≈10 s): o app instalado encerra a missão. */
+const GOAL_CHECK_EVERY = 5;
 const errText = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 300);
 
 /**
@@ -42,12 +48,17 @@ export function createBasePreparer(d: PrepareDeps) {
   const set = (patch: Partial<BasePrep>) => { writeBasePrep(d.db, { ...readBasePrep(d.db), ...patch }); d.onChange(); };
   const phase = (p: BasePhase) => set({ state: 'running', phase: p, error: null, humanReason: null, progress: null });
 
-  /** Espera a missão acabar; a verificação humana aparece como `needs-human` e volta a `running` com o "Continuar". */
-  async function waitMission(missionId: string): Promise<MissionRow> {
-    for (;;) {
+  /**
+   * Espera a missão acabar; a verificação humana aparece como `needs-human` e volta a `running` com o "Continuar".
+   * O critério de pronto é o aparelho, não o modelo: com o app alvo instalado a missão é encerrada na hora (um modelo
+   * pequeno às vezes cumpre o objetivo e continua andando em círculos).
+   */
+  async function waitMission(missionId: string, id: IdentityRow): Promise<MissionRow | null> {
+    for (let turn = 1; ; turn++) {
       const m = d.mission(missionId);
       if (!m) throw new Error('a missão do celular-base sumiu');
       if (m.state === 'done' || m.state === 'abandoned') return m;
+      if (turn % GOAL_CHECK_EVERY === 0 && await d.targetVersion(id)) { d.endMission(missionId); return null; }
       if (m.state === 'awaiting-human' || m.state === 'paused') {
         if (readBasePrep(d.db).state !== 'needs-human') set({ state: 'needs-human', humanReason: m.humanReason });
       } else if (readBasePrep(d.db).state === 'needs-human') set({ state: 'running', humanReason: null });
@@ -64,7 +75,7 @@ export function createBasePreparer(d: PrepareDeps) {
     phase('mcp');
     await d.setupMcp(id, (pct) => set({ progress: pct }));
     let version = await d.targetVersion(id);
-    if (!version || await d.googleOnDevice(id)) {
+    if (!version) {
       phase('google');
       const email = await d.googleEmail();
       if (!email) { set({ state: 'needs-google' }); return; }
@@ -73,9 +84,13 @@ export function createBasePreparer(d: PrepareDeps) {
       const open = prev ? d.mission(prev) : null;
       const missionId = open && open.state !== 'done' && open.state !== 'abandoned' ? prev! : d.startMission(id, email);
       set({ missionId });
-      const m = await waitMission(missionId);
+      const m = await waitMission(missionId, id);
       version = await d.targetVersion(id);
-      if (!version) throw new Error(m.state === 'abandoned' ? 'a missão de instalar o app foi abandonada' : 'a missão terminou sem o app instalado');
+      if (!version) throw new Error(m?.state === 'abandoned' ? 'a missão de instalar o app foi abandonada' : 'a missão terminou sem o app instalado');
+    }
+    // A conta Google sai por um caminho fixo das Configurações, sem modelo; toda identidade clonada herdaria ela.
+    if (await d.googleOnDevice(id)) {
+      await d.removeGoogle(id);
       if (await d.googleOnDevice(id)) throw new Error('a conta Google continua no celular-base');
     }
     phase('finish');

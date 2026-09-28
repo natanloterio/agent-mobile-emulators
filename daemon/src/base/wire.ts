@@ -15,6 +15,7 @@ import type { MissionRunner } from '../mission/runner.js';
 import type { Vault } from '../vault/vault.js';
 import { freezeTargetApp, googleAccountOnDevice, packageInstalled, setupMcpApp } from './device-setup.js';
 import { baseMissionText, googleAccountEmail, seedGoogleMemory } from './google-account.js';
+import { removeGoogleAccount } from './google-remove.js';
 import { ensureMcpApk, MCP_APK } from './mcp-apk.js';
 import { createBasePreparer } from './prepare.js';
 import { avdmanagerPath, avdmanagerSpawn, createAvdCommand, jreHome, systemImageId } from './sdk-tools.js';
@@ -115,6 +116,9 @@ export function wireBasePreparer(w: BaseWireDeps) {
     googleOnDevice: (id) => googleAccountOnDevice(w.adb, id.serial),
     startMission: (id, email) => w.missions.start(id.id, baseMissionText(w.lang(), pkg), w.lang(), (missionId) => seedGoogleMemory(w.db, missionId, email)),
     mission: (missionId) => getMission(w.db, missionId),
+    // Já encerrada (o humano abandonou, ou terminou no mesmo instante): nada a fazer.
+    endMission: (missionId) => { try { w.missions.abandon(missionId); } catch { /* já fechada */ } },
+    removeGoogle: async (id) => removeGoogleAccount(w.adb, id.serial, await googleAccountEmail(w.vault)),
     finish: async (id) => {
       await freezeTargetApp(w.adb, id.serial);
       await killEmulator(w.adb, id.serial);

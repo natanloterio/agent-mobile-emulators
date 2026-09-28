@@ -27,6 +27,9 @@ function harness(o: { exists?: boolean; installedAfter?: number; email?: string 
     googleEmail: async () => (o.email === undefined ? 'eu@gmail.com' : o.email),
     startMission: () => { log.push('mission'); return 'm1'; },
     mission: () => mission(states.length > 1 ? states.shift()! : states[0]),
+    endMission: (mid) => { log.push(`end ${mid}`); },
+    // Remoção determinística: tira a conta de vez (as próximas consultas já não a acham).
+    removeGoogle: async () => { log.push('remove-google'); googleCalls = Number.MAX_SAFE_INTEGER - 1; },
     finish: async () => { log.push('finish'); },
   };
   return { db, log, d };
@@ -67,17 +70,23 @@ describe('createBasePreparer', () => {
     await createBasePreparer(h.d).start();
     expect(readBasePrep(h.db)).toMatchObject({ state: 'failed', error: 'a missão terminou sem o app instalado' });
   });
-  it('app instalado mas conta Google ainda no aparelho: roda a missão para removê-la antes de travar a base', async () => {
+  it('app instalado mas conta Google no aparelho: remove pelas Configurações, sem missão', async () => {
     const h = harness({ exists: true, installedAfter: 0, googleLeft: 1 });
     await createBasePreparer(h.d).start();
-    expect(h.log).toEqual(['boot', 'mcp', 'mission', 'finish']);
+    expect(h.log).toEqual(['boot', 'mcp', 'remove-google', 'finish']);
     expect(readBasePrep(h.db).state).toBe('done');
   });
-  it('missão terminou e a conta Google continua no aparelho: falha sem desligar a base (clones herdariam a conta)', async () => {
+  it('remoção não tirou a conta: falha sem desligar a base (clones herdariam a conta)', async () => {
     const h = harness({ exists: true, installedAfter: 0, googleLeft: 99 });
-    await createBasePreparer(h.d).start();
+    await createBasePreparer({ ...h.d, removeGoogle: async () => { h.log.push('remove-google'); } }).start();
     expect(readBasePrep(h.db)).toMatchObject({ state: 'failed', error: 'a conta Google continua no celular-base' });
     expect(h.log).not.toContain('finish');
+  });
+  it('app apareceu no aparelho com a missão ainda rodando: encerra a missão sozinho e segue (não espera o modelo perceber)', async () => {
+    const h = harness({ installedAfter: 2, states: ['running'] });
+    await createBasePreparer(h.d).start();
+    expect(h.log).toEqual(['avd', 'boot', 'mcp', 'mission', 'end m1', 'finish']);
+    expect(readBasePrep(h.db).state).toBe('done');
   });
   it('erro numa fase fica gravado com a fase', async () => {
     const h = harness();

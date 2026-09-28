@@ -165,9 +165,11 @@ Opening `npm run dev` in a plain browser shows a **demo mode** with sample data.
    - downloads the Android Remote Control MCP app (v1.12.0, checked against a pinned sha256), installs it over adb and
      turns on its accessibility service and auto-start on boot;
    - asks once for a **Google account** (stored in the OS-keyring vault) and runs an agent mission on the base phone:
-     sign in to the Play Store, install Instagram, then **remove the Google account** from the phone so no identity
-     inherits it. If Google asks for a code or confirmation, the card says so: handle it in the emulator window and
-     press **Continuar**;
+     sign in to the Play Store and install Instagram. The mission ends as soon as Instagram shows up on the phone
+     (checked over adb, not trusted to the model). If Google asks for a code or confirmation, the card says so:
+     handle it in the emulator window and press **Continuar**;
+   - **removes the Google account** from the phone through Android Settings with no language model (reads the screen
+     with `uiautomator` and taps the account, *Remove account* and the confirmation), so no identity inherits it;
    - records the installed Instagram version as the official one (new identities are checked against it), disables
      the Play Store on the base so the app never updates itself, and shuts the emulator down.
    An existing AVD can be used instead with `TAPFLOCK_AVD_BASE`; without `tapflock_golden`, `mcp_test_playstore` is

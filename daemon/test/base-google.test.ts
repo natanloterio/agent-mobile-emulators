@@ -29,9 +29,9 @@ describe('conta Google do celular-base', () => {
     seedGoogleMemory(db, id, 'eu@gmail.com');
     expect(listMemory(db, id).map((m) => [m.key, m.value, m.secret])).toEqual([['google.email', 'eu@gmail.com', false], ['google.password', 'google:password', true]]);
   });
-  it('objetivo no idioma da tela, termina removendo a conta Google (clones não herdam a conta)', () => {
-    expect(baseMissionText('pt', 'com.instagram.android')).toMatch(/Remova a conta Google/);
-    expect(baseMissionText('en', 'com.instagram.android')).toMatch(/Remove the Google account/);
+  it('objetivo no idioma da tela, só instalar; não mexe nas contas (a remoção é do Tapflock, sem modelo)', () => {
+    expect(baseMissionText('pt', 'com.instagram.android')).toMatch(/Não mexa nas contas/);
+    expect(baseMissionText('en', 'com.instagram.android')).toMatch(/Do not touch the phone accounts/);
     expect(isEmail('a@b.co')).toBe(true); expect(isEmail('nada')).toBe(false);
   });
 });
