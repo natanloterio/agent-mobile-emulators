@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../i18n/I18nProvider';
+import { useDaemonError } from '../i18n/useDaemonError';
 import type { MessageKey } from '../i18n/messages';
 import type { BaseAvdStatus, BasePhase } from '../live/types';
 import { ipcErrorText } from '../onboarding/view';
@@ -54,6 +55,7 @@ function GoogleForm({ onSave }: { readonly onSave: (email: string, password: str
  */
 export function BasePrepCard({ base, stage }: { readonly base: BaseAvdStatus; readonly stage: BaseStage }) {
   const { t, locale } = useI18n();
+  const te = useDaemonError();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const bridge = window.tapflock;
@@ -103,7 +105,7 @@ export function BasePrepCard({ base, stage }: { readonly base: BaseAvdStatus; re
       )}
       {state === 'failed' && (
         <>
-          {prep?.error && <Notice>{prep.error}</Notice>}
+          {prep?.error && <Notice>{te(prep.error)}</Notice>}
           <div><Button disabled={busy} onClick={prepare}>{t('identities.prep.retry')}</Button></div>
         </>
       )}
@@ -116,7 +118,7 @@ export function BasePrepCard({ base, stage }: { readonly base: BaseAvdStatus; re
       )}
       {changing && (state === 'failed' || state === 'needs-human') && <GoogleForm onSave={saveGoogle} />}
       {state !== 'idle' && <Phases current={prep?.phase ?? null} progress={prep?.progress ?? null} />}
-      {error && <Notice>{t('identities.prep.requestFailed', { error })}</Notice>}
+      {error && <Notice>{t('identities.prep.requestFailed', { error: te(error) })}</Notice>}
     </section>
   );
 }

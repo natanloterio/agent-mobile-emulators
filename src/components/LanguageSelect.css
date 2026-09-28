@@ -1,0 +1,7 @@
+/* Seletor de idioma (barra lateral, topo no celular e onboarding). */
+.langselect { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: inherit; }
+.langselect__label { opacity: 0.8; }
+.langselect__select { font: inherit; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: var(--radius-sm, 8px); padding: 4px 8px; cursor: pointer; }
+.langselect__select option { color: #111; }
+.langselect--compact { margin-left: auto; }
+.topbar .langselect--compact { order: 2; margin-left: auto; }

@@ -59,6 +59,8 @@
 
 /* Cartão "Limites dos agentes" (spec limites §UI): duas linhas número + "sem limite", botão Salvar e uma nota curta. */
 .budgets { gap: 18px; }
+/* Os dois Salvar do cartão com o mesmo tamanho (antes um ocupava a largura toda). */
+.budgets > .btn { align-self: flex-start; }
 .budgets__row { display: flex; flex-direction: column; gap: 10px; }
 .budgets__controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .budgets__input { width: 110px; flex: none; }

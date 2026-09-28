@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { byAttention } from '../state/selectors';
 import { Bar } from '../components/Bar';
 import { Button } from '../components/Button';
 import { Heading } from '../components/Heading';
@@ -5,6 +7,7 @@ import { Notice } from '../components/Notice';
 import { PhoneMock } from '../components/PhoneMock';
 import { Pill } from '../components/Pill';
 import { useI18n } from '../i18n/I18nProvider';
+import { useDaemonError } from '../i18n/useDaemonError';
 import type { VideoBus } from '../live/videoBus';
 import type { GoalHeader } from '../state/liveSelectors';
 import type { Stat, TileVM } from '../state/selectors';
@@ -28,6 +31,8 @@ interface CockpitProps {
   readonly bus?: VideoBus | null;
   /** Vivo, sem AVD-base: o primeiro passo é prepará-lo (o CTA vai para Identidades, onde está o guia). */
   readonly baseMissing?: boolean;
+  /** Kill switch já acionado: o botão fica travado (o banner tem o "Retomar"). */
+  readonly killed?: boolean;
 }
 
 function EmptyFleet({ connecting, baseMissing, onProvision }: { readonly connecting: boolean; readonly baseMissing: boolean; readonly onProvision: () => void }) {
@@ -44,12 +49,14 @@ function EmptyFleet({ connecting, baseMissing, onProvision }: { readonly connect
 
 function Tile({ t, fullTiles, showCost, bus, onOpen }: { readonly t: TileVM; readonly fullTiles: boolean; readonly showCost: boolean; readonly bus?: VideoBus | null; readonly onOpen: (i: number) => void }) {
   const { t: tr } = useI18n();
+  const te = useDaemonError();
   return (
     <button type="button" className={`tile tile--${t.cardTone}`} onClick={() => onOpen(t.index)}>
       <PhoneMock
         variant="tile"
         handle={t.handle}
-        streamLabel={t.streamLabel}
+        // No tile só a idade do quadro ("ao vivo", "há 3 s"); resolução e fps ficam na tela do device.
+        streamLabel=""
         overlay={t.overlay || undefined}
         maxHeight={fullTiles ? '360px' : '260px'}
         videoId={t.id}
@@ -68,7 +75,7 @@ function Tile({ t, fullTiles, showCost, bus, onOpen }: { readonly t: TileVM; rea
             <span>{t.budget === null ? tr('cockpit.tile.stepNoBudget', { steps: t.steps }) : tr('cockpit.tile.step', { steps: t.steps, budget: t.budget })}</span>
             {showCost && <span>{t.costFmt}</span>}
           </div>
-          {t.error && <span className="tile__error">{t.error}</span>}
+          {t.error && <span className="tile__error">{te(t.error)}</span>}
         </div>
       )}
     </button>
@@ -78,6 +85,8 @@ function Tile({ t, fullTiles, showCost, bus, onOpen }: { readonly t: TileVM; rea
 export function Cockpit(p: CockpitProps) {
   const { tiles, goalHeader, goalStats, goalPct, isMobile, empty, killError } = p;
   const { t } = useI18n();
+  const te = useDaemonError();
+  const [confirming, setConfirming] = useState(false);
   return (
     <div className="screen">
       <header className="screen__header">
@@ -88,12 +97,22 @@ export function Cockpit(p: CockpitProps) {
         {/* Sem frota não há o que parar nem a quem dar objetivo: o único próximo passo é o do cartão vazio. */}
         {!empty && (
           <div className="screen__actions">
-            <Button variant="secondary" onClick={p.onKill}>Kill switch</Button>
+            <Button variant="secondary" disabled={!!p.killed || confirming} aria-expanded={confirming} onClick={() => setConfirming(true)}>Kill switch</Button>
             <Button onClick={p.onNew}>{t('cockpit.newGoal')}</Button>
           </div>
         )}
       </header>
-      {killError && <Notice>{t('cockpit.killFailed', { error: killError })}</Notice>}
+      {/* Parar a frota inteira é uma ação grande e ficava colada no "Nova missão": pede confirmação na mesma tela. */}
+      {confirming && (
+        <div className="killconfirm" role="alertdialog" aria-label="Kill switch">
+          <span>{t('cockpit.kill.confirm', { n: tiles.length })}</span>
+          <div className="killconfirm__actions">
+            <Button variant="tertiary" autoFocus onClick={() => { setConfirming(false); p.onKill(); }}>{t('cockpit.kill.confirmYes')}</Button>
+            <Button variant="secondary" onClick={() => setConfirming(false)}>{t('cockpit.kill.cancel')}</Button>
+          </div>
+        </div>
+      )}
+      {killError && <Notice>{t('cockpit.killFailed', { error: te(killError) })}</Notice>}
 
       {!empty && <section className="card card--grey card--shadow goal">
         <div className="goal__text">
@@ -113,7 +132,7 @@ export function Cockpit(p: CockpitProps) {
         <EmptyFleet connecting={empty === 'connecting'} baseMissing={!!p.baseMissing} onProvision={p.onProvision} />
       ) : (
         <section className="tiles">
-          {tiles.map((t) => (
+          {byAttention(tiles).map((t) => (
             <Tile key={t.id ?? t.name} t={t} fullTiles={p.fullTiles} showCost={p.showCost} bus={p.bus} onOpen={p.onOpen} />
           ))}
         </section>

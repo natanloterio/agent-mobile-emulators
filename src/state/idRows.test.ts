@@ -44,6 +44,14 @@ describe('selectLiveIdRows — ações por estado', () => {
     expect(r).toMatchObject({ id: 'c0', lc: 'idle', app: 'Instagram', version: '448.0.0.52.84', ports: '5554 · 8080', disk: '4,0 / 8 GB', dimmed: false });
     expect(d.dimmed).toBe(true); expect(d.actions).toEqual([]);
   });
+  it('versão do app diferente da registrada → oferece aceitar a versão instalada', () => {
+    const signals = { bootCompleted: true, accessibility: true, mcpInitialize: true, toolsPresent: true, versionMatch: false };
+    expect(kinds(rows([{ lifecycle: 'offline', signals }])[0].actions)).toEqual(['boot', 'accept-version']);
+    expect(kinds(rows([{ lifecycle: 'idle', signals: { ...signals, versionMatch: true } }])[0].actions)).not.toContain('accept-version');
+    // Sonda de um aparelho desligado (tudo false): não é versão mudada, não oferece.
+    const off = { bootCompleted: false, accessibility: false, mcpInitialize: false, toolsPresent: false, versionMatch: false };
+    expect(kinds(rows([{ lifecycle: 'offline', signals: off }])[0].actions)).not.toContain('accept-version');
+  });
   it('blank/provisioned → subir com janela e login feito; offline → subir; needs-human → abrir device', () => {
     expect(kinds(rows([{ lifecycle: 'blank' }])[0].actions)).toEqual(['boot-window', 'login']);
     expect(kinds(rows([{ lifecycle: 'provisioned' }])[0].actions)).toEqual(['boot-window', 'login']);

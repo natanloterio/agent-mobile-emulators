@@ -66,5 +66,7 @@ export const runtimeLines = (runtimes: readonly RuntimeInfo[], { t }: I18n): rea
 /** Erro no card: o de PUT sempre; o de carga some quando repete o de um runtime, já mostrado na linha dele. */
 export function cardError(error: string | null, putError: string | null, runtimes: readonly RuntimeInfo[] | null): string | null {
   if (putError !== null) return putError;
+  // "Ollama parado — o próximo teste o sobe" não é erro: a linha do runtime já diz isso (antes aparecia duas vezes).
+  if (error !== null && /parado — o próximo teste ou objetivo o sobe$/.test(error)) return null;
   return runtimes?.some((r) => r.error !== null && r.error === error) ? null : error;
 }

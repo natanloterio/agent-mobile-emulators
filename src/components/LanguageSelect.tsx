@@ -1,5 +1,6 @@
 import { useI18n } from '../i18n/I18nProvider';
 import { LOCALE_NAMES, LOCALES, isLocale } from '../i18n/locales';
+import './LanguageSelect.css';
 
 /** Seletor de idioma: cada opção no próprio idioma, para quem não lê o atual achar o seu. */
 export function LanguageSelect({ compact = false }: { readonly compact?: boolean }) {

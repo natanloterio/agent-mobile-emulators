@@ -4,6 +4,7 @@ import { Heading } from '../components/Heading';
 import { Notice } from '../components/Notice';
 import { DEFAULT_GOAL_TEXT, defaultGoalText, goalExamples } from '../data/goals';
 import { useI18n } from '../i18n/I18nProvider';
+import { useDaemonError } from '../i18n/useDaemonError';
 import type { RequestStatus } from '../state/fleetReducer';
 import { localizePlanVM, type PlanTaskVM, type PlanVM } from '../state/planView';
 import type { PlanStage } from '../types/fleet';
@@ -44,6 +45,7 @@ function TaskRow({ t }: { readonly t: PlanTaskVM }) {
 
 function PlanView({ plan, launchReq, onReset, onLaunch }: { readonly plan: PlanVM; readonly launchReq: RequestStatus; readonly onReset: () => void; readonly onLaunch: () => void }) {
   const { t } = useI18n();
+  const te = useDaemonError();
   return (
     <div className="plan">
       {plan.leaderWarning && <Notice tone="warn">{plan.leaderWarning}</Notice>}
@@ -70,7 +72,7 @@ function PlanView({ plan, launchReq, onReset, onLaunch }: { readonly plan: PlanV
         {plan.tasks.length === 0 && <span className="muted-14">{t('goal.plan.noTasks')}</span>}
       </div>
 
-      {launchReq.error && <Notice>{t('goal.plan.launchFailed', { error: launchReq.error })}</Notice>}
+      {launchReq.error && <Notice>{t('goal.plan.launchFailed', { error: te(launchReq.error) })}</Notice>}
       <div className="plan__actions">
         <Button variant="secondary" size="lg" onClick={onReset}>{t('goal.plan.edit')}</Button>
         <Button variant="tertiary" size="lg" disabled={launchReq.busy} onClick={onLaunch}>
@@ -83,6 +85,7 @@ function PlanView({ plan, launchReq, onReset, onLaunch }: { readonly plan: PlanV
 
 export function NewGoal({ goalText, planStage, plan, planReq, launchReq, isMobile, onSetGoal, onDecompose, onReset, onLaunch, mission }: NewGoalProps) {
   const i18n = useI18n();
+  const te = useDaemonError();
   const { t } = i18n;
   const [mode, setMode] = useState<'goal' | 'mission'>(GOAL_MODE_VISIBLE ? 'goal' : 'mission');
   const missionOnly = !!mission && !GOAL_MODE_VISIBLE;
@@ -122,7 +125,7 @@ export function NewGoal({ goalText, planStage, plan, planReq, launchReq, isMobil
               </div>
               <Button size="lg" disabled={decomposing} onClick={onDecompose}>{decomposing ? t('goal.decomposing') : t('goal.decompose')}</Button>
             </div>
-            {planReq.error && <Notice>{t('goal.decomposeFailed', { error: planReq.error })}</Notice>}
+            {planReq.error && <Notice>{t('goal.decomposeFailed', { error: te(planReq.error) })}</Notice>}
           </div>
 
           {planStage === 2 && shownPlan && <PlanView plan={shownPlan} launchReq={launchReq} onReset={onReset} onLaunch={onLaunch} />}

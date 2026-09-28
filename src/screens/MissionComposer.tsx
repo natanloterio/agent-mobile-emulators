@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../components/Button';
 import { Notice } from '../components/Notice';
 import { useI18n } from '../i18n/I18nProvider';
+import { useDaemonError } from '../i18n/useDaemonError';
 import type { RequestStatus } from '../state/fleetReducer';
 import { pickedFree, toggleAll, togglePick, type MissionIdentityOption } from './missionPick';
 import './Mission.css';
@@ -11,6 +12,7 @@ export type { MissionIdentityOption };
 /** Missão: texto livre + uma, várias ou todas as identidades; cada uma roda a sua missão (spec missões §Interface). */
 export function MissionComposer({ options, req, onStart }: { readonly options: readonly MissionIdentityOption[]; readonly req: RequestStatus; readonly onStart: (identityIds: readonly string[], text: string) => void }) {
   const { t } = useI18n();
+  const te = useDaemonError();
   const [text, setText] = useState('');
   const firstFree = options.find((o) => !o.disabled)?.id;
   // Sem escolha do operador ainda (as opções chegam com o snapshot): vale a primeira identidade livre.
@@ -46,7 +48,7 @@ export function MissionComposer({ options, req, onStart }: { readonly options: r
           {req.busy ? t('mission.starting') : chosen.length > 1 ? t('mission.startMany', { count: chosen.length }) : t('mission.start')}
         </Button>
       </div>
-      {req.error && <Notice>{t('mission.startFailed', { error: req.error })}</Notice>}
+      {req.error && <Notice>{t('mission.startFailed', { error: te(req.error) })}</Notice>}
     </div>
   );
 }

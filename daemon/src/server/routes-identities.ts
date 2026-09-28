@@ -16,7 +16,7 @@ import { buildSnapshot, isRestoreUnsafe } from './snapshot.js';
 
 /** Rotas do ciclo de vida da identidade (spec inc. 5 §3.2, Frente B). `/control` e `/input` ficam para outra rota. */
 export interface IdentityOps {
-  readonly adb: Pick<Adb, 'devices' | 'emu' | 'trimCaches'>;
+  readonly adb: Pick<Adb, 'devices' | 'emu' | 'trimCaches'> & Partial<Pick<Adb, 'versionName'>>;
   /** Clona o AVD-base no nome dado. */
   readonly clone: (avdName: string) => Promise<unknown>;
   readonly deleteAvd: (avdName: string) => Promise<void>;
@@ -261,6 +261,27 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     done(ctx, id.id);
   };
 
+  /**
+   * O app alvo se atualizou sozinho (a sonda acusa versionName diferente): aceitar a versão instalada como a desta
+   * identidade, em vez de ela ficar fora da frota sem nada a fazer na tela.
+   */
+  const acceptVersion: Action = async (ctx, id) => {
+    if (id.state === 'banned' || id.state === 'running' || id.discardedAt) return ctx.send(409, { error: `identidade ${id.state}` });
+    // Sem login ainda: a sonda passando a marcaria pronta para a frota sem conta (mesma regra do boot).
+    if (awaitingLogin(id)) return ctx.send(409, { error: `login-done indisponível em ${id.state}` });
+    if (hasPendingTask(ctx.db, id.id)) return ctx.send(409, { error: 'identidade com tarefa pendente no objetivo em curso' });
+    if (openMissionFor(ctx.db, id.id)) return ctx.send(409, { error: 'identidade em missão; pause a missão antes' });
+    if (!(await online(id))) return ctx.send(409, { error: 'emulador fora do adb: dê boot antes' });
+    let installed: string | null;
+    try { installed = (await ops.adb.versionName?.(id.serial, id.appPackage)) ?? null; } catch (e) { return fail(ctx, id, e); }
+    if (!installed) return ctx.send(409, { error: `app ${id.appPackage} não está instalado no aparelho` });
+    setIdentityFlags(ctx.db, id.id, { appVersionName: installed });
+    // O ensureReady não grava os sinais (só a sonda da frota grava): sem isto o botão seguiria na tela até a próxima.
+    const probe = await ops.ensureReady(ctx.db, getIdentity(ctx.db, id.id)!);
+    setIdentityFlags(ctx.db, id.id, { lastSignals: probe.signals });
+    done(ctx, id.id);
+  };
+
   /** Registra o PIN de uma identidade existente. Com o device no adb, só grava se o PIN destravar de fato (evita gastar tentativas depois). */
   const pin: Action = async (ctx, id) => {
     const body = await parse(ctx, PinBody); if (!body) return;
@@ -307,7 +328,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     ctx.send(200, { outcome: r.outcome, detail });
   };
 
-  const actions: Readonly<Record<string, Action>> = { login, pin, boot, 'login-done': loginDone, pause, resolve, ban, discard, restore, rebaseline };
+  const actions: Readonly<Record<string, Action>> = { login, pin, boot, 'login-done': loginDone, pause, resolve, ban, discard, restore, rebaseline, 'accept-version': acceptVersion };
 
   const route: Route = async (ctx) => {
     if (ctx.method !== 'POST') return false;

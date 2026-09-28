@@ -4,6 +4,7 @@ import { Notice } from '../components/Notice';
 import { PhoneMock } from '../components/PhoneMock';
 import { Pill } from '../components/Pill';
 import { useI18n } from '../i18n/I18nProvider';
+import { useDaemonError } from '../i18n/useDaemonError';
 import type { InputGesture, MissionView } from '../live/types';
 import type { VideoBus } from '../live/videoBus';
 import type { MissionAction, MissionInstructThen } from '../state/missionActions';
@@ -107,6 +108,7 @@ function StepLog({ log, isMobile }: { readonly log: readonly LogRow[]; readonly 
 export function Device(p: DeviceProps) {
   const { sel, control, paused, busy, isMobile } = p;
   const { t } = useI18n();
+  const te = useDaemonError();
   return (
     <div className="screen">
       <header className="screen__header" style={{ alignItems: 'center' }}>
@@ -132,7 +134,7 @@ export function Device(p: DeviceProps) {
               {t(paused ? 'device.resume' : 'device.pause')}
             </Button>
           </div>
-          {p.errors.map((e) => <Notice key={e}>{e}</Notice>)}
+          {p.errors.map((e) => <Notice key={e}>{te(e)}</Notice>)}
         </div>
 
         <div className="device__right">
