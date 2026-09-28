@@ -65,9 +65,9 @@ describe('supervisor do Ollama', () => {
     });
     await sup.ensure('http://127.0.0.1:11434/v1', 'gpt-oss:20b');
     sup.stop(); up = false;
-    installed = '/home/u/.local/share/enxame/tools/ollama/bin/ollama';
+    installed = '/home/u/.local/share/tapflock/tools/ollama/bin/ollama';
     await sup.ensure('http://127.0.0.1:11434/v1', 'gpt-oss:20b');
-    expect(spawned).toEqual(['ollama', '/home/u/.local/share/enxame/tools/ollama/bin/ollama']);
+    expect(spawned).toEqual(['ollama', '/home/u/.local/share/tapflock/tools/ollama/bin/ollama']);
   });
   it('não sobe dentro do timeout → mata o filho e lança infra-local', async () => {
     const killed: string[] = [];
@@ -269,7 +269,7 @@ describe('warnIfExternalOllama', () => {
     warnIfExternalOllama({ spawnedByUs: false });
     warnIfExternalOllama({ spawnedByUs: false });
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0]).toContain(`ENXAME_LOCAL_CONTEXT=${CONFIG.local.contextLength}`);
+    expect(spy.mock.calls[0][0]).toContain(`TAPFLOCK_LOCAL_CONTEXT=${CONFIG.local.contextLength}`);
     spy.mockClear();
     resetExternalOllamaWarning();
     warnIfExternalOllama({ spawnedByUs: true });

@@ -7,6 +7,6 @@ sha256: deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae
 Licença: `LICENSE-scrcpy` neste diretório (texto integral da Apache License 2.0,
 https://www.apache.org/licenses/LICENSE-2.0.txt).
 
-O daemon faz `adb push` dele para `/data/local/tmp/enxame-scrcpy-server.jar` e o executa com
+O daemon faz `adb push` dele para `/data/local/tmp/tapflock-scrcpy-server.jar` e o executa com
 `app_process` (spec inc. 4 §4.1). Para atualizar: baixar a release, atualizar `CONFIG.scrcpy.version`
-e `sha256` em `daemon/src/config.ts`, rodar a integração (`ENXAME_INTEGRATION=1`).
+e `sha256` em `daemon/src/config.ts`, rodar a integração (`TAPFLOCK_INTEGRATION=1`).

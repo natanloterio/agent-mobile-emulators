@@ -61,7 +61,7 @@ export interface UseFleet {
 }
 
 /** Bridge do preload; a presença de `api` marca o modo vivo. */
-export const hasLiveBridge = (): boolean => !!window.enxame?.api;
+export const hasLiveBridge = (): boolean => !!window.tapflock?.api;
 
 /** Estado da frota; no demo, com os efeitos temporais do design (tick, decomposição); no vivo, nenhum tick. */
 export function useFleet(): UseFleet {
@@ -83,7 +83,7 @@ export function useFleet(): UseFleet {
   const runningTests = (Object.keys(state.tests) as RoleKey[]).filter((k) => state.tests[k] === 'run');
   const runningKey = runningTests.join(',');
   useEffect(() => {
-    if (!runningKey || window.enxame?.testProvider) return;
+    if (!runningKey || window.tapflock?.testProvider) return;
     const timers = runningKey
       .split(',')
       .map((role) => window.setTimeout(() => dispatch({ type: 'testDone', role: role as RoleKey }), TEST_MS));
@@ -107,7 +107,7 @@ export function useFleet(): UseFleet {
       decompose: () => dispatch({ type: 'decomposeStart', fallbackText: DEFAULT_GOAL_TEXT }),
       resetPlan: () => dispatch({ type: 'resetPlan' }),
       launch: (fleetSize) => dispatch({ type: 'launch', fleetSize }),
-      ...createProviderActions({ dispatch, getBridge: () => window.enxame, getMode: (role) => modesRef.current[role] }),
+      ...createProviderActions({ dispatch, getBridge: () => window.tapflock, getMode: (role) => modesRef.current[role] }),
       provision: () => dispatch({ type: 'provision' }),
       extraAction: (index) => dispatch({ type: 'extraAction', index }),
     }),
@@ -119,7 +119,7 @@ export function useFleet(): UseFleet {
   const i18nRef = useRef(i18n);
   i18nRef.current = i18n;
   const live = useMemo(() => {
-    const deps = { dispatch, getBridge: () => window.enxame, getI18n: () => i18nRef.current };
+    const deps = { dispatch, getBridge: () => window.tapflock, getI18n: () => i18nRef.current };
     const confirm = (m: string) => window.confirm(m);
     return {
       goal: createGoalActions(deps),

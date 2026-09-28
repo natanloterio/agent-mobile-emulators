@@ -2,11 +2,16 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { createI18n, type I18n } from './translate';
 import { detectLocale, isLocale, LOCALE_TAGS, type Locale } from './locales';
 
-const STORAGE_KEY = 'enxame.locale';
+const STORAGE_KEY = 'tapflock.locale';
+/** Chave de antes da troca de nome (Enxame); lida só enquanto a nova não existe. */
+const LEGACY_STORAGE_KEY = 'enxame.locale';
 
 /** Escolha salva > idioma do sistema > português. localStorage pode falhar (modo privado): nunca derruba a tela. */
 function initialLocale(): Locale {
-  try { const saved = window.localStorage.getItem(STORAGE_KEY); if (isLocale(saved)) return saved; } catch { /* sem storage */ }
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (isLocale(saved)) return saved;
+  } catch { /* sem storage */ }
   return detectLocale(typeof navigator === 'undefined' ? [] : navigator.languages ?? [navigator.language]);
 }
 

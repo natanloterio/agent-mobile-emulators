@@ -1,7 +1,7 @@
-import type { EnxameBridge, InputGesture } from './types';
+import type { TapflockBridge, InputGesture } from './types';
 
-/** Chamadas do modo controle (spec inc. 5 §3.2) pelo canal genérico `window.enxame.api`. */
-export type ApiFn = EnxameBridge['api'];
+/** Chamadas do modo controle (spec inc. 5 §3.2) pelo canal genérico `window.tapflock.api`. */
+export type ApiFn = TapflockBridge['api'];
 
 const path = (id: string, leaf: 'control' | 'input') => `/identities/${encodeURIComponent(id)}/${leaf}`;
 

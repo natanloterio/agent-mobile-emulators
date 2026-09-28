@@ -52,7 +52,7 @@ describe('createCredentialActions', () => {
   });
 
   it('erro do main (ex.: sem chaveiro) aparece legível na linha, sem a senha', async () => {
-    const credentials = fakeCreds({ set: vi.fn(() => Promise.reject(new Error("Error invoking remote method 'enxame:credentials:set': Error: sem chaveiro do sistema"))) });
+    const credentials = fakeCreds({ set: vi.fn(() => Promise.reject(new Error("Error invoking remote method 'tapflock:credentials:set': Error: sem chaveiro do sistema"))) });
     const { actions, created } = setup({ credentials });
     expect(await created.save('c1', 'u', 'SENHA-X')).toBe(false);
     expect(actions.at(-1)).toEqual({ type: 'requestError', key: 'cred:c1', message: 'sem chaveiro do sistema' });
@@ -96,7 +96,7 @@ describe('createCredentialActions', () => {
   });
 
   it('login com erro do main vira mensagem legível', async () => {
-    const login = vi.fn(() => Promise.reject(new Error("Error invoking remote method 'enxame:login': Error: sem credenciais salvas para c1")));
+    const login = vi.fn(() => Promise.reject(new Error("Error invoking remote method 'tapflock:login': Error: sem credenciais salvas para c1")));
     const { actions, created } = setup({ login });
     expect(await created.login('c1')).toBe(false);
     expect(actions.at(-1)).toEqual({ type: 'requestError', key: 'login:c1', message: 'sem credenciais salvas para c1' });

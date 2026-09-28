@@ -9,7 +9,7 @@ export const MODE_ROLES: Readonly<Record<SetupMode, readonly [RoleWhere, RoleWhe
 };
 
 export interface ModelEntry { readonly id: string; readonly sizeGb: number; readonly vramGb: number; readonly noteKey: MessageKey; readonly recommended?: boolean }
-/** Tamanhos do registro do Ollama; memória de vídeo estimada com o contexto padrão do Enxame (65536). */
+/** Tamanhos do registro do Ollama; memória de vídeo estimada com o contexto padrão do Tapflock (65536). */
 export const LOCAL_MODELS: readonly ModelEntry[] = [
   { id: 'gpt-oss:20b', sizeGb: 14, vramGb: 16, noteKey: 'onboarding.model.note.gptoss20', recommended: true },
   { id: 'qwen3:14b', sizeGb: 9.3, vramGb: 13, noteKey: 'onboarding.model.note.qwen14' },

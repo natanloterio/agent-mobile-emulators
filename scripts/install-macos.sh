@@ -1,7 +1,7 @@
 #!/bin/bash
-# Instala o Enxame no macOS sem o bloqueio do Gatekeeper.
+# Instala o Tapflock no macOS sem o bloqueio do Gatekeeper.
 #
-#   curl -fsSL https://raw.githubusercontent.com/natanloterio/agent-mobile-emulators/master/scripts/install-macos.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/natanloterio/tapflock/master/scripts/install-macos.sh | bash
 #
 # Por que isto existe: os DMGs não têm assinatura Developer ID nem notarização (só a assinatura
 # ad-hoc do scripts/adhoc-sign.cjs). Um DMG baixado pelo navegador ganha o atributo
@@ -10,13 +10,16 @@
 # Applications evita o bloqueio. Em troca, a verificação da Apple não roda: por isso o download é
 # conferido contra o SHA-256 que o GitHub publica para cada asset da release.
 #
+# O app se chamava Enxame até a 0.1.0: releases antigas trazem Enxame-*.dmg com Enxame.app, e uma
+# instalação antiga em Applications é trocada pela nova.
+#
 # Compatível com o bash 3.2 que vem no macOS. Tudo fica em funções e main só roda na última linha,
 # para que um download interrompido no `curl | bash` não execute metade do script.
 set -euo pipefail
 
-REPO="natanloterio/agent-mobile-emulators"
-APP_NAME="Enxame.app"
-PROCESS_NAME="Enxame"
+REPO="natanloterio/tapflock"
+PRODUCT="Tapflock"
+LEGACY_PRODUCT="Enxame"
 
 usage() {
   cat <<'EOF'
@@ -25,7 +28,7 @@ Uso: install-macos.sh [opções]
   --version X   instala a versão X (ex.: 0.1.0); padrão: a release mais recente
   --dmg ARQ     instala a partir de um DMG já baixado, sem baixar nada
   --dest DIR    pasta de destino; padrão: /Applications (ou ~/Applications sem permissão)
-  --no-open     não abre o Enxame no fim
+  --no-open     não abre o Tapflock no fim
   -h, --help    mostra esta ajuda
 EOF
 }
@@ -42,10 +45,10 @@ normalize_version() {
 
 # Nomes gerados pelo electron-builder: o DMG de Intel não leva sufixo de arquitetura.
 asset_name() {
-  local version="$1" arch="$2"
+  local version="$1" arch="$2" product="${3:-$PRODUCT}"
   case "$arch" in
-    arm64) printf 'Enxame-%s-arm64.dmg\n' "$version" ;;
-    x86_64) printf 'Enxame-%s.dmg\n' "$version" ;;
+    arm64) printf '%s-%s-arm64.dmg\n' "$product" "$version" ;;
+    x86_64) printf '%s-%s.dmg\n' "$product" "$version" ;;
     *) fail "arquitetura sem instalador: $arch" ;;
   esac
 }
@@ -94,14 +97,17 @@ fetch_release_json() {
 
 # Baixa o DMG da release e confere o SHA-256. Imprime o caminho do arquivo baixado.
 download_dmg() {
-  local version="$1" workdir="$2" json tag asset expected actual
+  local version="$1" workdir="$2" json tag arch product asset="" expected=""
   json="$(fetch_release_json "$version")" || fail "não consegui consultar as releases no GitHub"
   tag="$(release_tag <<<"$json")"
   [ -n "$tag" ] || fail "nenhuma release encontrada"
   version="$(normalize_version "$tag")"
-  asset="$(asset_name "$version" "$(detect_arch)")"
-  expected="$(asset_digest "$asset" <<<"$json")" \
-    || fail "a release $tag não tem $asset (ou o GitHub não informou o SHA-256 dele)"
+  arch="$(detect_arch)"
+  for product in "$PRODUCT" "$LEGACY_PRODUCT"; do
+    asset="$(asset_name "$version" "$arch" "$product")"
+    expected="$(asset_digest "$asset" <<<"$json")" && break
+  done
+  [ -n "$expected" ] || fail "a release $tag não tem o DMG para $arch (ou o GitHub não informou o SHA-256 dele)"
 
   log "Baixando $asset ($tag)"
   curl -fL --progress-bar -o "$workdir/$asset" \
@@ -121,13 +127,26 @@ default_dest() {
   fi
 }
 
+# App dentro do DMG montado: o atual, ou o de antes da troca de nome. Imprime o nome do bundle.
+app_in() {
+  local product
+  for product in "$PRODUCT" "$LEGACY_PRODUCT"; do
+    if [ -d "$1/$product.app" ]; then
+      printf '%s.app\n' "$product"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Copia o app do DMG montado para $dest, trocando uma instalação anterior de uma vez só.
+# Imprime o caminho do app instalado.
 install_app() {
-  local dmg="$1" dest="$2" workdir="$3" mountpoint="$3/mnt"
+  local dmg="$1" dest="$2" workdir="$3" mountpoint="$3/mnt" APP_NAME
   mkdir -p "$mountpoint" "$dest"
   hdiutil attach -nobrowse -readonly -quiet -mountpoint "$mountpoint" "$dmg" </dev/null \
     || fail "não consegui montar $dmg"
-  [ -d "$mountpoint/$APP_NAME" ] || fail "$APP_NAME não está dentro de $dmg"
+  APP_NAME="$(app_in "$mountpoint")" || fail "$dmg não traz $PRODUCT.app"
 
   log "Copiando $APP_NAME para $dest"
   rm -rf "$dest/.$APP_NAME.new"
@@ -140,10 +159,17 @@ install_app() {
   xattr -dr com.apple.quarantine "$dest/$APP_NAME" 2>/dev/null || true
   codesign --verify --deep --strict "$dest/$APP_NAME" \
     || fail "a assinatura de $dest/$APP_NAME é inválida; o macOS não vai abri-lo"
+
+  # O mesmo app com o nome antigo: sobraria como um segundo ícone que abre a versão velha.
+  if [ "$APP_NAME" = "$PRODUCT.app" ] && [ -d "$dest/$LEGACY_PRODUCT.app" ]; then
+    log "Removendo $LEGACY_PRODUCT.app (o app agora se chama $PRODUCT)"
+    rm -rf "$dest/$LEGACY_PRODUCT.app"
+  fi
+  printf '%s\n' "$dest/$APP_NAME"
 }
 
 main() {
-  local version="" dmg="" dest="" open_app=1 workdir
+  local version="" dmg="" dest="" open_app=1 workdir app
   while [ $# -gt 0 ]; do
     case "$1" in
       --version) [ $# -ge 2 ] || fail "--version precisa de um valor"; version="$(normalize_version "$2")"; shift 2 ;;
@@ -157,24 +183,24 @@ main() {
 
   [ "$(uname -s)" = "Darwin" ] || fail "este instalador só roda no macOS"
   [ -z "$dmg" ] || [ -f "$dmg" ] || fail "arquivo não encontrado: $dmg"
-  if pgrep -xq "$PROCESS_NAME"; then
-    fail "o Enxame está aberto; feche-o e rode o instalador de novo"
+  if pgrep -xq "$PRODUCT" || pgrep -xq "$LEGACY_PRODUCT"; then
+    fail "o $PRODUCT (ou o $LEGACY_PRODUCT) está aberto; feche-o e rode o instalador de novo"
   fi
   [ -n "$dest" ] || dest="$(default_dest)"
 
-  workdir="$(mktemp -d -t enxame-install)"
+  workdir="$(mktemp -d -t tapflock-install)"
   # shellcheck disable=SC2064 # workdir é fixo a partir daqui.
   trap "hdiutil detach -quiet '$workdir/mnt' 2>/dev/null || true; rm -rf '$workdir'" EXIT
 
   [ -n "$dmg" ] || dmg="$(download_dmg "$version" "$workdir")"
-  install_app "$dmg" "$dest" "$workdir"
-  log "Enxame instalado em $dest/$APP_NAME"
+  app="$(install_app "$dmg" "$dest" "$workdir")"
+  log "$PRODUCT instalado em $app"
 
   if [ "$open_app" = 1 ]; then
-    open "$dest/$APP_NAME"
+    open "$app"
   fi
 }
 
-if [ -z "${ENXAME_INSTALL_SOURCED:-}" ]; then
+if [ -z "${TAPFLOCK_INSTALL_SOURCED:-}" ]; then
   main "$@"
 fi

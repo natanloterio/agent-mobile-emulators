@@ -1,14 +1,16 @@
-# Enxame
+# Tapflock
 
 **A desktop cockpit for a swarm of Android emulators driven by AI agents.**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-You describe a goal in plain language, such as *"Reply to the comments from the last 24 hours on every account"*. Enxame splits it into tasks, hands one to each emulator, and runs them without step-by-step supervision. Later you come back to see what was done, what it cost, and which accounts need a human.
+You describe a goal in plain language, such as *"Reply to the comments from the last 24 hours on every account"*. Tapflock splits it into tasks, hands one to each emulator, and runs them without step-by-step supervision. Later you come back to see what was done, what it cost, and which accounts need a human.
 
 Each emulator is an **identity**: one Android Virtual Device (AVD) tied to one account, which keeps its own app data and history over time. It is built for automating apps that have no API.
 
-> **Use it on accounts you own or are authorized to operate.** Automating third-party apps like Instagram may violate their Terms of Service and can get accounts challenged or banned. Enxame paces its actions and never retries after a platform block, but it cannot remove that risk.
+> **Use it on accounts you own or are authorized to operate.** Automating third-party apps like Instagram may violate their Terms of Service and can get accounts challenged or banned. Tapflock paces its actions and never retries after a platform block, but it cannot remove that risk.
+
+> **Formerly Enxame.** Up to 0.1.0 this project was called Enxame. Upgrading keeps everything: on first run Tapflock moves `~/.local/share/enxame` to `~/.local/share/tapflock` (stopping the old daemon first if it is still running), copies the vault key in the OS keyring to the new name, and keeps using existing identities, their AVDs (`enxame_*`), the `enxame_golden` base AVD and their snapshots. `ENXAME_*` environment variables still work when the matching `TAPFLOCK_*` one isn't set. The `.deb` replaces the old `enxame` package and the macOS install command removes the old `Enxame.app`; on Windows, uninstall Enxame yourself from **Settings → Apps**.
 
 ---
 
@@ -35,7 +37,7 @@ The sidebar shows the host's real RAM and CPU usage, plus GPU memory when the ho
 Electron app (React UI)
         │  IPC
         ▼
-Enxame daemon (Node) ── SQLite (goals, tasks, steps, identities)
+Tapflock daemon (Node) ── SQLite (goals, tasks, steps, identities)
         │
         ├── adb (private server on port 5038) ── emulators
         │        └── scrcpy-server (bundled) → live H.264 video
@@ -55,41 +57,43 @@ Enxame daemon (Node) ── SQLite (goals, tasks, steps, identities)
 **macOS: one command, no Gatekeeper warning.** Paste this in Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/natanloterio/agent-mobile-emulators/master/scripts/install-macos.sh | bash
+curl -fsSL https://raw.githubusercontent.com/natanloterio/tapflock/master/scripts/install-macos.sh | bash
 ```
 
 It picks the right build for your Mac (Apple Silicon or Intel), downloads it from the latest release, checks its
-SHA-256 against the one GitHub publishes, copies **Enxame** to **Applications** and opens it. Run it again to update.
+SHA-256 against the one GitHub publishes, copies **Tapflock** to **Applications** and opens it. Run it again to update.
 Files fetched by `curl` are not quarantined, so macOS doesn't block the app. The trade-off is that Apple's malware check
 doesn't run either, which is why the script verifies the checksum. Read [the script](scripts/install-macos.sh) before
 running it if you like. Options: `--version 0.1.0`, `--dest ~/Applications`, `--no-open`, and `--dmg <file>` to
 install a DMG you already downloaded (this also unblocks it).
 
-Or download the installer for your system from the [releases page](https://github.com/natanloterio/agent-mobile-emulators/releases):
+Or download the installer for your system from the [releases page](https://github.com/natanloterio/tapflock/releases):
 
 | System | File |
 |---|---|
-| Linux x64 | `Enxame-0.1.0.AppImage` or `enxame_0.1.0_amd64.deb` |
-| macOS Intel | `Enxame-0.1.0.dmg` |
-| macOS Apple Silicon | `Enxame-0.1.0-arm64.dmg` |
-| Windows x64 | `Enxame.Setup.0.1.0.exe` |
+| Linux x64 | `Tapflock-<version>.AppImage` or `tapflock_<version>_amd64.deb` |
+| macOS Intel | `Tapflock-<version>.dmg` |
+| macOS Apple Silicon | `Tapflock-<version>-arm64.dmg` |
+| Windows x64 | `Tapflock.Setup.<version>.exe` |
+
+Release 0.1.0 came out under the old name, so its files are called `Tapflock-0.1.0…` instead.
 
 **Unsigned builds.** The 0.1.0 installers are not code-signed, so the OS will warn you on first open:
-- **macOS** (if you used the DMG instead of the command above): drag **Enxame** to **Applications** and try to open
+- **macOS** (if you used the DMG instead of the command above): drag **Tapflock** to **Applications** and try to open
   it once (macOS blocks it). Then open
-  **System Settings → Privacy & Security**, scroll down to the message about Enxame and click **Open Anyway**
+  **System Settings → Privacy & Security**, scroll down to the message about Tapflock and click **Open Anyway**
   (on macOS 15 and later the old right-click → **Open** shortcut no longer works). Alternatively, run
-  `xattr -dr com.apple.quarantine /Applications/Enxame.app` in Terminal.
+  `xattr -dr com.apple.quarantine /Applications/Tapflock.app` in Terminal.
 - **Windows**: SmartScreen will show a warning; click **More info** → **Run anyway**.
 
-**First run.** On every system, Enxame's onboarding checks the machine and installs what is missing, without
+**First run.** On every system, Tapflock's onboarding checks the machine and installs what is missing, without
 `sudo`/admin: the Android SDK with its own Java, platform-tools, the emulator, an Android 14 (API 34) Google Play
 system image (**arm64** on Apple Silicon, x86_64 elsewhere), Ollama and a local model. On macOS hardware
 acceleration (Hypervisor.framework) is built in and needs nothing from you; only on a Mac without hypervisor support
 does the check report it as off. The app asks you to act only when it can't do something itself:
 - **Linux**: add your user to the `kvm` group, or turn on virtualization in the BIOS.
 - **Windows**: turning on Windows Hypervisor Platform needs an administrator and a restart; the app shows the command to run.
-- **Any system**: a locked OS keyring needs to be unlocked before Enxame can use it.
+- **Any system**: a locked OS keyring needs to be unlocked before Tapflock can use it.
 
 The onboarding also asks for your **Anthropic API key** (optional, for the cloud roles) and stores it in the OS
 keyring. No `.env` file is needed for the installed app.
@@ -112,7 +116,7 @@ issue if something doesn't work on your system.
   - the target app installed (Instagram by default);
   - the **Android Remote Control MCP** app (`com.danielealbano.androidremotecontrolmcp.gms.debug`) installed, with its accessibility service enabled and auto-start on boot turned on;
   - Play Store auto-updates turned off. The readiness check refuses a device whose app version changed.
-- **Models:** an **Anthropic API key** for the cloud roles, **[Ollama](https://ollama.com)** and/or **[LM Studio](https://lmstudio.ai)** for local ones, or any mix. The key is optional: with every role set to a local model on the **Provedores** screen, Enxame runs fully offline. The default local model is `gpt-oss:20b`.
+- **Models:** an **Anthropic API key** for the cloud roles, **[Ollama](https://ollama.com)** and/or **[LM Studio](https://lmstudio.ai)** for local ones, or any mix. The key is optional: with every role set to a local model on the **Provedores** screen, Tapflock runs fully offline. The default local model is `gpt-oss:20b`.
 - An unlocked **OS keyring** for the daemon vault (passwords created by missions and login credentials): Credential Manager on Windows, Keychain on macOS, GNOME Keyring or KWallet (Secret Service) on Linux.
 
 Plan for about 4.6 GB of RAM and 4 vCPUs per running emulator. On a 32-thread machine the practical ceiling is about **8 emulators at once**.
@@ -126,8 +130,8 @@ Identities are created on the **Identidades** screen (see [Your first identity](
 Requires **Node.js 24 or newer** (the daemon uses the built-in `node:sqlite`).
 
 ```bash
-git clone https://github.com/natanloterio/agent-mobile-emulators.git
-cd agent-mobile-emulators
+git clone https://github.com/natanloterio/tapflock.git
+cd tapflock
 npm install
 
 cp .env.example .env          # optional: add ANTHROPIC_API_KEY=sk-ant-... for cloud models
@@ -139,7 +143,7 @@ npx electron --no-sandbox .   # starts the app; the app starts the daemon for yo
 
 On Linux x64, macOS or Windows x64 the first run lands on the **setup screen** instead (see [Install](#install) and [Requirements](#requirements)); once it finishes, the app opens straight into the Cockpit from then on.
 
-The app starts the daemon on its own if none is running. The daemon writes its address and access token to `~/.local/share/enxame/daemon.json`. It uses a private adb server on port **5038**, so it won't clash with Android Studio.
+The app starts the daemon on its own if none is running. The daemon writes its address and access token to `~/.local/share/tapflock/daemon.json`. It uses a private adb server on port **5038**, so it won't clash with Android Studio.
 
 When running from source, an `ANTHROPIC_API_KEY` in `.env` still works and wins over the key saved by the setup screen. It is optional, since the setup screen also offers to save one to the OS keyring. The installed app does not read `.env`.
 
@@ -156,23 +160,23 @@ Opening `npm run dev` in a plain browser shows a **demo mode** with sample data.
 ## Your first identity
 
 1. **Prepare the base AVD.**
-   - By default new identities are cloned from an AVD named `enxame_golden`. If it doesn't exist, `mcp_test_playstore` is used instead, and that AVD must be **stopped** while cloning.
-   - To create `enxame_golden`, copy a stopped, ready AVD, or point `ENXAME_AVD_BASE` at the AVD you want to use.
+   - By default new identities are cloned from an AVD named `tapflock_golden`. If it doesn't exist, `mcp_test_playstore` is used instead, and that AVD must be **stopped** while cloning.
+   - To create `tapflock_golden`, copy a stopped, ready AVD, or point `TAPFLOCK_AVD_BASE` at the AVD you want to use.
 2. **Identidades → Provisionar identidade** (Provision identity).
-   - Optionally type a **PIN** in the field next to the button. Enxame copies the base AVD into a new one with its own ports, its own MCP token and its own lifecycle.
+   - Optionally type a **PIN** in the field next to the button. Tapflock copies the base AVD into a new one with its own ports, its own MCP token and its own lifecycle.
 3. **Subir com janela** (Start with window).
    - The new emulator boots in a visible window.
-   - On this first boot Enxame wipes the target app's data, so the new identity never inherits another account's session.
+   - On this first boot Tapflock wipes the target app's data, so the new identity never inherits another account's session.
    - If you gave a PIN, it is applied to the device now.
 4. **Log in** by hand in that window, with **Fazer login** (the daemon types the saved credential), or let a mission create the account.
 5. **Login feito** (Login done).
    - Type the account's @handle.
-   - Enxame saves a snapshot as the identity's restore point.
+   - Tapflock saves a snapshot as the identity's restore point.
    - The identity is now `logged-in` and joins the fleet at the next readiness check.
 
 ### PINs and locked devices
 
-A device with a screen-lock PIN starts locked after every reboot, and nothing can use it until the PIN is typed. Enxame handles that for you:
+A device with a screen-lock PIN starts locked after every reboot, and nothing can use it until the PIN is typed. Tapflock handles that for you:
 
 - Each identity can store its PIN. The UI only ever shows whether a PIN exists, never the PIN itself.
 - Before every readiness check, after every boot and after every restore, the daemon wakes the device and types the PIN if it finds it locked.
@@ -223,14 +227,14 @@ A **mission** is a long goal for one identity, such as *"create an email account
 | Variable | Default | What it does |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | none | Key for the cloud roles. In the installed app, set it in the onboarding (stored in the OS keyring); when running from source it can also go in `.env`. Leave it out to use only local models. |
-| `ENXAME_AVD_BASE` | `enxame_golden`, if it exists | AVD cloned when provisioning. |
-| `ENXAME_DEFAULT_PIN` | none | PIN given to new identities when you don't type one. 4–16 digits. |
-| `ENXAME_STEP_BUDGET` | `30` | Starting value for the agent-steps-per-task limit (see below). `0` disables it (the task runs until it finishes, is paused or the kill switch is hit). |
-| `ENXAME_MISSION_STEP_BUDGET` | `60` | Starting value for the agent-steps-per-mission-subtask limit (see below). `0` disables it (the subtask runs until it finishes, is paused or the kill switch is hit). |
-| `ENXAME_LOCAL_CONTEXT` | `65536` | Context length for local models (Ollama and LM Studio). More context uses more VRAM. |
-| `ENXAME_DATA_DIR` | `~/.local/share/enxame` | Database, logs and `daemon.json`. |
-| `ENXAME_PORT` | `47800` | Daemon HTTP/WebSocket port (loopback only). |
-| `ENXAME_SCRCPY_PORT` | `27183` | First local port used for video streams. |
+| `TAPFLOCK_AVD_BASE` | `tapflock_golden`, if it exists | AVD cloned when provisioning. |
+| `TAPFLOCK_DEFAULT_PIN` | none | PIN given to new identities when you don't type one. 4–16 digits. |
+| `TAPFLOCK_STEP_BUDGET` | `30` | Starting value for the agent-steps-per-task limit (see below). `0` disables it (the task runs until it finishes, is paused or the kill switch is hit). |
+| `TAPFLOCK_MISSION_STEP_BUDGET` | `60` | Starting value for the agent-steps-per-mission-subtask limit (see below). `0` disables it (the subtask runs until it finishes, is paused or the kill switch is hit). |
+| `TAPFLOCK_LOCAL_CONTEXT` | `65536` | Context length for local models (Ollama and LM Studio). More context uses more VRAM. |
+| `TAPFLOCK_DATA_DIR` | `~/.local/share/tapflock` | Database, logs and `daemon.json`. |
+| `TAPFLOCK_PORT` | `47800` | Daemon HTTP/WebSocket port (loopback only). |
+| `TAPFLOCK_SCRCPY_PORT` | `27183` | First local port used for video streams. |
 | `ANDROID_AVD_HOME` | `~/.android/avd` | Where AVDs live. |
 
 **Step limits** can be changed live, without restarting the daemon, on **Provedores → Limites dos agentes**. The env
@@ -248,12 +252,12 @@ keeps its current limit).
 
 For a local role, the model picker lists every model **already downloaded** on this machine, grouped by runtime, with its size and whether it is loaded right now. It works even when the runtime is stopped: Ollama models are read from disk and LM Studio models from its `lms` CLI.
 
-| Runtime | Default endpoint | What Enxame does when you use it |
+| Runtime | Default endpoint | What Tapflock does when you use it |
 |---|---|---|
-| Ollama | `http://127.0.0.1:11434/v1` | Starts `ollama serve` with the context from `ENXAME_LOCAL_CONTEXT` (default 65536) if nothing is running. |
-| LM Studio | `http://127.0.0.1:1234/v1` | Starts the server with `lms server start` and loads the model with `lms load … --context-length <ENXAME_LOCAL_CONTEXT>`. |
+| Ollama | `http://127.0.0.1:11434/v1` | Starts `ollama serve` with the context from `TAPFLOCK_LOCAL_CONTEXT` (default 65536) if nothing is running. |
+| LM Studio | `http://127.0.0.1:1234/v1` | Starts the server with `lms server start` and loads the model with `lms load … --context-length <TAPFLOCK_LOCAL_CONTEXT>`. |
 
-Picking a model from the other runtime switches the role's runtime and endpoint for you. Enxame only stops the servers it started itself: if you change `ENXAME_LOCAL_CONTEXT` or upgrade Enxame, stop any `ollama serve` you started outside the daemon so it gets restarted with the new context (an already-running one is used as-is, at whatever context it was started with).
+Picking a model from the other runtime switches the role's runtime and endpoint for you. Tapflock only stops the servers it started itself: if you change `TAPFLOCK_LOCAL_CONTEXT` or upgrade Tapflock, stop any `ollama serve` you started outside the daemon so it gets restarted with the new context (an already-running one is used as-is, at whatever context it was started with).
 
 **Simultaneous generations** on the local model (1–8) are set on **Provedores → Limites dos agentes → Gerações simultâneas no modelo local**. Raising it lets several workers share the same local model instead of queueing; it splits the GPU, so each generation gets slower and may need more VRAM. The swap only happens once the whole fleet is idle (no goal task or mission subtask running): Ollama's `ollama serve` is restarted with the new `OLLAMA_NUM_PARALLEL`, and LM Studio's loaded model is reloaded with `--parallel`. Until then the screen shows "aplica quando a frota ficar ociosa" (applies once the fleet is idle). If Ollama is running outside the daemon's control, the screen tells you to restart it yourself with `OLLAMA_NUM_PARALLEL=N`.
 
@@ -265,12 +269,12 @@ Cost is tracked per task and per goal: dollars for cloud models, GPU seconds for
 
 | Symptom | What to do |
 |---|---|
-| Provisioning says *"AVD-base … em uso"* (base AVD in use) | The base AVD's emulator is running. Copying a running AVD corrupts the clone. Stop it, or create `enxame_golden` and clone from that instead. |
+| Provisioning says *"AVD-base … em uso"* (base AVD in use) | The base AVD's emulator is running. Copying a running AVD corrupts the clone. Stop it, or create `tapflock_golden` and clone from that instead. |
 | An identity is `offline` with a PIN message | Register its PIN on the Identities screen, or type it in the emulator window. |
 | An identity is `needs-human` | Open the device, fix what it reports (challenge, wrong PIN, lost session), then press **Resolvi, devolver à fila** (Resolved, back to queue). |
 | Readiness shows *"versão mudou"* (version changed) | The target app updated itself. Pin the version again, or update the version recorded for the identity. |
 | The plan says *"regra determinística"* (deterministic rule) | The leader model failed, or it is a cloud model and there is no API key. A simple built-in rule planned the goal instead. Switch the leader to a local model in **Provedores**, or add the key. |
-| The app says *"daemon não conectado"* (daemon not connected) | The daemon is still starting or failed to start. In the installed app, read `<data dir>/daemon.log` (`~/.local/share/enxame/daemon.log` by default); when running from source, the daemon prints to the terminal instead. A malformed `ANTHROPIC_API_KEY` stops it. Then restart the app. |
+| The app says *"daemon não conectado"* (daemon not connected) | The daemon is still starting or failed to start. In the installed app, read `<data dir>/daemon.log` (`~/.local/share/tapflock/daemon.log` by default); when running from source, the daemon prints to the terminal instead. A malformed `ANTHROPIC_API_KEY` stops it. Then restart the app. |
 
 After a crash or restart, the daemon marks interrupted work as failed. It never resumes an action whose result it doesn't know.
 
@@ -281,7 +285,7 @@ After a crash or restart, the daemon marks interrupted work as failed. It never 
 ```bash
 npm test                      # unit tests (daemon, UI logic, Electron glue)
 npm run typecheck
-ENXAME_INTEGRATION=1 npm run test:integration   # needs a real emulator and Ollama; stop the daemon first
+TAPFLOCK_INTEGRATION=1 npm run test:integration   # needs a real emulator and Ollama; stop the daemon first
 npm run real:run              # one real task end to end, from the CLI
 npm run bench                 # local-model bake-off
 ```

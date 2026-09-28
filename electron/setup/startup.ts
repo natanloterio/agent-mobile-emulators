@@ -3,7 +3,7 @@ import type { ProbeResult } from './probe.js';
 import type { SetupFileT } from './setup-file.js';
 
 /**
- * Onboarding aparece só em Linux x86_64 sem setup.json concluído. Quem já usava o Enxame antes dele existir (tudo
+ * Onboarding aparece só em Linux x86_64 sem setup.json concluído. Quem já usava o Tapflock antes dele existir (tudo
  * `ok`) não vê nada: gravamos o setup.json concluído com os caminhos achados e o app sobe como antes. O Ollama é
  * opcional (só nuvem funciona), então a falta dele sozinha não obriga ninguém a passar pelo onboarding.
  */

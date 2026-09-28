@@ -32,9 +32,9 @@ describe('connectMcp', () => {
   });
 });
 
-describe.skipIf(!process.env.ENXAME_INTEGRATION)('MCP real', () => {
+describe.skipIf(!process.env.TAPFLOCK_INTEGRATION)('MCP real', () => {
   it('lista 57 tools do device em 127.0.0.1:8080', async () => {
-    const token = process.env.ENXAME_MCP_TOKEN ?? '';
+    const token = process.env.TAPFLOCK_MCP_TOKEN ?? '';
     const client = await connectMcp('http://127.0.0.1:8080/mcp', token);
     expect(Object.keys(await client.tools()).length).toBeGreaterThanOrEqual(50);
     await client.close();

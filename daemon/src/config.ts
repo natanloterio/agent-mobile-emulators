@@ -3,16 +3,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { BRAND, LEGACY_BRAND, brandEnv, dataDirFrom, dbFileIn } from './brand.js';
 import { sdkPaths, sdkRoot } from './device/sdk.js';
 
-const DATA_DIR = process.env.ENXAME_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'enxame');
+const DATA_DIR = dataDirFrom(process.env);
 
 /** AVD dourado criado a partir da conta1 com ela parada (clone sem conta de terceiro após o primeiro boot). */
-export const GOLDEN_AVD = 'enxame_golden';
-/** Base de clonagem: `ENXAME_AVD_BASE`, senão a dourada se existir, senão o AVD da conta1 (que precisa estar parado). */
+export const GOLDEN_AVD = `${BRAND}_golden`;
+/** Dourada criada antes da troca de nome (Enxame). */
+export const LEGACY_GOLDEN_AVD = `${LEGACY_BRAND}_golden`;
+/** Base de clonagem: `TAPFLOCK_AVD_BASE`, senão a dourada (a nova, depois a de antes da troca), senão o AVD da conta1 (que precisa estar parado). */
 export function pickBaseAvd(envBase: string | undefined, avdHome: string, exists: (p: string) => boolean = existsSync): string {
   if (envBase) return envBase;
-  return exists(path.join(avdHome, `${GOLDEN_AVD}.avd`)) ? GOLDEN_AVD : 'mcp_test_playstore';
+  return [GOLDEN_AVD, LEGACY_GOLDEN_AVD].find((avd) => exists(path.join(avdHome, `${avd}.avd`))) ?? 'mcp_test_playstore';
 }
 const AVD_HOME = process.env.ANDROID_AVD_HOME ?? path.join(os.homedir(), '.android', 'avd');
 
@@ -34,9 +37,9 @@ export function sdkRootFrom(setup: SetupPaths, env: NodeJS.ProcessEnv, home: str
   return sdkRoot(env, platform, home, setup.sdkRoot);
 }
 
-/** Binário do Ollama: `ENXAME_OLLAMA_BIN`, o que o onboarding instalou ou achou, senão o `ollama` do PATH. */
+/** Binário do Ollama: `TAPFLOCK_OLLAMA_BIN`, o que o onboarding instalou ou achou, senão o `ollama` do PATH. */
 export function ollamaBinFrom(setup: SetupPaths, env: NodeJS.ProcessEnv): string {
-  return env.ENXAME_OLLAMA_BIN || setup.ollamaBin || 'ollama';
+  return brandEnv(env, 'OLLAMA_BIN') || setup.ollamaBin || 'ollama';
 }
 
 const SETUP_PATH = path.join(DATA_DIR, 'setup.json');
@@ -53,7 +56,7 @@ export function stepBudgetFrom(raw: string | undefined, fallback: number): numbe
   return n === 0 ? null : n;
 }
 
-/** Contexto dos modelos locais via `ENXAME_LOCAL_CONTEXT`: inteiro ≥ 8192 vale; ausente, lixo ou menor cai no padrão 65536 (mais contexto usa mais VRAM). */
+/** Contexto dos modelos locais via `TAPFLOCK_LOCAL_CONTEXT`: inteiro ≥ 8192 vale; ausente, lixo ou menor cai no padrão 65536 (mais contexto usa mais VRAM). */
 export function localContextFrom(raw: string | undefined, fallback = 65536): number {
   if (!raw) return fallback;
   const n = Number(raw);
@@ -75,7 +78,7 @@ function resolveVendor(file: string): string {
 
 export const CONFIG = {
   dataDir: DATA_DIR,
-  dbPath: path.join(DATA_DIR, 'enxame.sqlite'),
+  dbPath: dbFileIn(DATA_DIR),
   daemonInfoPath: path.join(DATA_DIR, 'daemon.json'),
   /** Cofre de segredos do daemon (spec missões §Cofre); a chave fica no chaveiro do SO. */
   vaultPath: path.join(DATA_DIR, 'vault.json'),
@@ -87,23 +90,25 @@ export const CONFIG = {
   mcpAppPackage: 'com.danielealbano.androidremotecontrolmcp.gms.debug',
   targetApp: { package: 'com.instagram.android', versionName: '448.0.0.52.84' },
   ports: { consoleFrom: 5554, consoleMax: 5584, mcpHostFrom: 8080 },
-  /** `ENXAME_STEP_BUDGET=0` desliga o orçamento (spec orçamento desligável): a tarefa roda até terminar, pausar ou o kill switch. */
-  worker: { stepBudget: stepBudgetFrom(process.env.ENXAME_STEP_BUDGET, 30), keepScreens: 2, qualityFloor: 3 },
+  /** `TAPFLOCK_STEP_BUDGET=0` desliga o orçamento (spec orçamento desligável): a tarefa roda até terminar, pausar ou o kill switch. */
+  worker: { stepBudget: stepBudgetFrom(brandEnv(process.env, 'STEP_BUDGET'), 30), keepScreens: 2, qualityFloor: 3 },
   /** Missões (spec missões): orçamento de passos por subtarefa; a missão em si não tem teto. `0` desliga o da subtarefa. */
-  mission: { subtaskStepBudget: stepBudgetFrom(process.env.ENXAME_MISSION_STEP_BUDGET, 60), keepScreens: 1 },
-  /** Contexto dos modelos locais (Ollama, LM Studio) via `ENXAME_LOCAL_CONTEXT` (spec local: contexto configurável). */
-  local: { contextLength: localContextFrom(process.env.ENXAME_LOCAL_CONTEXT) },
-  /** Enxame (spec §4.3 Pacing, inc. 5 §2): starts escalonados com jitter, atraso entre passos e teto de ações/hora por identidade. */
+  mission: { subtaskStepBudget: stepBudgetFrom(brandEnv(process.env, 'MISSION_STEP_BUDGET'), 60), keepScreens: 1 },
+  /** Contexto dos modelos locais (Ollama, LM Studio) via `TAPFLOCK_LOCAL_CONTEXT` (spec local: contexto configurável). */
+  local: { contextLength: localContextFrom(brandEnv(process.env, 'LOCAL_CONTEXT')) },
+  /** Enxame de identidades (spec §4.3 Pacing, inc. 5 §2): starts escalonados com jitter, atraso entre passos e teto de ações/hora por identidade. */
   swarm: { staggerMs: 8000, jitterMs: 3000, stepDelayMs: 1500, stepJitterMs: 1000, maxActionsPerHour: 120 },
   /** Ciclo de vida (spec inc. 5 §2): snapshot mais velho que isto exige confirmação humana para restaurar. */
   identity: { restoreUnsafeDays: 14 },
   /** Provisionamento, boot, disco e snapshot (spec inc. 5 §2). */
   avd: {
     home: AVD_HOME,
-    /** AVD dourado clonado no provisionamento; `ENXAME_AVD_BASE` troca sem rebuild (ex.: uma base sem conta e desligada). */
-    base: pickBaseAvd(process.env.ENXAME_AVD_BASE, AVD_HOME),
+    /** AVD dourado clonado no provisionamento; `TAPFLOCK_AVD_BASE` troca sem rebuild (ex.: uma base sem conta e desligada). */
+    base: pickBaseAvd(brandEnv(process.env, 'AVD_BASE'), AVD_HOME),
     emulatorPath: SDK.emulator,
-    bootTimeoutMs: 180_000, diskCacheMs: 60_000, snapshotName: 'enxame',
+    bootTimeoutMs: 180_000, diskCacheMs: 60_000, snapshotName: BRAND,
+    /** Snapshot salvo antes da troca de nome; a restauração cai nele quando o novo não existe. */
+    legacySnapshotName: LEGACY_BRAND,
   },
   /** Miniatura ao vivo (spec inc. 4): captura por identidade, só com alguém assistindo. */
   screen: { intervalMs: 500, retryMs: 5000 },
@@ -111,8 +116,8 @@ export const CONFIG = {
   scrcpy: {
     serverPath: resolveVendor('scrcpy-server-v4.1'), version: '4.1',
     sha256: 'deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae',
-    devicePath: '/data/local/tmp/enxame-scrcpy-server.jar',
-    maxSize: 720, maxFps: 30, bitRate: 2_000_000, portFrom: Number(process.env.ENXAME_SCRCPY_PORT ?? 27183), connectTimeoutMs: 5000, retryMs: 5000,
+    devicePath: `/data/local/tmp/${BRAND}-scrcpy-server.jar`,
+    maxSize: 720, maxFps: 30, bitRate: 2_000_000, portFrom: Number(brandEnv(process.env, 'SCRCPY_PORT') ?? 27183), connectTimeoutMs: 5000, retryMs: 5000,
   },
 } as const;
 

@@ -3,15 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { localContextFrom, pickBaseAvd, stepBudgetFrom } from '../src/config.js';
 
 describe('pickBaseAvd', () => {
-  it('env vence; senão a dourada se existir; senão o AVD da conta1', () => {
+  it('env vence; senão a dourada (a nova, depois a de antes da troca de nome); senão o AVD da conta1', () => {
     expect(pickBaseAvd('outra', '/h', () => true)).toBe('outra');
-    const golden = path.join('/h', 'enxame_golden.avd');
-    expect(pickBaseAvd(undefined, '/h', (p) => p === golden)).toBe('enxame_golden');
+    const golden = path.join('/h', 'tapflock_golden.avd');
+    const legacyGolden = path.join('/h', 'enxame_golden.avd');
+    expect(pickBaseAvd(undefined, '/h', (p) => p === golden || p === legacyGolden)).toBe('tapflock_golden');
+    expect(pickBaseAvd(undefined, '/h', (p) => p === legacyGolden)).toBe('enxame_golden');
     expect(pickBaseAvd(undefined, '/h', () => false)).toBe('mcp_test_playstore');
   });
 });
 
-describe('stepBudgetFrom (ENXAME_STEP_BUDGET / ENXAME_MISSION_STEP_BUDGET)', () => {
+describe('stepBudgetFrom (TAPFLOCK_STEP_BUDGET / TAPFLOCK_MISSION_STEP_BUDGET)', () => {
   it('"0" desliga o orçamento (null); inteiro positivo vale; o resto cai no padrão', () => {
     expect(stepBudgetFrom('0', 60)).toBeNull();
     expect(stepBudgetFrom('45', 60)).toBe(45);
@@ -23,7 +25,7 @@ describe('stepBudgetFrom (ENXAME_STEP_BUDGET / ENXAME_MISSION_STEP_BUDGET)', () 
   });
 });
 
-describe('localContextFrom (ENXAME_LOCAL_CONTEXT)', () => {
+describe('localContextFrom (TAPFLOCK_LOCAL_CONTEXT)', () => {
   it('ausente, lixo ou pequeno demais (<8192) caem no padrão 65536; inteiro ≥8192 vale', () => {
     expect(localContextFrom(undefined)).toBe(65536);
     expect(localContextFrom('')).toBe(65536);

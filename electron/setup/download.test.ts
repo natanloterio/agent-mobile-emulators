@@ -7,7 +7,7 @@ import { downloadResumable } from './download';
 
 const BODY = Buffer.from('0123456789abcdefghij'); // 20 bytes
 const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex');
-const tmp = () => mkdtemp(path.join(os.tmpdir(), 'enxame-dl-'));
+const tmp = () => mkdtemp(path.join(os.tmpdir(), 'tapflock-dl-'));
 
 describe('downloadResumable', () => {
   it('baixa, confere o checksum e renomeia o .part', async () => {

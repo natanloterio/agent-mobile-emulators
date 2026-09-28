@@ -30,7 +30,7 @@ describe('createIdentityActions — rotas §3.2', () => {
   });
 
   it('erro da rota vira mensagem legível na chave da identidade', async () => {
-    const api = vi.fn(() => Promise.reject(new Error(`Error invoking remote method 'enxame:api': Error: /identities/c1/restore → 409: {"error":"restore-unsafe: confirme"}`)));
+    const api = vi.fn(() => Promise.reject(new Error(`Error invoking remote method 'tapflock:api': Error: /identities/c1/restore → 409: {"error":"restore-unsafe: confirme"}`)));
     const { actions, created } = setup({ api });
     expect(await created.restore('c1', 'conta1')).toBe(false);
     expect(actions.at(-1)).toEqual({ type: 'requestError', key: 'id:c1', message: 'restore-unsafe: confirme' });

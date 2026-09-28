@@ -106,11 +106,28 @@ describe('emulador', () => {
       emu: async (s: string, a: readonly string[]) => { calls.push(`${s} ${a.join(' ')}`); return 'OK'; },
       devices: async () => { gone += 1; return gone < 3 ? ['emulator-5556'] : []; },
     };
-    await saveSnapshot(adb, 'emulator-5556', 'enxame');
-    await loadSnapshot(adb, 'emulator-5556', 'enxame');
+    await saveSnapshot(adb, 'emulator-5556', 'tapflock');
+    await loadSnapshot(adb, 'emulator-5556', 'tapflock');
     await killEmulator(adb, 'emulator-5556', { sleep: async () => {} });
-    expect(calls).toEqual(['emulator-5556 avd snapshot save enxame', 'emulator-5556 avd snapshot load enxame', 'emulator-5556 kill']);
+    expect(calls).toEqual(['emulator-5556 avd snapshot save tapflock', 'emulator-5556 avd snapshot load tapflock', 'emulator-5556 kill']);
     expect(gone).toBe(3);
+  });
+
+  it('load cai no snapshot de antes da troca de nome quando o novo não existe', async () => {
+    const calls: string[] = [];
+    const adb = { emu: async (s: string, a: readonly string[]) => {
+      calls.push(a.join(' '));
+      if (a[3] === 'tapflock') throw new Error('KO: snapshot not found');
+      return 'OK';
+    } };
+    await loadSnapshot(adb, 'emulator-5556', 'tapflock', 'enxame');
+    expect(calls).toEqual(['avd snapshot load tapflock', 'avd snapshot load enxame']);
+  });
+
+  it('sem snapshot antigo, o erro do novo sobe', async () => {
+    const adb = { emu: async () => { throw new Error('KO: snapshot not found'); } };
+    await expect(loadSnapshot(adb, 'emulator-5556', 'tapflock', null)).rejects.toThrow('KO: snapshot not found');
+    await expect(loadSnapshot(adb, 'emulator-5556', 'tapflock', 'enxame')).rejects.toThrow('KO: snapshot not found');
   });
 
   it('kill que não derruba o device no prazo → erro', async () => {

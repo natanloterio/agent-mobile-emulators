@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { brandEnv } from './brand.js';
 import { CONFIG, loadEnv } from './config.js';
 import { createAdb } from './device/adb.js';
 import { createDeviceInput } from './device/input.js';
@@ -53,6 +54,9 @@ import { singleFlightOllama } from './swarm/single-flight.js';
 import { createIdentityRoutes } from './server/routes-identities.js';
 import { runTask } from './worker/run.js';
 
+const defaultPinEnv = brandEnv(process.env, 'DEFAULT_PIN');
+const portEnv = brandEnv(process.env, 'PORT');
+
 // Só o daemon roda como Node dentro do Electron; adb, emulador, Ollama e LM Studio não podem herdar a flag.
 delete process.env.ELECTRON_RUN_AS_NODE;
 const env = loadEnv();
@@ -60,14 +64,14 @@ mkdirSync(CONFIG.dataDir, { recursive: true });
 const db = openDb(CONFIG.dbPath);
 // Nada em voo é retomado sozinho depois de uma queda (spec §4.3).
 const reconciled = reconcileOnStart(db);
-if (reconciled.tasks + reconciled.goals + reconciled.identities + reconciled.subtasks > 0) console.log('[enxame-daemon] reconciliação na subida:', reconciled);
+if (reconciled.tasks + reconciled.goals + reconciled.identities + reconciled.subtasks > 0) console.log('[tapflock-daemon] reconciliação na subida:', reconciled);
 const adb = createAdb();
 // Cofre do daemon (spec missões §Cofre): senhas geradas por missões e credenciais de login; chave no chaveiro do SO.
 const vault = createVault({ file: CONFIG.vaultPath, keys: keyringKeySource() });
 // Chave da Anthropic: ambiente vence; sem ele, a que o onboarding gravou no cofre (spec onboarding).
 const apiKeys = createApiKeyStore({ envKey: env.anthropicApiKey, vault });
-await apiKeys.load().catch((e: unknown) => console.warn('[enxame-daemon] chave da Anthropic do cofre ilegível:', (e as Error).message));
-if (!apiKeys.current()) console.log('[enxame-daemon] sem chave da Anthropic: papéis na nuvem ficam indisponíveis; use modelos locais em Provedores');
+await apiKeys.load().catch((e: unknown) => console.warn('[tapflock-daemon] chave da Anthropic do cofre ilegível:', (e as Error).message));
+if (!apiKeys.current()) console.log('[tapflock-daemon] sem chave da Anthropic: papéis na nuvem ficam indisponíveis; use modelos locais em Provedores');
 // Supervisor do Ollama: só mata o processo que ele mesmo subiu (spec §4.3).
 // Paralelismo local configurável (spec paralelismo §UI): lido do banco a cada spawn/load, nunca cacheado.
 const ollamaSupervisor = createOllamaSupervisor({ parallel: () => readLocalParallel(db) });
@@ -119,7 +123,7 @@ const identityRoutes = createIdentityRoutes({
   unlock: (identity) => ensureUnlocked(adb, identity.serial, identity.lockPin),
   login: (identity, creds) => loginIdentity(db, identity, creds, { ensureReady: (d, i) => ensureIdentityReady(d, i, { adb }) }),
   setPin: (identity, pin) => setDevicePin(adb, identity.serial, pin),
-  defaultPin: process.env.ENXAME_DEFAULT_PIN && isValidPin(process.env.ENXAME_DEFAULT_PIN) ? process.env.ENXAME_DEFAULT_PIN : null,
+  defaultPin: defaultPinEnv && isValidPin(defaultPinEnv) ? defaultPinEnv : null,
   clearAccount: async (identity) => { await clearTargetAccount(adb, identity.serial, identity.appPackage); },
   credentials: (id) => getCredential(vault, id),
 });
@@ -133,11 +137,11 @@ const onFleetChange = () => {
   if (localParallelController.status().pending) {
     void localParallelController.apply()
       .then(() => server.broadcast())
-      .catch((e: unknown) => console.error('[enxame-daemon] apply do paralelismo local falhou:', (e as Error).message));
+      .catch((e: unknown) => console.error('[tapflock-daemon] apply do paralelismo local falhou:', (e as Error).message));
   }
 };
 
-// Enxame (spec inc. 5 §3.2): líder planeja sobre a frota; scheduler roda um worker por identidade pronta, com pacing.
+// Enxame de identidades (spec inc. 5 §3.2): líder planeja sobre a frota; scheduler roda um worker por identidade pronta, com pacing.
 const ensureReady = (id: IdentityRow) => ensureIdentityReady(db, id, { adb });
 const planDeps = (): PlanDeps => ({ db, ensureReady, apiKey: apiKeys.current(), ollama });
 // Limite lido do banco no início de cada tarefa (spec limites §UI): a tela muda o valor sem reiniciar o daemon.
@@ -176,7 +180,7 @@ const missions = createMissionRunner({
 
 const daemonToken = randomUUID();
 const server = await startServer({
-  db, token: daemonToken, screen, video, port: process.env.ENXAME_PORT ? Number(process.env.ENXAME_PORT) : undefined, videoState: (id) => video.state(id),
+  db, token: daemonToken, screen, video, port: portEnv ? Number(portEnv) : undefined, videoState: (id) => video.state(id),
   host: () => host.read(),
   localParallel: () => localParallelController.status(),
   listLocal: (current) => localRuntimes.listAll(current),
@@ -213,7 +217,7 @@ broadcast = () => server.broadcast();
 host.start(() => server.broadcast()); // só em mudança relevante (RAM ±0,5 GiB, CPU ±5 pts, VRAM ±256 MiB)
 stopDisk = startDiskCollector(db, disk, () => server.broadcast());
 writeFileSync(CONFIG.daemonInfoPath, JSON.stringify({ port: server.port, token: daemonToken, pid: process.pid }));
-console.log(`[enxame-daemon] http://127.0.0.1:${server.port} · info em ${CONFIG.daemonInfoPath}`);
+console.log(`[tapflock-daemon] http://127.0.0.1:${server.port} · info em ${CONFIG.daemonInfoPath}`);
 
 const resumed = missions.resumeAllOnStart();
-if (resumed > 0) console.log(`[enxame-daemon] ${resumed} missão(ões) retomada(s)`);
+if (resumed > 0) console.log(`[tapflock-daemon] ${resumed} missão(ões) retomada(s)`);

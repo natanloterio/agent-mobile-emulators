@@ -27,7 +27,7 @@ describe('setControl / sendGesture', () => {
 
 describe('apiErrorMessage', () => {
   it('extrai o `error` do JSON que o main embute na mensagem', () => {
-    expect(apiErrorMessage(new Error(`Error invoking remote method 'enxame:api': Error: /identities/conta1/input → 409: {"error":"sem controle"}`))).toBe('sem controle');
+    expect(apiErrorMessage(new Error(`Error invoking remote method 'tapflock:api': Error: /identities/conta1/input → 409: {"error":"sem controle"}`))).toBe('sem controle');
     expect(apiErrorMessage(new Error('x → 400: {"error":["kind: inválido","x: y"]}'))).toBe('kind: inválido; x: y');
   });
   it('sem JSON: a própria mensagem; não-Error: String', () => {

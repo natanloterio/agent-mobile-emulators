@@ -1,19 +1,21 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 import WebSocket from 'ws';
+import { dataDirFrom } from './brand.js';
 import { dispatchWsMessage, type WsHandlers } from './ws-dispatch.js';
 
-// Mesmo diretório do daemon (ENXAME_DATA_DIR): permite uma segunda instância isolada para verificação.
-const DATA_DIR = process.env.ENXAME_DATA_DIR ?? path.join(os.homedir(), '.local', 'share', 'enxame');
-const INFO = path.join(DATA_DIR, 'daemon.json');
+// Mesmo diretório do daemon (TAPFLOCK_DATA_DIR): permite uma segunda instância isolada para verificação. Resolvido a
+// cada uso, não no import: o main migra a pasta do nome antigo (electron/legacy-migrate.ts) depois dos imports.
+const dataDir = () => dataDirFrom(process.env);
+const infoFile = () => path.join(dataDir(), 'daemon.json');
 export type DaemonInfo = { port: number; token: string; pid: number };
 type Info = DaemonInfo;
 
 function readInfo(): Info | null {
-  try { return existsSync(INFO) ? (JSON.parse(readFileSync(INFO, 'utf8')) as Info) : null; } catch { return null; }
+  const file = infoFile();
+  try { return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Info) : null; } catch { return null; }
 }
 function alive(pid: number): boolean { try { process.kill(pid, 0); return true; } catch { return false; } }
 
@@ -43,8 +45,8 @@ export function daemonSpawnSpec(o: {
  * Empacotado, stdio vai para `daemon.log` (não `inherit`): o daemon é feito para sobreviver ao app (fica
  * rodando entre reaberturas), então não faz sentido ele ficar preso ao stdout/stderr do processo Electron que
  * o subiu — mesma convenção usada para o `ollama serve` e o emulador (daemon/src/provider/ollama.ts,
- * daemon/src/fleet/emulator.ts). Em desenvolvimento mantém `inherit`: `DATA_DIR` sem `ENXAME_DATA_DIR` cai no
- * `~/.local/share/enxame` de verdade, e cada `npm start` não pode ficar escrevendo log ali.
+ * daemon/src/fleet/emulator.ts). Em desenvolvimento mantém `inherit`: `dataDir()` sem `TAPFLOCK_DATA_DIR` cai no
+ * `~/.local/share/tapflock` de verdade, e cada `npm start` não pode ficar escrevendo log ali.
  */
 export function ensureDaemon(spec: DaemonSpawn): ChildProcess | null {
   const info = readInfo();
@@ -52,14 +54,15 @@ export function ensureDaemon(spec: DaemonSpawn): ChildProcess | null {
   if (!spec.isPackaged) {
     const child = spawn(spec.cmd, spec.args, { cwd: spec.cwd, stdio: 'inherit', env: spec.env, windowsHide: true });
     // Sem este ouvinte um erro de spawn derrubaria o main; o waitForInfo expira e a tela mostra o erro.
-    child.on('error', (e) => console.error('[enxame] não deu para subir o daemon:', e.message));
+    child.on('error', (e) => console.error('[tapflock] não deu para subir o daemon:', e.message));
     return child;
   }
-  mkdirSync(DATA_DIR, { recursive: true });
-  const log = openSync(path.join(DATA_DIR, 'daemon.log'), 'a');
+  const dir = dataDir();
+  mkdirSync(dir, { recursive: true });
+  const log = openSync(path.join(dir, 'daemon.log'), 'a');
   try {
     const child = spawn(spec.cmd, spec.args, { cwd: spec.cwd, stdio: ['ignore', log, log], env: spec.env, windowsHide: true });
-    child.on('error', (e) => console.error('[enxame] não deu para subir o daemon:', e.message));
+    child.on('error', (e) => console.error('[tapflock] não deu para subir o daemon:', e.message));
     return child;
   } finally {
     closeSync(log);

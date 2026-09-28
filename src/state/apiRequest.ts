@@ -1,11 +1,11 @@
 import type { Dispatch } from 'react';
 import { PT, type I18n } from '../i18n/translate';
-import type { EnxameBridge } from '../live/types';
+import type { TapflockBridge } from '../live/types';
 import type { FleetAction } from './fleetReducer';
 import { bridgeMessage } from './providerActions';
 
-export type ApiBridge = Partial<Pick<EnxameBridge, 'api' | 'resume' | 'kill'>>;
-export type Api = EnxameBridge['api'];
+export type ApiBridge = Partial<Pick<TapflockBridge, 'api' | 'resume' | 'kill'>>;
+export type Api = TapflockBridge['api'];
 
 export interface ApiDeps {
   readonly dispatch: Dispatch<FleetAction>;

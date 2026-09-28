@@ -26,7 +26,7 @@ export function javaMajor(out: string | null): number | null {
   const first = Number(m[1]);
   return first === 1 && m[2] ? Number(m[2]) : first;
 }
-/** Java mínimo das cmdline-tools atuais; o JRE do Enxame (Temurin 17) atende. */
+/** Java mínimo das cmdline-tools atuais; o JRE do Tapflock (Temurin 17) atende. */
 export const MIN_JAVA = 17;
 
 export const parseOllamaVersion = (out: string | null): string | null => /(\d+\.\d+\.\d+)/.exec(out ?? '')?.[1] ?? null;
@@ -46,8 +46,8 @@ async function sdkPackage(id: 'sdk' | 'adb' | 'emu' | 'img', bin: string, dir: s
 }
 
 /**
- * sdkmanager presente não basta: ele precisa do JRE do Enxame ou de um Java ≥ 17 no PATH.
- * No macOS só vale o JRE do Enxame: o /usr/bin/java de lá é um stub que pode abrir o diálogo de instalação.
+ * sdkmanager presente não basta: ele precisa do JRE do Tapflock ou de um Java ≥ 17 no PATH.
+ * No macOS só vale o JRE do Tapflock: o /usr/bin/java de lá é um stub que pode abrir o diálogo de instalação.
  */
 async function probeSdkTools(paths: SetupPaths, d: ProbeDeps): Promise<DepStatus> {
   const p = pathFor(paths.platform);
@@ -81,7 +81,7 @@ async function probeAccel(platform: PlatformId, d: ProbeDeps): Promise<DepStatus
 /** macOS: app do Electron não herda o PATH do shell; Homebrew e o app oficial ficam fora dele. */
 const MAC_OLLAMA_BINS: readonly string[] = ['/opt/homebrew/bin/ollama', '/usr/local/bin/ollama', '/Applications/Ollama.app/Contents/Resources/ollama'];
 
-/** O Ollama instalado pelo Enxame vem primeiro; no macOS os locais conhecidos; por fim o do PATH. */
+/** O Ollama instalado pelo Tapflock vem primeiro; no macOS os locais conhecidos; por fim o do PATH. */
 async function findOllama(paths: SetupPaths, d: ProbeDeps): Promise<{ bin: string; version: string } | null> {
   const extra = paths.platform.startsWith('darwin') ? MAC_OLLAMA_BINS : [];
   for (const bin of [paths.ollamaBin, ...extra, 'ollama']) {
@@ -129,7 +129,7 @@ export async function probeSetup(paths: SetupPaths, d: ProbeDeps, hw: HardwareDe
 function keyringProbe(): boolean {
   try {
     const { Entry } = createRequire(import.meta.url)('@napi-rs/keyring') as typeof import('@napi-rs/keyring');
-    new Entry('enxame', 'setup-probe', { linux: { store: 'secret-service' } }).getPassword();
+    new Entry('tapflock', 'setup-probe', { linux: { store: 'secret-service' } }).getPassword();
     return true;
   } catch { return false; }
 }

@@ -64,9 +64,9 @@ describe('POST /identities', () => {
     const h = harness(); const s = await serve(h.db, h.ops);
     const r = await s.post('/identities', {});
     expect(r.status).toBe(201);
-    expect(r.body).toMatchObject({ id: 'conta2', name: 'conta2', handle: 'sem conta', lifecycle: 'provisioned', consolePort: 5556, mcpHostPort: 8081, serial: 'emulator-5556', avdName: 'enxame_conta2' });
+    expect(r.body).toMatchObject({ id: 'conta2', name: 'conta2', handle: 'sem conta', lifecycle: 'provisioned', consolePort: 5556, mcpHostPort: 8081, serial: 'emulator-5556', avdName: 'tapflock_conta2' });
     expect(getIdentity(h.db, 'conta2')).toMatchObject({ mcpToken: 'uuid-novo', deviceSlug: 'conta2', appPackage: 'com.instagram.android', state: 'provisioned' });
-    expect(h.log).toContain('clone enxame_conta2');
+    expect(h.log).toContain('clone tapflock_conta2');
   });
   it('nome e handle informados; nome repetido → 409; nome inválido → 400', async () => {
     const h = harness(); const s = await serve(h.db, h.ops);
@@ -83,7 +83,7 @@ describe('POST /identities', () => {
     expect(h.log.some((l) => l.startsWith('clone'))).toBe(false);
   });
   it('clone falhou → 500 com a mensagem e nada gravado', async () => {
-    const h = harness({ clone: async () => { throw new Error('AVD enxame_conta2 já existe'); } }); const s = await serve(h.db, h.ops);
+    const h = harness({ clone: async () => { throw new Error('AVD tapflock_conta2 já existe'); } }); const s = await serve(h.db, h.ops);
     const r = await s.post('/identities', {});
     expect(r.status).toBe(500); expect(String(r.body?.error)).toMatch(/já existe/);
     expect(getIdentity(h.db, 'conta2')).toBeNull();
@@ -135,7 +135,7 @@ describe('ciclo de vida', () => {
     const r = await s.post('/identities/conta1/login-done', { handle: 'nova.conta' });
     expect(r.status).toBe(200);
     expect(getIdentity(h.db, 'conta1')).toMatchObject({ state: 'logged-in', handle: '@nova.conta', snapshotTakenAt: NOW.toISOString(), lastError: null });
-    expect(h.log).toContain('emu emulator-5554 avd snapshot save enxame');
+    expect(h.log).toContain('emu emulator-5554 avd snapshot save tapflock');
   });
   it('login-done com snapshot falhando: 200, erro em last_error, sem snapshot_taken_at', async () => {
     const h = harness(); h.ops.adb.emu = async () => { throw new Error('KO: sem espaço'); };
@@ -166,8 +166,8 @@ describe('ciclo de vida', () => {
     await s.post('/identities/conta2/ban', { reason: 'banida' });
     const r = await s.post('/identities/conta2/discard');
     expect(r.status).toBe(200);
-    expect(h.log).toEqual(expect.arrayContaining(['emu emulator-5556 kill', 'sup-stop conta2', 'delete enxame_conta2', 'invalidate enxame_conta2']));
-    expect(h.log.indexOf('emu emulator-5556 kill')).toBeLessThan(h.log.indexOf('delete enxame_conta2'));
+    expect(h.log).toEqual(expect.arrayContaining(['emu emulator-5556 kill', 'sup-stop conta2', 'delete tapflock_conta2', 'invalidate tapflock_conta2']));
+    expect(h.log.indexOf('emu emulator-5556 kill')).toBeLessThan(h.log.indexOf('delete tapflock_conta2'));
     expect(getIdentity(h.db, 'conta2')).toMatchObject({ discardedAt: NOW.toISOString(), diskBytes: 0, state: 'banned' });
     expect((await s.post('/identities/conta2/discard')).status).toBe(409);
     const hb = harness({ baseAvd: 'mcp_test_playstore' }); const sb = await serve(hb.db, hb.ops);
@@ -185,7 +185,7 @@ describe('ciclo de vida', () => {
     const ok = await s.post('/identities/conta1/restore', { confirm: true });
     expect(ok.status).toBe(200); expect(ok.body).toMatchObject({ lifecycle: 'restored' });
     await s.settle();
-    expect(h.log).toEqual(expect.arrayContaining(['emu emulator-5554 avd snapshot load enxame', 'probe conta1']));
+    expect(h.log).toEqual(expect.arrayContaining(['emu emulator-5554 avd snapshot load tapflock', 'probe conta1']));
     expect(getIdentity(h.db, 'conta1')?.state).toBe('idle');
   });
   it('restore com sessão inválida → needs-human; sem snapshot ou fora do adb → 409', async () => {
@@ -204,7 +204,7 @@ describe('ciclo de vida', () => {
     const h = harness(); const s = await serve(h.db, h.ops);
     const r = await s.post('/identities/conta1/rebaseline');
     expect(r.status).toBe(200);
-    expect(h.log).toEqual(['trim emulator-5554', 'emu emulator-5554 avd snapshot save enxame', 'invalidate mcp_test_playstore']);
+    expect(h.log).toEqual(['trim emulator-5554', 'emu emulator-5554 avd snapshot save tapflock', 'invalidate mcp_test_playstore']);
     expect(getIdentity(h.db, 'conta1')).toMatchObject({ state: 'idle', snapshotTakenAt: NOW.toISOString() });
   });
   it('rebaseline com falha → 500 e erro em last_error; running → 409', async () => {

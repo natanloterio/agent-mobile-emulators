@@ -47,21 +47,21 @@ describe('cofre do daemon', () => {
   });
   it('keyringKeySource: sem entrada → null; store guarda a chave em base64 e load a devolve', async () => {
     let saved: string | null = null;
-    const ks = keyringKeySource(() => ({ getPassword: () => saved, setPassword: (p: string) => { saved = p; } }));
+    const ks = keyringKeySource(() => ({ getPassword: () => saved, setPassword: (p: string) => { saved = p; } }), null);
     expect(await ks.load()).toBeNull();
     await ks.store(Buffer.alloc(32, 7));
     expect(Buffer.from(saved ?? '', 'base64')).toEqual(Buffer.alloc(32, 7));
     expect(await ks.load()).toEqual(Buffer.alloc(32, 7));
   });
   it('keyringKeySource: chaveiro travado/inacessível ou biblioteca nativa ausente → VaultError', async () => {
-    const locked = keyringKeySource(() => ({ getPassword: () => { throw new Error('Platform secure storage failure: locked'); }, setPassword: () => { throw new Error('locked'); } }));
+    const locked = keyringKeySource(() => ({ getPassword: () => { throw new Error('Platform secure storage failure: locked'); }, setPassword: () => { throw new Error('locked'); } }), null);
     await expect(locked.load()).rejects.toThrow(/chaveiro do sistema indisponível/);
     await expect(locked.store(Buffer.alloc(32))).rejects.toBeInstanceOf(VaultError);
-    const noNative = keyringKeySource(() => { throw new Error('Cannot find native binding'); });
+    const noNative = keyringKeySource(() => { throw new Error('Cannot find native binding'); }, null);
     await expect(noNative.load()).rejects.toBeInstanceOf(VaultError);
   });
   it('keyringKeySource: valor no chaveiro com tamanho errado → VaultError', async () => {
-    const ks = keyringKeySource(() => ({ getPassword: () => Buffer.alloc(16).toString('base64'), setPassword: () => undefined }));
+    const ks = keyringKeySource(() => ({ getPassword: () => Buffer.alloc(16).toString('base64'), setPassword: () => undefined }), null);
     await expect(ks.load()).rejects.toThrow(/tamanho errado/);
   });
   it('readFile com erro de permissão → put rejeita, nada gravado', async () => {

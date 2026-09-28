@@ -89,7 +89,7 @@ describe('formatMb e ipcErrorText', () => {
     expect(formatMb(15600, createI18n('en'))).toBe('15.6 GB');
   });
   it('tira o prefixo do Electron', () => {
-    expect(ipcErrorText(new Error("Error invoking remote method 'enxame:setup:finish': Error: daemon não respondeu em 15 s"))).toBe('daemon não respondeu em 15 s');
+    expect(ipcErrorText(new Error("Error invoking remote method 'tapflock:setup:finish': Error: daemon não respondeu em 15 s"))).toBe('daemon não respondeu em 15 s');
     expect(ipcErrorText('x')).toBe('x');
   });
 });

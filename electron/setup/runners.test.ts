@@ -96,7 +96,7 @@ describe('Linux (comportamento de hoje)', () => {
     expect(calls).toContain(`run ${d.paths.sdkmanager} --sdk_root=${d.paths.sdkRoot} --licenses`);
     expect(seen.at(-1)).toEqual([a.jre.sizeMb + a.cmdlineTools.sizeMb, a.jre.sizeMb + a.cmdlineTools.sizeMb]);
   });
-  it('sdk: com o JRE do Enxame já extraído, só baixa as cmdline-tools', async () => {
+  it('sdk: com o JRE do Tapflock já extraído, só baixa as cmdline-tools', async () => {
     const { d, calls } = deps('linux-x64', { javaHere: true });
     const a = artifactsFor('linux-x64');
     await createRunners('gpt-oss:20b', 'ollama', d).sdk(() => {});

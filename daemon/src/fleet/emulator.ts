@@ -148,7 +148,17 @@ export async function bootEmulator(db: DatabaseSync, identity: IdentityRow, opts
 
 type EmuAdb = Pick<Adb, 'emu'>;
 export const saveSnapshot = async (adb: EmuAdb, serial: string, name: string = CONFIG.avd.snapshotName) => { await adb.emu(serial, ['avd', 'snapshot', 'save', name]); };
-export const loadSnapshot = async (adb: EmuAdb, serial: string, name: string = CONFIG.avd.snapshotName) => { await adb.emu(serial, ['avd', 'snapshot', 'load', name]); };
+/** Identidade criada antes da troca de nome (Enxame) só tem o snapshot antigo; se ele também falhar, sobe o erro do novo. */
+export const loadSnapshot = async (
+  adb: EmuAdb, serial: string, name: string = CONFIG.avd.snapshotName, legacy: string | null = CONFIG.avd.legacySnapshotName,
+) => {
+  try {
+    await adb.emu(serial, ['avd', 'snapshot', 'load', name]);
+  } catch (e) {
+    if (!legacy || legacy === name) throw e;
+    try { await adb.emu(serial, ['avd', 'snapshot', 'load', legacy]); } catch { throw e; }
+  }
+};
 
 /** `adb emu kill` e espera o serial sumir do adb (apagar o AVD com o qemu vivo corromperia o descarte). */
 export async function killEmulator(

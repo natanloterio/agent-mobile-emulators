@@ -1,4 +1,4 @@
-/** Rotas que o renderer pode chamar pelo canal genérico `enxame:api` (spec inc. 5 §3.4). Tudo o mais é recusado. */
+/** Rotas que o renderer pode chamar pelo canal genérico `tapflock:api` (spec inc. 5 §3.4). Tudo o mais é recusado. */
 const ALLOWED: readonly { readonly method: 'GET' | 'POST' | 'PUT'; readonly path: RegExp }[] = [
   { method: 'GET', path: /^\/state$/ },
   { method: 'GET', path: /^\/goals$/ },

@@ -115,7 +115,7 @@ export interface FleetSnapshot {
 export interface LiveFrame { readonly id: string; readonly at: string; readonly png: string }
 /** Access unit H.264 Annex B (base64); `key` traz SPS+PPS+IDR. */
 export interface LiveVideoPacket { readonly id: string; readonly seq: number; readonly key: boolean; readonly nal: string }
-export interface EnxameBridge {
+export interface TapflockBridge {
   readonly onSnapshot: (cb: (s: FleetSnapshot) => void) => () => void;
   readonly onFrame: (cb: (f: LiveFrame) => void) => () => void;
   readonly onVideo: (cb: (p: LiveVideoPacket) => void) => () => void;
