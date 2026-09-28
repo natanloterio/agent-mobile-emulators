@@ -28,7 +28,7 @@ ipcRenderer.on('tapflock:daemon', (_e, s: unknown) => { lastDaemon = s; });
 
 contextBridge.exposeInMainWorld('tapflock', {
   platform: process.platform,
-  version: '0.1.0',
+  version: '0.2.0',
   onSnapshot: (cb: (s: unknown) => void) => {
     const listener = (_e: unknown, data: unknown) => cb(data);
     ipcRenderer.on('tapflock:snapshot', listener);

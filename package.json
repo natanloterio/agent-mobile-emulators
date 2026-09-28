@@ -1,7 +1,7 @@
 {
   "name": "tapflock",
   "productName": "Tapflock",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tapflock: cockpit para um enxame de emuladores Android dirigidos por agentes",
   "license": "AGPL-3.0-only",
   "author": "Natan Loterio <natan@gaiahub.ai>",
@@ -66,17 +66,71 @@
     "appId": "me.pitaia.tapflock",
     "productName": "Tapflock",
     "copyright": "Copyright (C) 2026 Natan Loterio",
-    "directories": { "output": "release", "buildResources": "build" },
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
     "icon": "build/icon.png",
-    "files": ["dist/**", "dist-electron/**", "dist-daemon/**", "daemon/vendor/**", "package.json", "!**/*.test.*", "!**/*.map"],
-    "asarUnpack": ["daemon/vendor/**"],
-    "extraFiles": [{ "from": "LICENSE", "to": "LICENSE" }, { "from": "NOTICE", "to": "NOTICE" }],
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "dist-daemon/**",
+      "daemon/vendor/**",
+      "package.json",
+      "!**/*.test.*",
+      "!**/*.map"
+    ],
+    "asarUnpack": [
+      "daemon/vendor/**"
+    ],
+    "extraFiles": [
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "NOTICE",
+        "to": "NOTICE"
+      }
+    ],
     "npmRebuild": false,
     "afterPack": "scripts/adhoc-sign.cjs",
-    "linux": { "target": ["AppImage", "deb"], "icon": "build/icon.png", "category": "Development", "maintainer": "Natan Loterio <natan@gaiahub.ai>", "executableName": "tapflock" },
-    "deb": { "packageName": "tapflock", "artifactName": "tapflock_${version}_${arch}.${ext}", "fpm": ["--replaces=enxame", "--conflicts=enxame"] },
-    "mac": { "target": ["dmg"], "icon": "build/icon-mac.png", "category": "public.app-category.developer-tools", "identity": null, "hardenedRuntime": false },
-    "win": { "target": ["nsis"] },
-    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true }
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Development",
+      "maintainer": "Natan Loterio <natan@gaiahub.ai>",
+      "executableName": "tapflock"
+    },
+    "deb": {
+      "packageName": "tapflock",
+      "artifactName": "tapflock_${version}_${arch}.${ext}",
+      "fpm": [
+        "--replaces=enxame",
+        "--conflicts=enxame"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon-mac.png",
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "hardenedRuntime": false
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }
