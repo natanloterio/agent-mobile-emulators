@@ -1,6 +1,6 @@
 # Changelog
 
-## Não lançado
+## 0.4.1 — pré-lançamento
 
 ### Corrigido
 - Nova missão prendia identidades com missão pausada ou esperando humano: a lista mostrava "Em execução" e a conta ficava

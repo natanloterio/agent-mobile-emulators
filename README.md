@@ -66,7 +66,7 @@ It picks the right build for your Mac (Apple Silicon or Intel), downloads it fro
 SHA-256 against the one GitHub publishes, copies **Tapflock** to **Applications** and opens it. Run it again to update.
 Files fetched by `curl` are not quarantined, so macOS doesn't block the app. The trade-off is that Apple's malware check
 doesn't run either, which is why the script verifies the checksum. Read [the script](scripts/install-macos.sh) before
-running it if you like. Options: `--version 0.4.0`, `--dest ~/Applications`, `--no-open`, and `--dmg <file>` to
+running it if you like. Options: `--version 0.4.1`, `--dest ~/Applications`, `--no-open`, and `--dmg <file>` to
 install a DMG you already downloaded (this also unblocks it).
 
 Or download the installer for your system from the [releases page](https://github.com/natanloterio/tapflock/releases):
