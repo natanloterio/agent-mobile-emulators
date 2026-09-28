@@ -25,8 +25,8 @@ export function seedGoogleMemory(db: DatabaseSync, missionId: string, email: str
 }
 
 /**
- * Objetivo da missão no celular-base. Termina removendo a conta Google do aparelho: sem isso toda identidade clonada
- * nasceria logada na mesma conta Google.
+ * Objetivo da missão no celular-base: só entrar na Play Store e instalar o app. A conta Google sai depois por um
+ * caminho fixo das Configurações (google-remove.ts), sem modelo: um modelo pequeno se perdia nesse trecho.
  */
 export function baseMissionText(lang: string, targetPackage: string): string {
   if (lang.startsWith('pt')) {
@@ -34,15 +34,13 @@ export function baseMissionText(lang: string, targetPackage: string): string {
       `Instale o app Instagram (pacote ${targetPackage}) pela Play Store deste celular.`,
       '1) Abra a Play Store e entre na conta Google cujo e-mail está na memória google.email; a senha está no segredo google.password (digite com type_secret).',
       '2) Busque "Instagram", instale e espere a instalação terminar. Não abra o Instagram nem crie conta nele.',
-      '3) Remova a conta Google do aparelho: Configurações > Senhas e contas > a conta > Remover conta.',
-      'Termine quando o Instagram estiver instalado e a conta Google removida. Se o Google pedir código, telefone ou outra verificação, peça ajuda humana.',
+      'Termine quando o Instagram estiver instalado. Não mexa nas contas do aparelho: o Tapflock remove a conta Google depois. Se o Google pedir código, telefone ou outra verificação, peça ajuda humana.',
     ].join('\n');
   }
   return [
     `Install the Instagram app (package ${targetPackage}) from this phone's Play Store.`,
     '1) Open the Play Store and sign in to the Google account whose email is in memory google.email; the password is in secret google.password (type it with type_secret).',
     '2) Search "Instagram", install it and wait for the install to finish. Do not open Instagram or create an account in it.',
-    '3) Remove the Google account from the phone: Settings > Passwords & accounts > the account > Remove account.',
-    'Finish when Instagram is installed and the Google account is removed. If Google asks for a code, phone or other verification, ask for human help.',
+    'Finish when Instagram is installed. Do not touch the phone accounts: Tapflock removes the Google account afterwards. If Google asks for a code, phone or other verification, ask for human help.',
   ].join('\n');
 }

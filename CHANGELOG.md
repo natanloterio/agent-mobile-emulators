@@ -34,6 +34,13 @@
   (`daemon.lock`) garante um daemon só por pasta; o segundo sai com código 3 e o app espera o que já roda.
 - Provedores ganhou o cartão da chave da Anthropic: diz se há chave e de onde veio, e testa antes de salvar.
 
+### Celular-base: fim sem depender do modelo
+- A missão do celular-base só entra na Play Store e instala o app; ela é encerrada assim que o app aparece no
+  aparelho (conferido pelo adb a cada ~10 s), sem esperar o modelo perceber.
+- A conta Google sai pelas Configurações sem modelo de linguagem (`uiautomator dump` + toques na conta, em
+  "Remover conta" e na confirmação). Rodando na instalação real, um modelo local de 12B removeu a conta e seguiu 17
+  subtarefas procurando por ela.
+
 ### Acabamento de UX
 - "Novo objetivo" virou "Nova missão" no menu e no Cockpit (o modo objetivo está oculto; a tela já era de missão).
   O modo demonstração mostra a mesma tela de missão do app de verdade.
