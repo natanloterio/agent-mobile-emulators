@@ -27,7 +27,7 @@ export interface GuideButton { readonly id: GuideActionId; readonly label: Messa
 export interface GuideStep {
   /** Situação estável: o painel só troca o cartão quando ela muda. */
   readonly id: string;
-  readonly kind: 'action' | 'progress' | 'human' | 'form' | 'confirm' | 'done';
+  readonly kind: 'action' | 'progress' | 'human' | 'form' | 'confirm' | 'done' | 'idle';
   readonly milestone: MilestoneIndex | null;
   readonly title: MessageKey;
   readonly body?: MessageKey;
@@ -200,6 +200,11 @@ export function nextGuideStep(p: GuideProgress, snap: FleetSnapshot | null, ui: 
     case 3:
       return taskStep(p, snap, ui);
     default:
+      // Com a primeira missão criada, o "tudo configurado" cumpriu o papel: fica o estado quieto até algo pedir a pessoa.
+      if (snap?.missions?.length) return { id: 'idle', kind: 'idle', milestone: null, title: 'guide.idle.title', body: 'guide.idle.body', buttons: [] };
       return { id: 'done', kind: 'done', milestone: null, title: 'guide.done.title', body: 'guide.done.body', buttons: [btn('go.newMission', 'guide.done.go')], point: 'new-mission' };
   }
 }
+
+/** O painel fecha sozinho quando a pessoa cria a primeira missão (o foco passa a ser o Cockpit); só nessa passagem. */
+export const closesPanel = (prev: string | null, next: string): boolean => prev === 'done' && next === 'idle';
