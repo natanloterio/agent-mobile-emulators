@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tapflock Guia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --color-green: #b9ff66; --color-dark: #191a23; --color-grey: #f3f3f3; --color-white: #fff;
+  --color-danger: #b3261e; --color-dark-2: #292a32; --color-muted: #5b5c66;
+  --font-sans: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-heading: 7px; --radius-control: 14px; --radius-card: 45px; --radius-card-mobile: 30px;
+  --border-card: 1px solid var(--color-dark); --shadow-card: 0 5px 0 0 var(--color-dark);
+  --sidebar-width: 250px; --guide-width: 400px;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: var(--font-sans); color: var(--color-dark); background: var(--color-white); font-size: 16px; line-height: 1.45; }
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--color-dark); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Barra do mockup */
+.mockbar { display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; padding: var(--s2) var(--s4); border-bottom: 1px solid #ddd; font-size: 13px; background: var(--color-white); }
+.mockbar b { font-weight: 700; }
+.seg { display: inline-flex; border: var(--border-card); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: var(--color-white); padding: 6px 12px; min-height: 32px; font-size: 13px; }
+.seg button + button { border-left: var(--border-card); }
+.seg button[aria-pressed="true"] { background: var(--color-dark); color: var(--color-white); }
+
+/* Shell */
+.shell { display: grid; grid-template-columns: var(--sidebar-width) 1fr auto; min-height: calc(100vh - 49px); }
+.sidebar { background: var(--color-dark); color: var(--color-white); padding: var(--s5) var(--s4); display: flex; flex-direction: column; gap: var(--s5); position: sticky; top: 0; height: calc(100vh - 49px); }
+.brand { display: flex; align-items: center; gap: var(--s3); font-size: 26px; font-weight: 500; padding: 0 var(--s2); }
+.brand__mark { width: 36px; height: 36px; border-radius: 9px; background: var(--color-dark-2); display: grid; place-items: center; color: var(--color-green); font-weight: 700; }
+.nav { display: flex; flex-direction: column; gap: var(--s1); }
+.navbtn { text-align: left; background: none; border: 0; color: var(--color-white); font-size: 18px; padding: var(--s3) var(--s4); border-radius: var(--radius-control); min-height: 48px; display: flex; justify-content: space-between; align-items: center; }
+.navbtn:hover { background: var(--color-dark-2); }
+.navbtn--active { background: var(--color-green); color: var(--color-dark); }
+.sidebar__foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--s3); }
+.helpbtn { display: flex; align-items: center; gap: var(--s3); background: var(--color-dark-2); color: var(--color-white); border: 1px solid #44454f; border-radius: var(--radius-control); padding: var(--s3) var(--s4); min-height: 48px; font-size: 16px; position: relative; }
+.helpbtn[aria-expanded="true"] { background: var(--color-green); color: var(--color-dark); border-color: var(--color-green); }
+.helpbtn__icon { width: 26px; height: 26px; border-radius: 50%; border: 2px solid currentColor; display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+.helpbtn__dot { position: absolute; top: 10px; right: 12px; width: 10px; height: 10px; border-radius: 50%; background: var(--color-green); box-shadow: 0 0 0 3px var(--color-dark-2); }
+.helpbtn[aria-expanded="true"] .helpbtn__dot { display: none; }
+.lang { font-size: 13px; color: #b8b9bf; padding: 0 var(--s2); }
+
+/* Main */
+.main { padding: var(--s6) var(--s6) var(--s7); min-width: 0; }
+.header { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; margin-bottom: var(--s5); }
+.h-title { font-size: 40px; font-weight: 500; background: var(--color-green); border-radius: var(--radius-heading); padding: 0 var(--s2); margin: 0; line-height: 1.2; }
+.lede { margin: 0; max-width: 460px; }
+.header__actions { margin-left: auto; display: flex; gap: var(--s3); }
+.btn { border-radius: var(--radius-control); border: var(--border-card); padding: 0 var(--s5); min-height: 48px; font-size: 17px; background: var(--color-white); color: var(--color-dark); }
+.btn--primary { background: var(--color-dark); color: var(--color-white); }
+.btn--green { background: var(--color-green); color: var(--color-dark); }
+.btn--ghost { border-color: transparent; background: transparent; text-decoration: underline; text-underline-offset: 3px; }
+.btn--sm { min-height: 44px; font-size: 15px; padding: 0 var(--s4); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.card { border: var(--border-card); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: var(--s6) var(--s6); background: var(--color-grey); }
+.card--white { background: var(--color-white); }
+
+/* Checklist */
+.checklist { margin-bottom: var(--s5); }
+.checklist__head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s4); flex-wrap: wrap; margin-bottom: var(--s4); }
+.checklist__title { font-size: 22px; font-weight: 500; margin: 0; }
+.checklist__count { font-size: 15px; color: var(--color-muted); }
+.bar { height: 10px; border: var(--border-card); border-radius: 99px; overflow: hidden; margin-bottom: var(--s4); background: var(--color-white); }
+.bar > i { display: block; height: 100%; background: var(--color-dark); transition: width .4s ease; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s3); }
+.step { display: flex; gap: var(--s3); align-items: flex-start; padding: var(--s3); border-radius: var(--radius-control); border: 1px solid transparent; }
+.step--current { border-color: var(--color-dark); background: var(--color-white); }
+.step__icon { flex: 0 0 28px; height: 28px; border-radius: 50%; border: 2px solid var(--color-dark); display: grid; place-items: center; font-size: 14px; font-weight: 700; }
+.step--done .step__icon { background: var(--color-green); }
+.step--needs .step__icon { background: var(--color-dark); color: var(--color-green); }
+.step--failed .step__icon { background: var(--color-danger); color: var(--color-white); border-color: var(--color-danger); }
+.step__label { font-weight: 500; line-height: 1.25; }
+.step__state { font-size: 13px; color: var(--color-muted); }
+.step--needs .step__state { color: var(--color-dark); font-weight: 700; }
+
+/* Frota */
+.fleet { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 260px)); gap: var(--s5); }
+.empty { padding: var(--s6); display: flex; flex-direction: column; gap: var(--s3); align-items: flex-start; }
+.empty__title { font-size: 22px; font-weight: 500; }
+.tile { border: var(--border-card); border-radius: var(--radius-card); box-shadow: var(--shadow-card); background: var(--color-grey); padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3); }
+.screen { aspect-ratio: 9 / 16; background: var(--color-dark); border-radius: 28px; display: grid; place-items: center; color: var(--color-green); text-align: center; padding: var(--s4); font-size: 14px; position: relative; overflow: hidden; }
+.screen--ig { background: linear-gradient(160deg, #2a2b36, #191a23); }
+.screen__line { position: absolute; left: 16px; right: 16px; height: 10px; border-radius: 6px; background: #33343e; }
+.tile__head { display: flex; justify-content: space-between; align-items: center; gap: var(--s2); }
+.tile__name { font-size: 20px; font-weight: 500; }
+.pill { font-size: 13px; border: var(--border-card); border-radius: 8px; padding: 2px 8px; background: var(--color-white); white-space: nowrap; }
+.pill--green { background: var(--color-green); }
+.pill--dark { background: var(--color-dark); color: var(--color-green); }
+.tile__meta { font-size: 14px; }
+
+/* Destaque */
+.pointed { position: relative; outline: 3px solid var(--color-green) !important; box-shadow: 0 0 0 7px rgb(25 26 35 / .18); border-radius: var(--radius-control); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 11px rgb(25 26 35 / .06); } }
+@media (prefers-reduced-motion: reduce) { .pointed { animation: none; } .bar > i, .guide { transition: none !important; } }
+
+/* Guia */
+.guide { width: var(--guide-width); border-left: var(--border-card); background: var(--color-white); display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100vh - 49px); }
+.guide[hidden] { display: none; }
+.guide__head { display: flex; align-items: center; gap: var(--s2); padding: var(--s4) var(--s4) var(--s3) var(--s5); border-bottom: 1px solid #e3e3e6; }
+.guide__title { font-size: 22px; font-weight: 500; margin: 0; margin-right: auto; background: var(--color-green); border-radius: var(--radius-heading); padding: 0 6px; }
+.iconbtn { min-width: 44px; min-height: 44px; border-radius: 12px; border: 1px solid transparent; background: none; font-size: 15px; }
+.iconbtn:hover { border-color: var(--color-dark); }
+.guide__progress { padding: var(--s3) var(--s5); border-bottom: 1px solid #e3e3e6; font-size: 14px; display: flex; align-items: center; gap: var(--s3); }
+.dots { display: inline-flex; gap: 6px; }
+.dots i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--color-dark); }
+.dots i.on { background: var(--color-dark); }
+.dots i.cur { background: var(--color-green); }
+.guide__log { flex: 1; overflow-y: auto; padding: var(--s4) var(--s5); display: flex; flex-direction: column; gap: var(--s3); }
+.msg { max-width: 100%; }
+.say { font-size: 16px; }
+.say small { display: block; color: var(--color-muted); font-size: 13px; margin-top: 2px; }
+.you { align-self: flex-end; background: var(--color-grey); border-radius: 16px 16px 4px 16px; padding: var(--s2) var(--s3); max-width: 85%; }
+.gcard { border: var(--border-card); border-radius: 22px; padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3); background: var(--color-grey); }
+.gcard--human { background: var(--color-dark); color: var(--color-white); }
+.gcard--human .gcard__kicker { color: var(--color-green); }
+.gcard--human .btn--ghost { color: var(--color-white); }
+.gcard--confirm { background: var(--color-white); box-shadow: var(--shadow-card); }
+.gcard__kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.gcard__title { font-size: 18px; font-weight: 500; margin: 0; line-height: 1.3; }
+.gcard__body { margin: 0; font-size: 15px; }
+.gcard__actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.gcard--used { opacity: .6; }
+.gcard--used .gcard__actions { display: none; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.field input { font: inherit; font-size: 16px; min-height: 44px; border: var(--border-card); border-radius: 12px; padding: 0 var(--s3); background: var(--color-white); }
+.lock { font-size: 13px; display: flex; gap: 6px; align-items: flex-start; color: var(--color-muted); }
+.prog { display: flex; flex-direction: column; gap: 6px; }
+.prog__row { display: flex; justify-content: space-between; font-size: 15px; gap: var(--s2); }
+.prog__bar { height: 8px; border-radius: 99px; background: #dcdce0; overflow: hidden; }
+.prog__bar i { display: block; height: 100%; background: var(--color-dark); transition: width .3s linear; }
+.phases { list-style: none; padding: 0; margin: 0; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.phases li { display: flex; gap: 8px; align-items: center; }
+.phases li::before { content: '○'; width: 16px; text-align: center; }
+.phases li.done::before { content: '✓'; font-weight: 700; }
+.phases li.cur { font-weight: 700; }
+.phases li.cur::before { content: '●'; }
+.log { font-size: 14px; color: var(--color-muted); display: flex; gap: 6px; }
+.log b { color: var(--color-dark); }
+.why { background: none; border: 0; padding: 0; text-decoration: underline; font-size: 14px; color: inherit; min-height: 24px; }
+.guide__ask { border-top: 1px solid #e3e3e6; padding: var(--s3) var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: var(--border-card); background: var(--color-white); border-radius: 99px; padding: 0 12px; min-height: 36px; font-size: 13px; }
+.ask { display: flex; gap: var(--s2); }
+.ask input { flex: 1; min-width: 0; font: inherit; min-height: 44px; border: var(--border-card); border-radius: 12px; padding: 0 var(--s3); }
+.ask__off { font-size: 14px; color: var(--color-muted); }
+.ask__off a { color: var(--color-dark); }
+
+/* Mobile: painel vira bottom sheet */
+@media (max-width: 760px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; flex-direction: row; align-items: center; padding: var(--s3) var(--s4); }
+  .nav, .lang { display: none; }
+  .brand { font-size: 20px; }
+  .sidebar__foot { margin: 0 0 0 auto; }
+  .helpbtn { padding: var(--s2) var(--s3); }
+  .helpbtn__label { display: none; }
+  .main { padding: var(--s5) var(--s4) var(--s7); }
+  .h-title { font-size: 34px; }
+  .header__actions { margin-left: 0; width: 100%; }
+  .card { border-radius: var(--radius-card-mobile); padding: var(--s5) var(--s4); }
+  .steps { grid-template-columns: 1fr 1fr; }
+  .fleet { grid-template-columns: 1fr 1fr; }
+  .guide { position: fixed; left: 0; right: 0; bottom: 0; width: auto; height: 90vh; border-left: 0; border-top: var(--border-card); border-radius: 24px 24px 0 0; z-index: 20; box-shadow: 0 -8px 30px rgb(0 0 0 / .2); }
+  .guide__grab { display: block !important; width: 48px; height: 5px; border-radius: 99px; background: #c9c9ce; margin: 10px auto 0; }
+}
+.guide__grab { display: none; }
+</style>
+</head>
+<body>
+<div class="mockbar" role="region" aria-label="Controles do protótipo">
+  <span><b>Protótipo</b> · Guia do Tapflock (spec 2026-09-30-guia-design)</span>
+  <span>Cenário:</span>
+  <div class="seg" role="group" aria-label="Cenário">
+    <button type="button" data-scn="setup" aria-pressed="true">Primeira configuração</button>
+    <button type="button" data-scn="needs" aria-pressed="false">Precisa de você (depois)</button>
+    <button type="button" data-scn="noai" aria-pressed="false">Sem IA configurada</button>
+  </div>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="fast" checked> acelerar esperas</label>
+</div>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand__mark">T</span>TapFlock</div>
+    <nav class="nav" aria-label="Navegação">
+      <button type="button" class="navbtn navbtn--active">Cockpit</button>
+      <button type="button" class="navbtn" data-guide="new-mission-nav">Nova missão</button>
+      <button type="button" class="navbtn">Relatório</button>
+      <button type="button" class="navbtn">Identidades</button>
+      <button type="button" class="navbtn">Provedores</button>
+    </nav>
+    <div class="sidebar__foot">
+      <button type="button" class="helpbtn" id="helpBtn" aria-expanded="true" aria-controls="guide">
+        <span class="helpbtn__icon" aria-hidden="true">?</span><span class="helpbtn__label">Ajuda</span>
+        <span class="helpbtn__dot" id="helpDot" hidden></span><span class="sr-only" id="helpNew"></span>
+      </button>
+      <div class="lang">Idioma · Português</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="header">
+      <h1 class="h-title">Cockpit</h1>
+      <p class="lede" id="lede">Seus celulares e o que cada um está fazendo.</p>
+      <div class="header__actions">
+        <button type="button" class="btn">Parar tudo</button>
+        <button type="button" class="btn btn--primary" data-guide="new-mission">Nova missão</button>
+      </div>
+    </header>
+
+    <section class="card card--white checklist" id="checklist" aria-labelledby="clTitle">
+      <div class="checklist__head">
+        <h2 class="checklist__title" id="clTitle">Configuração</h2>
+        <span class="checklist__count" id="clCount"></span>
+      </div>
+      <div class="bar" aria-hidden="true"><i id="clBar"></i></div>
+      <ol class="steps" id="clSteps"></ol>
+    </section>
+
+    <section id="fleet" aria-label="Celulares"></section>
+  </main>
+
+  <aside class="guide" id="guide" aria-labelledby="guideTitle">
+    <span class="guide__grab" aria-hidden="true"></span>
+    <div class="guide__head">
+      <h2 class="guide__title" id="guideTitle">Guia</h2>
+      <button type="button" class="iconbtn" id="stopBtn" title="Parar o que o Guia está esperando">Parar</button>
+      <button type="button" class="iconbtn" id="closeBtn" aria-label="Fechar o Guia">✕</button>
+    </div>
+    <div class="guide__progress" id="gProgress"></div>
+    <div class="guide__log" id="log" aria-live="polite" aria-relevant="additions"></div>
+    <div class="guide__ask" id="ask"></div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const MILESTONES = ['Computador pronto', 'Celular-base pronto', 'Primeira conta conectada', 'Primeira tarefa concluída'];
+  const NEXT = ['Deixar o computador pronto', 'Preparar o celular-base', 'Conectar a primeira conta', 'Fazer a primeira tarefa'];
+  const STATE_TXT = { todo: 'A fazer', doing: 'Fazendo…', needs: 'Precisa de você', done: 'Feito', failed: 'Falhou' };
+  const ICON = { todo: '', doing: '…', needs: '!', done: '✓', failed: '✕' };
+  const PHASES = ['Criando o celular virtual', 'Ligando o celular (1–2 min)', 'Instalando o controle do Tapflock', 'Entrando na conta Google', 'Baixando o Instagram na Play Store', 'Tirando a conta Google e guardando o celular-base'];
+  const SIGNALS = ['Celular ligado', 'Acessibilidade ativa', 'Controle respondendo', 'Ferramentas do agente', 'Versão do Instagram certa'];
+
+  let s; let timers = [];
+  const fast = () => $('#fast').checked;
+  const wait = (ms) => new Promise((r) => timers.push(setTimeout(r, fast() ? ms / 4 : ms)));
+  const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
+  function reset(scn) {
+    clearTimers();
+    s = { scn, ms: ['done', 'todo', 'todo', 'todo'], phone: null, stopped: false, ai: scn !== 'noai', unread: false };
+    $('#log').innerHTML = '';
+    unpoint();
+    if (scn === 'needs') { s.ms = ['done', 'done', 'done', 'done']; s.phone = { name: 'conta1', handle: '@nuvem.cafe', state: 'needs' }; }
+    render();
+    if (scn === 'needs') needsFlow(); else intro();
+  }
+
+  /* ---------- render ---------- */
+  function current() { return s.ms.findIndex((m) => m !== 'done'); }
+  function render() {
+    const done = s.ms.filter((m) => m === 'done').length;
+    const cur = current();
+    $('#checklist').hidden = done === 4 && s.scn === 'needs';
+    $('#clCount').textContent = `${done} de 4`;
+    $('#clBar').style.width = `${done * 25}%`;
+    $('#clSteps').innerHTML = s.ms.map((m, i) => {
+      const cls = m === 'needs' ? 'needs' : m === 'failed' ? 'failed' : m === 'done' ? 'done' : '';
+      return `<li class="step ${cls ? 'step--' + cls : ''} ${i === cur ? 'step--current' : ''}" ${i === cur ? 'aria-current="step"' : ''}>
+        <span class="step__icon" aria-hidden="true">${ICON[m] || i + 1}</span>
+        <span><span class="step__label">${MILESTONES[i]}</span><br><span class="step__state">${STATE_TXT[m]}</span></span></li>`;
+    }).join('');
+    $('#gProgress').innerHTML = done === 4
+      ? `<span>Configuração completa ✓</span>`
+      : `<span class="dots" aria-hidden="true">${s.ms.map((m, i) => `<i class="${m === 'done' ? 'on' : i === cur ? 'cur' : ''}"></i>`).join('')}</span><span>${done} de 4 · agora: <b>${NEXT[cur]}</b></span>`;
+    renderFleet();
+    renderAsk();
+  }
+  function renderFleet() {
+    const f = $('#fleet');
+    if (!s.phone) {
+      f.innerHTML = `<div class="card empty"><span class="empty__title">Nenhum celular ainda.</span>
+        <span>O Guia cria o primeiro com você. Leva uns 10 minutos.</span></div>`;
+      return;
+    }
+    const p = s.phone;
+    const map = {
+      booting: ['Ligando…', 'pill', 'Ligando o celular'],
+      login: ['Esperando login', 'pill pill--dark', 'Tela de login do Instagram'],
+      checking: ['Conferindo', 'pill', 'Conferindo se está tudo certo'],
+      ready: ['Pronto', 'pill pill--green', 'Pronto para trabalhar'],
+      running: ['Trabalhando', 'pill pill--green', 'Lendo comentários'],
+      done: ['Livre', 'pill', 'Teste concluído · 14 comentários lidos'],
+      needs: ['Precisa de você', 'pill pill--dark', '"Confirme que é você" no Instagram'],
+    }[p.state];
+    const screen = p.state === 'booting' ? `<div class="screen">Ligando…</div>`
+      : `<div class="screen screen--ig">${[18, 40, 62, 84].map((t) => `<span class="screen__line" style="top:${t}%"></span>`).join('')}${p.state === 'needs' ? '<span style="position:relative">Confirme que é você</span>' : ''}</div>`;
+    f.innerHTML = `<div class="fleet"><article class="tile" data-guide="tile" aria-label="${p.name}">
+      ${screen}
+      <div class="tile__head"><span class="tile__name">${p.name}</span><span class="${map[1]}">${map[0]}</span></div>
+      <div class="tile__meta">${p.handle || 'sem conta ainda'}<br>${map[2]}</div></article></div>`;
+  }
+  function renderAsk() {
+    const a = $('#ask');
+    if (!s.ai) {
+      a.innerHTML = `<p class="ask__off">Para conversar com o Guia, configure a IA em <a href="#" id="toProv">Provedores</a>. Os passos acima funcionam sem ela.</p>`;
+      $('#toProv').onclick = (e) => { e.preventDefault(); point('.navbtn:nth-child(5)'); };
+      return;
+    }
+    a.innerHTML = `<div class="chips">${['O que é o celular-base?', 'Quanto isso custa?', 'Minha conta pode ser bloqueada?'].map((q) => `<button type="button" class="chip">${q}</button>`).join('')}</div>
+      <form class="ask" id="askForm"><label class="sr-only" for="askIn">Pergunte ao Guia</label>
+      <input id="askIn" placeholder="Pergunte ao Guia…" autocomplete="off"><button class="btn btn--primary btn--sm">Enviar</button></form>`;
+    a.querySelectorAll('.chip').forEach((c) => c.onclick = () => ask(c.textContent));
+    $('#askForm').onsubmit = (e) => { e.preventDefault(); const v = $('#askIn').value.trim(); if (v) { ask(v); $('#askIn').value = ''; } };
+  }
+
+  /* ---------- mensagens ---------- */
+  function add(html, cls = 'msg') {
+    const el = document.createElement('div'); el.className = cls; el.innerHTML = html;
+    $('#log').appendChild(el); $('#log').scrollTop = $('#log').scrollHeight;
+    if ($('#guide').hidden) { s.unread = true; $('#helpDot').hidden = false; $('#helpNew').textContent = 'mensagem nova'; }
+    return el;
+  }
+  const say = (t, small) => add(`${t}${small ? `<small>${small}</small>` : ''}`, 'msg say');
+  const log = (t, ok = true) => add(`<span aria-hidden="true">${ok ? '✓' : '✕'}</span><span><b>${t}</b></span>`, 'msg log');
+  function card({ kind = '', kicker, title, body = '', extra = '', actions = [] }) {
+    const el = add(`<div class="gcard ${kind ? 'gcard--' + kind : ''}">
+      ${kicker ? `<span class="gcard__kicker">${kicker}</span>` : ''}
+      <p class="gcard__title">${title}</p>${body ? `<p class="gcard__body">${body}</p>` : ''}${extra}
+      <div class="gcard__actions">${actions.map((a, i) => `<button type="button" class="btn btn--sm ${a.style || (i ? '' : 'btn--primary')}" data-i="${i}">${a.label}</button>`).join('')}</div></div>`);
+    const box = el.firstElementChild;
+    if (kind === 'human') el.setAttribute('role', 'alert');
+    box.querySelectorAll('[data-i]').forEach((b) => b.onclick = () => {
+      const a = actions[+b.dataset.i];
+      if (a.validate && !a.validate(box)) return;
+      box.classList.add('gcard--used'); unpoint();
+      a.run && a.run(box);
+    });
+    const first = box.querySelector('input, [data-i]'); if (first && !$('#guide').hidden) first.focus({ preventScroll: true });
+    return box;
+  }
+  function progress(label) {
+    const el = add(`<div class="gcard"><div class="prog"><div class="prog__row"><span class="prog__label">${label}</span><span class="prog__pct"></span></div>
+      <div class="prog__bar"><i style="width:0%"></i></div><div class="prog__extra"></div></div></div>`);
+    return {
+      set(pct, text) { el.querySelector('.prog__bar i').style.width = pct + '%'; el.querySelector('.prog__pct').textContent = pct + '%'; if (text) el.querySelector('.prog__label').textContent = text; },
+      extra(html) { el.querySelector('.prog__extra').innerHTML = html; },
+      remove() { el.remove(); },
+    };
+  }
+  const setMs = (i, v) => { s.ms[i] = v; render(); };
+
+  /* ---------- destaque ---------- */
+  function point(sel) { unpoint(); const t = document.querySelector(sel); if (!t) return; t.classList.add('pointed'); t.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); timers.push(setTimeout(unpoint, 8000)); }
+  function unpoint() { document.querySelectorAll('.pointed').forEach((e) => e.classList.remove('pointed')); }
+
+  /* ---------- roteiro ---------- */
+  function intro() {
+    say('Oi! Eu sou o Guia. Vou te ajudar a deixar o Tapflock trabalhando, passo a passo.', 'Você não precisa saber nada técnico. Quando for a sua vez, eu aviso.');
+    card({
+      kicker: 'Passo 2 de 4', title: 'Preparar o celular-base',
+      body: 'É um celular virtual com o Instagram instalado. Todas as suas contas vão ser cópias dele. Leva uns 10 minutos, e eu faço quase tudo.',
+      actions: [{ label: 'Preparar', run: askGoogle }, { label: 'Por quê?', style: 'btn--ghost', run: () => { say('Preparar uma vez e copiar é mais rápido e mais seguro do que instalar tudo em cada conta. Nenhuma conta sua fica no celular-base.'); intro2(); } }],
+    });
+  }
+  function intro2() { card({ title: 'Vamos preparar?', actions: [{ label: 'Preparar', run: askGoogle }] }); }
+
+  function askGoogle() {
+    add('Preparar', 'msg you');
+    card({
+      kicker: 'Só desta vez', title: 'Uma conta Google para baixar o Instagram',
+      body: 'Use qualquer conta Google. Ela sai do celular no final e nenhuma cópia herda ela.',
+      extra: `<label class="field">E-mail do Google<input type="email" autocomplete="off" placeholder="voce@gmail.com"></label>
+        <label class="field">Senha<input type="password" autocomplete="off"></label>
+        <span class="lock"><span aria-hidden="true">🔒</span>Vai direto para o cofre do seu computador. Nem eu nem a IA vemos a senha.</span>`,
+      actions: [{ label: 'Guardar e continuar', validate: (b) => { const [e, p] = b.querySelectorAll('input'); if (!e.value || !p.value) { (e.value ? p : e).focus(); return false; } return true; }, run: (b) => { b.querySelectorAll('input').forEach((i) => { i.value = ''; i.disabled = true; }); log('Conta Google guardada no cofre'); prepBase(); } }],
+    });
+  }
+
+  async function prepBase() {
+    setMs(1, 'doing');
+    const p = progress(PHASES[0]);
+    const list = (cur) => `<ol class="phases">${PHASES.map((t, i) => `<li class="${i < cur ? 'done' : i === cur ? 'cur' : ''}">${t}</li>`).join('')}</ol>`;
+    for (let i = 0; i < PHASES.length; i++) {
+      if (s.stopped) return;
+      p.set(Math.round(i / PHASES.length * 100), PHASES[i]); p.extra(list(i));
+      await wait(1600);
+      if (i === 3) { await googleChallenge(); if (s.stopped) return; }
+    }
+    p.remove();
+    log('Celular-base pronto, Instagram 448.0.0.52.84');
+    setMs(1, 'done');
+    firstPhone();
+  }
+  function googleChallenge() {
+    return new Promise((resolve) => {
+      setMs(1, 'needs');
+      card({
+        kind: 'human', kicker: 'Sua vez', title: 'O Google quer confirmar que é você',
+        body: 'Olhe a janela do celular que abriu na sua tela. Toque em "Sim" no seu telefone de verdade ou digite o código que o Google mandou. Depois volte aqui.',
+        actions: [{ label: 'Já fiz', style: 'btn--green', run: () => { add('Já fiz', 'msg you'); setMs(1, 'doing'); resolve(); } }],
+      });
+    });
+  }
+
+  function firstPhone() {
+    say('Celular-base pronto! 🎉');
+    card({
+      kicker: 'Passo 3 de 4', title: 'Criar o seu primeiro celular',
+      body: 'Cada celular guarda uma conta do Instagram. Depois dá para criar mais.',
+      actions: [{ label: 'Criar celular', run: bootPhone }],
+    });
+  }
+  async function bootPhone() {
+    add('Criar celular', 'msg you');
+    setMs(2, 'doing');
+    s.phone = { name: 'conta1', handle: '', state: 'booting' }; render();
+    log('Criei o celular conta1');
+    const p = progress('Ligando o celular… 1–2 min');
+    for (let k = 0; k <= 100; k += 20) { if (s.stopped) return; p.set(k); await wait(500); }
+    p.remove();
+    s.phone.state = 'login'; setMs(2, 'needs');
+    point('[data-guide="tile"]');
+    card({
+      kind: 'human', kicker: 'Sua vez', title: 'Entre no Instagram na janela que abriu',
+      body: 'Faça como no seu celular: usuário e senha, e o código se o Instagram pedir. Quando aparecer o seu feed, volte aqui.',
+      actions: [
+        { label: 'Entrei', style: 'btn--green', run: askHandle },
+        { label: 'Prefiro que o Tapflock digite', style: 'btn--ghost', run: typeForMe },
+      ],
+    });
+  }
+  function typeForMe() {
+    card({
+      title: 'Usuário e senha do Instagram',
+      extra: `<label class="field">Usuário<input autocomplete="off" placeholder="nuvem.cafe"></label><label class="field">Senha<input type="password" autocomplete="off"></label>
+        <span class="lock"><span aria-hidden="true">🔒</span>Vai para o cofre. O Tapflock digita no celular sem mostrar a senha para a IA.</span>`,
+      actions: [{ label: 'Entrar', validate: (b) => [...b.querySelectorAll('input')].every((i) => i.value || (i.focus(), false)), run: (b) => { const u = b.querySelector('input').value; b.querySelectorAll('input').forEach((i) => { i.value = ''; i.disabled = true; }); log('Login guardado no cofre, digitando no celular'); connected('@' + u.replace(/^@/, '')); } }],
+    });
+  }
+  function askHandle() {
+    add('Entrei', 'msg you');
+    card({
+      title: 'Qual é o seu @ no Instagram?', body: 'Serve para você reconhecer este celular na lista.',
+      extra: `<label class="field">Seu @<input autocomplete="off" placeholder="@nuvem.cafe"></label>`,
+      actions: [{ label: 'Guardar', validate: (b) => { const i = b.querySelector('input'); if (!/^@?[a-z0-9._]{1,30}$/i.test(i.value.trim())) { i.setAttribute('aria-invalid', 'true'); i.focus(); return false; } return true; }, run: (b) => connected('@' + b.querySelector('input').value.trim().replace(/^@/, '')) }],
+    });
+  }
+  async function connected(handle) {
+    setMs(2, 'doing');
+    s.phone.handle = handle; s.phone.state = 'checking'; render();
+    const p = progress('Conferindo se está tudo certo…');
+    for (let i = 0; i <= SIGNALS.length; i++) {
+      if (s.stopped) return;
+      p.set(Math.round(i / SIGNALS.length * 100));
+      p.extra(`<ol class="phases">${SIGNALS.map((t, k) => `<li class="${k < i ? 'done' : k === i ? 'cur' : ''}">${t}</li>`).join('')}</ol>`);
+      await wait(600);
+    }
+    p.remove();
+    s.phone.state = 'ready';
+    log(`Conta ${handle} conectada e guardada como ponto de restauração`);
+    setMs(2, 'done');
+    firstTask();
+  }
+  function firstTask() {
+    card({
+      kind: 'confirm', kicker: 'Passo 4 de 4 · teste', title: 'Ler os comentários das últimas 24 h',
+      body: '<b>Sem responder nada.</b> Só para você ver o Tapflock trabalhando. Custo estimado: <b>US$ 0,05</b>. Leva uns 3 minutos.',
+      actions: [{ label: 'Começar teste', run: runTask }, { label: 'Agora não', style: 'btn--ghost', run: () => say('Tudo bem. Quando quiser, é só clicar em Ajuda → "Fazer o teste".') }],
+    });
+  }
+  async function runTask() {
+    add('Começar teste', 'msg you');
+    setMs(3, 'doing'); s.phone.state = 'running'; render();
+    const p = progress('conta1 está lendo os comentários…');
+    p.extra(`<button type="button" class="btn btn--sm" id="seeLive">Ver ao vivo</button>`);
+    $('#seeLive').onclick = () => point('[data-guide="tile"]');
+    for (let k = 0; k <= 100; k += 10) { if (s.stopped) return; p.set(k); await wait(400); }
+    p.remove();
+    s.phone.state = 'done'; setMs(3, 'done');
+    timers.push(setTimeout(() => { $('#checklist').hidden = true; }, fast() ? 1500 : 5000));
+    log('Teste concluído: 14 comentários lidos em 3 min · US$ 0,04');
+    say('Pronto! Está tudo configurado. 🎉', 'O resultado completo fica no Relatório.');
+    card({
+      title: 'E agora?', body: 'Descreva uma tarefa com as suas palavras, como "responder os comentários de hoje com simpatia".',
+      actions: [{ label: 'Criar minha primeira missão', run: () => point('[data-guide="new-mission"]') }],
+    });
+  }
+
+  function needsFlow() {
+    say('Tudo tranquilo por aqui. Os seus celulares estão trabalhando.');
+    timers.push(setTimeout(() => {
+      $('#guide').hidden = false; $('#helpBtn').setAttribute('aria-expanded', 'true');
+      card({
+        kind: 'human', kicker: 'conta1 precisa de você', title: 'O Instagram pediu "Confirme que é você"',
+        body: 'Eu parei este celular para não piorar: tentar de novo sozinho pode fazer o Instagram bloquear a conta. Os outros continuam trabalhando.',
+        actions: [
+          { label: 'Abrir o celular', style: 'btn--green', run: () => { point('[data-guide="tile"]'); say('Toque em "Usar o celular eu mesmo", confirme no Instagram e volte aqui.'); resolvedCard(); } },
+          { label: 'Agora não', style: 'btn--ghost', run: () => say('Fica parado até você resolver. Eu te lembro no Relatório.') },
+        ],
+      });
+    }, fast() ? 500 : 1500));
+  }
+  function resolvedCard() {
+    card({ title: 'Resolveu?', actions: [{ label: 'Resolvi, pode continuar', run: () => { s.phone.state = 'running'; render(); log('conta1 voltou a trabalhar'); } }] });
+  }
+
+  const ANSWERS = {
+    'O que é o celular-base?': 'É um celular virtual "modelo", com o Instagram já instalado. Cada conta sua ganha uma cópia dele, assim ninguém precisa instalar nada de novo.',
+    'Quanto isso custa?': 'Até agora, US$ 0,00. As tarefas na nuvem custam alguns centavos cada; o que roda no seu computador é grátis. O custo aparece em cada tarefa e no Relatório.',
+    'Minha conta pode ser bloqueada?': 'Pode. O Instagram não gosta de automação. O Tapflock vai devagar, e se o Instagram desconfiar ele para e te chama, sem insistir. Use só contas suas.',
+  };
+  async function ask(q) {
+    add(q.replace(/</g, '&lt;'), 'msg you');
+    const t = say('…'); await wait(700);
+    t.innerHTML = (ANSWERS[q] || 'Boa pergunta. No app de verdade, eu respondo usando o que estou vendo nos seus celulares agora.') + '<small>Pergunta ao Guia · US$ 0,01</small>';
+  }
+
+  /* ---------- controles ---------- */
+  $('#stopBtn').onclick = () => { s.stopped = true; clearTimers(); unpoint(); log('Parei. Nada acontece até você clicar de novo.', false); card({ title: 'Continuar de onde parei?', actions: [{ label: 'Continuar', run: () => reset(s.scn) }] }); };
+  const setOpen = (open) => {
+    $('#guide').hidden = !open; $('#helpBtn').setAttribute('aria-expanded', String(open));
+    if (open) { s.unread = false; $('#helpDot').hidden = true; $('#helpNew').textContent = ''; $('#closeBtn').focus(); } else $('#helpBtn').focus();
+  };
+  $('#helpBtn').onclick = () => setOpen($('#guide').hidden);
+  $('#closeBtn').onclick = () => setOpen(false);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('#guide').hidden) setOpen(false);
+    if ((e.key === 'F1' || (e.key === '?' && !/INPUT/.test(document.activeElement.tagName)))) { e.preventDefault(); setOpen(true); }
+  });
+  document.querySelectorAll('[data-scn]').forEach((b) => b.onclick = () => {
+    document.querySelectorAll('[data-scn]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    $('#guide').hidden = false; $('#helpBtn').setAttribute('aria-expanded', 'true');
+    reset(b.dataset.scn);
+  });
+  reset('setup');
+})();
+</script>
+</body>
+</html>
