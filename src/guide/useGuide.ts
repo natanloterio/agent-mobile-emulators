@@ -3,19 +3,10 @@ import { useI18n } from '../i18n/I18nProvider';
 import type { MessageKey } from '../i18n/messages';
 import type { FleetSnapshot } from '../live/types';
 import { createGuideActions, type FormValues, type GuideLogEntry } from './actions';
-import { guideProgress, type GuideProgress } from './progress';
+import { guideProgress, shouldMarkCompleted, type GuideProgress } from './progress';
 import { INITIAL_UI, nextGuideStep, type GuideActionId, type GuideForm, type GuideStep, type GuideUi } from './script';
 
 export interface GuideError { readonly message: string; readonly detail: string | null }
-
-/** Configuração concluída numa sessão anterior (spec guia §2): por máquina, no armazenamento do Electron. */
-const COMPLETED_KEY = 'tapflock.guide.completed';
-function readCompleted(): boolean {
-  try { return window.localStorage.getItem(COMPLETED_KEY) === '1'; } catch { return false; }
-}
-function writeCompleted(): void {
-  try { window.localStorage.setItem(COMPLETED_KEY, '1'); } catch { /* sem armazenamento: só esta sessão lembra */ }
-}
 
 export interface UseGuideOptions {
   readonly snap: FleetSnapshot | null;
@@ -44,12 +35,17 @@ export function useGuide({ snap, setupCompleted, go, openAccount }: UseGuideOpti
   const [log, setLog] = useState<readonly GuideLogEntry[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GuideError | null>(null);
-  const [completed, setCompleted] = useState(readCompleted);
 
-  const progress = useMemo(() => guideProgress({ setupCompleted, snap, alreadyCompleted: completed }), [setupCompleted, snap, completed]);
+  // Concluída uma vez, fica concluída (spec guia §2): o daemon guarda no banco dele, então outro TAPFLOCK_DATA_DIR
+  // começa do zero. Um pedido por sessão; se falhar, o checklist volta a derivar do snapshot, sem travar nada.
+  const progress = useMemo(() => guideProgress({ setupCompleted, snap, alreadyCompleted: snap?.guide?.completed ?? false }), [setupCompleted, snap]);
+  const marking = useRef(false);
   useEffect(() => {
-    if (!completed && snap && progress.current === null) { writeCompleted(); setCompleted(true); }
-  }, [completed, snap, progress.current]);
+    if (marking.current || !shouldMarkCompleted(snap, progress)) return;
+    marking.current = true;
+    void window.tapflock?.api?.('PUT', '/settings/guide', { completed: true })
+      .catch((e: unknown) => { marking.current = false; console.warn('[guia] não deu para marcar a configuração concluída:', e); });
+  }, [snap, progress]);
   const step = useMemo(() => nextGuideStep(progress, snap, ui), [progress, snap, ui]);
 
   // Refs: as ações nascem uma vez e leem sempre o estado mais novo.

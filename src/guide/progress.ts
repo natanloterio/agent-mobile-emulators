@@ -94,3 +94,8 @@ export function guideProgress({ setupCompleted, snap, alreadyCompleted = false }
     baseRunning: baseStage(snap?.baseAvd) === 'running',
   };
 }
+
+/** Checklist completo agora e o daemon ainda não guardou isso: hora de marcar (daemon antigo, sem o campo, fica de fora). */
+export function shouldMarkCompleted(snap: FleetSnapshot | null, p: GuideProgress): boolean {
+  return !!snap?.guide && !snap.guide.completed && p.current === null;
+}

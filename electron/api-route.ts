@@ -23,6 +23,8 @@ const ALLOWED: readonly { readonly method: 'GET' | 'POST' | 'PUT'; readonly path
   // Paralelismo local (spec paralelismo §UI): idem, direto pela tela.
   { method: 'GET', path: /^\/settings\/local$/ },
   { method: 'PUT', path: /^\/settings\/local$/ },
+  // Guia (spec guia §2): marca a configuração concluída; ler vem no snapshot.
+  { method: 'PUT', path: /^\/settings\/guide$/ },
   // Preparo do celular-base: começar/retomar e seguir depois de uma verificação humana (a senha Google vai por IPC próprio).
   { method: 'POST', path: /^\/base\/(?:prepare|continue|reset)$/ },
 ];
