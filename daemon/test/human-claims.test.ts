@@ -12,6 +12,9 @@ describe('classifyHumanReason', () => {
     ['o provedor pediu número de telefone', null],
     ['Instagram pediu "confirme que é você" com código por SMS', null],
     ['captcha na criação da conta', null],
+    ['No "Allow all" button appears on current screen state. Need clarification whether a permission prompt is present. Please guide next steps.', 'guidance'],
+    ['Não sei o que fazer agora, preciso de orientação', 'guidance'],
+    ['Preciso que você digite o código de verificação enviado por SMS, não sei como seguir', null],
   ] as const)('%s → %s', (reason, kind) => {
     expect(classifyHumanReason(reason)).toBe(kind);
   });
@@ -38,6 +41,13 @@ describe('createHumanClaimCheck', () => {
   });
   it('sem screen_capture disponível, o pedido de print passa', async () => {
     expect(await createHumanClaimCheck({ session: async () => 'logged-in', canCapture: false })('tire um print da tela')).toBeNull();
+  });
+  it('pedido de orientação: recusa mandando ler a tela ou encerrar a subtarefa', async () => {
+    const session = vi.fn();
+    const r = await createHumanClaimCheck({ session, canCapture: true })('Need clarification. Please guide next steps.');
+    expect(r).toMatch(/get_screen_state/);
+    expect(r).toMatch(/finish_subtask/);
+    expect(session).not.toHaveBeenCalled();
   });
   it('pedido legítimo passa direto', async () => {
     const session = vi.fn();

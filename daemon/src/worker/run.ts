@@ -9,7 +9,7 @@ import { providerLabel, readProviderConfig, type ProviderConfig, type ProviderRo
 import { isLocalInfraError, ProviderError } from '../provider/errors.js';
 import { buildModel as defaultBuildModel, pricingFor, providerOptionsFor } from '../provider/factory.js';
 import { createOllamaSupervisor, warnIfExternalOllama, type OllamaSupervisor } from '../provider/ollama.js';
-import { createQualityFloor } from '../provider/quality.js';
+import { createQualityFloor, isToolParseError } from '../provider/quality.js';
 import { connectMcp } from '../device/mcp.js';
 import { detectLoggedOut, detectPlatformBlock } from '../screen/checks.js';
 import { detectHumanCheck } from '../screen/human-check.js';
@@ -309,7 +309,19 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
 
     let history: ModelMessage[] = messages;
     let currentRow = cfg.worker; let currentModel = model;
-    let result = await segment(currentRow, currentModel, tools, history, stopIfHalted, slug, budget);
+    type SegmentResult = Awaited<ReturnType<typeof segment>>;
+    const NO_RESULT = { text: '', response: { messages: [] } } as unknown as SegmentResult;
+    // O servidor local recusou a chamada gerada pelo modelo (a requisição inteira falha, o passo nem chega ao piso):
+    // conta como piso atingido, para escalar em vez de falhar a subtarefa com o erro cru (missão de 2026-09-30).
+    const localSegment = async (run: () => Promise<SegmentResult>, fallback: SegmentResult): Promise<SegmentResult> => {
+      try { return await run(); }
+      catch (e) {
+        if (currentRow !== cfg.worker || currentRow.mode !== 'local' || !isToolParseError(e)) throw e;
+        floor.trip();
+        return fallback;
+      }
+    };
+    let result = await localSegment(() => segment(currentRow, currentModel, tools, history, stopIfHalted, slug, budget), NO_RESULT);
     if (mission && result.text.trim()) lastNonEmptyText = result.text;
 
     // Orçamento desligado: escalonamento continua possível (sem teto a respeitar).
@@ -330,7 +342,8 @@ export async function runTask(o: RunTaskOpts, depsIn: RunTaskDeps = {}): Promise
     if (shouldRunMissionFinish({ mission: !!mission, report, halted: !!halt, stopped: stopped(), budget, stepsUsed })) {
       missionFinishRan = true;
       history = buildMissionFinishMessages(history, result.response.messages, MISSION_FINISH_NUDGE);
-      result = await segment(currentRow, currentModel, tools, history, stopIfHalted, slug, MISSION_FINISH_STEPS, MISSION_FINISH_TOOLS);
+      const before = result;
+      result = await localSegment(() => segment(currentRow, currentModel, tools, history, stopIfHalted, slug, MISSION_FINISH_STEPS, MISSION_FINISH_TOOLS), before);
       if (result.text.trim()) lastNonEmptyText = result.text;
     }
 

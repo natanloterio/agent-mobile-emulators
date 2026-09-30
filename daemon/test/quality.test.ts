@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createQualityFloor, invalidCallIds, isParamError, isTextToolCall } from '../src/provider/quality.js';
+import { createQualityFloor, invalidCallIds, isParamError, isTextToolCall, isToolParseError } from '../src/provider/quality.js';
 import type { StepLike } from '../src/worker/record.js';
 
 const usage = { inputTokens: 1, outputTokens: 1 };
@@ -60,12 +60,29 @@ describe('erro de parâmetro do MCP (incremento 3, spec §4.1)', () => {
     expect(f.tripped()).toBe(true);
     expect(f.count()).toBe(3);
   });
-  it('isTextToolCall: só JSON com name + arguments, e só sem tool call real no passo', () => {
+  it('isTextToolCall: objeto JSON como texto, e só sem tool call real no passo', () => {
     const t = (text: string, content: StepLike['content'] = [{ type: 'text' }]): StepLike => ({ stepNumber: 1, text, content, usage });
     expect(isTextToolCall(t('{"name":"finish_subtask","arguments":{}}'))).toBe(true);
     expect(isTextToolCall(t('```json\n{"name": "android_conta1_tap_node", "arguments": {"node_id": "x"}}\n```'))).toBe(true);
     expect(isTextToolCall(t('Não consegui concluir a subtarefa.'))).toBe(false);
-    expect(isTextToolCall(t('{"?":"?"}'))).toBe(false);
+    expect(isTextToolCall(t('{"?":"?"}'))).toBe(true); // lixo do gpt-oss na 1ª missão (subtarefa 4): também escala
     expect(isTextToolCall(t('{"name":"finish_subtask","arguments":{}}', [ok]))).toBe(false);
+  });
+  it('isTextToolCall também pega o JSON só com os argumentos (ex.: {"ok":true,"did":…} do finish_subtask)', () => {
+    const t = (text: string): StepLike => ({ stepNumber: 1, text, content: [{ type: 'text' }], usage });
+    expect(isTextToolCall(t('{"ok":true,"did":"captured natanloterio last post image","blockers":""}'))).toBe(true);
+    expect(isTextToolCall(t('{}'))).toBe(false);
+    expect(isTextToolCall(t('[1,2]'))).toBe(false);
+  });
+  it('isToolParseError: erro do Ollama ao ler a chamada, direto ou dentro do RetryError', () => {
+    expect(isToolParseError(new Error("error parsing tool call: raw='We need open…'"))).toBe(true);
+    const retry = Object.assign(new Error("Failed after 3 attempts. Last error: AI_APICallError: error parsing tool call: raw='x'"), { name: 'AI_RetryError' });
+    expect(isToolParseError(retry)).toBe(true);
+    expect(isToolParseError(new Error('fetch failed: ECONNREFUSED'))).toBe(false);
+    expect(isToolParseError('texto')).toBe(false);
+  });
+  it('trip() dispara o piso na hora', () => {
+    const f = createQualityFloor(3); f.trip();
+    expect(f.tripped()).toBe(true); expect(f.count()).toBe(3);
   });
 });

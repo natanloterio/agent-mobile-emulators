@@ -29,14 +29,27 @@ export function isTextToolCall(step: StepLike): boolean {
   const body = step.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   if (!body.startsWith('{')) return false;
   try {
-    const v = JSON.parse(body) as { name?: unknown; arguments?: unknown };
-    return typeof v.name === 'string' && !!v.arguments && typeof v.arguments === 'object';
+    // Com o envelope ({name, arguments}) ou só os argumentos ({"ok":true,"did":…}): um objeto JSON solto no lugar da
+    // resposta nunca é útil ao executor, que só age por tools.
+    const v = JSON.parse(body) as unknown;
+    return !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 0;
   } catch { return false; }
+}
+
+/**
+ * O servidor local (Ollama) não conseguiu ler a chamada que o modelo gerou e a requisição inteira falhou, às vezes
+ * depois das novas tentativas do SDK (RetryError). O passo nem chega ao onStepFinish, então só dá para ver pelo erro.
+ */
+export function isToolParseError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : '';
+  return /error parsing tool call|failed to parse tool call/i.test(msg);
 }
 
 export interface QualityFloor {
   readonly limit: number;
   observe(step: StepLike): number;
+  /** Dispara o piso na hora (ex.: o servidor local recusou a chamada do modelo). */
+  trip(): void;
   tripped(): boolean;
   count(): number;
 }
@@ -51,6 +64,7 @@ export function createQualityFloor(limit = 3): QualityFloor {
   return {
     limit,
     observe: (step) => { n = isTextToolCall(step) ? Math.max(n + 1, limit) : n + invalidCallIds(step).length; return n; },
+    trip: () => { n = Math.max(n + 1, limit); },
     tripped: () => n >= limit,
     count: () => n,
   };
