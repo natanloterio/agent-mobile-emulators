@@ -37,28 +37,36 @@ async function restartMcpServer(
 }
 const ALL_FALSE = { bootCompleted: false, accessibility: false, mcpInitialize: false, toolsPresent: false, versionMatch: false } as const;
 
+type ReadyDeps = { adb: Adb; probe?: typeof probeIdentity; sleep?: (ms: number) => Promise<void>; unlock?: (id: IdentityRow) => Promise<unknown> };
+
+/**
+ * Destrava com o PIN, refaz forward, aplica slug e token e roda a sonda (reiniciando o servidor MCP se preciso).
+ * Não olha o estado nem grava nada: serve a pedidos explícitos da pessoa (login, conferir o login), inclusive em
+ * needs-human. Pode lançar (ex.: PIN recusado).
+ */
+export async function prepareIdentityDevice(id: IdentityRow, deps: ReadyDeps): Promise<ProbeResult> {
+  const sleep = deps.sleep ?? defaultSleep;
+  const probe = deps.probe ?? probeIdentity;
+  // Tela ou armazenamento bloqueados pelo PIN (reboot, restore, tela apagada): destrava com o PIN da identidade antes de tudo.
+  const unlocked = await (deps.unlock ?? ((i: IdentityRow) => ensureUnlocked(deps.adb, i.serial, i.lockPin)))(id);
+  // Recém-destravado: apps do armazenamento criptografado ainda estão subindo e perderiam o broadcast de configuração.
+  if (unlocked === 'unlocked') await sleep(UNLOCK_SETTLE_MS);
+  await deps.adb.forward(id.serial, id.mcpHostPort, `tcp:${MCP_DEVICE_PORT}`);
+  await deps.adb.broadcastConfigure(id.serial, configureExtras(id));
+  const result = await probe(id, { adb: deps.adb });
+  return needsServerRestart(result) ? restartMcpServer(id, deps.adb, probe, sleep) : result;
+}
+
 /**
  * Garante forward, slug e token, roda a sonda e persiste o estado resultante. Nunca lança.
  * Identidade em needs-human ou banned é recusada sem tocar no device: "nunca retry automático" (spec §6).
  */
-export async function ensureIdentityReady(
-  db: DatabaseSync, id: IdentityRow,
-  deps: { adb: Adb; probe?: typeof probeIdentity; sleep?: (ms: number) => Promise<void>; unlock?: (id: IdentityRow) => Promise<unknown> },
-): Promise<ProbeResult> {
-  const sleep = deps.sleep ?? defaultSleep;
+export async function ensureIdentityReady(db: DatabaseSync, id: IdentityRow, deps: ReadyDeps): Promise<ProbeResult> {
   if (id.state === 'needs-human' || id.state === 'banned') {
     return { ready: false, signals: ALL_FALSE, details: [`identidade em ${id.state}: exige ação humana antes de qualquer tarefa`], failureClass: 'blocked' };
   }
-  const probe = deps.probe ?? probeIdentity;
   try {
-    // Tela ou armazenamento bloqueados pelo PIN (reboot, restore, tela apagada): destrava com o PIN da identidade antes de tudo.
-    const unlocked = await (deps.unlock ?? ((i: IdentityRow) => ensureUnlocked(deps.adb, i.serial, i.lockPin)))(id);
-    // Recém-destravado: apps do armazenamento criptografado ainda estão subindo e perderiam o broadcast de configuração.
-    if (unlocked === 'unlocked') await sleep(UNLOCK_SETTLE_MS);
-    await deps.adb.forward(id.serial, id.mcpHostPort, `tcp:${MCP_DEVICE_PORT}`);
-    await deps.adb.broadcastConfigure(id.serial, configureExtras(id));
-    let result = await probe(id, { adb: deps.adb });
-    if (needsServerRestart(result)) result = await restartMcpServer(id, deps.adb, probe, sleep);
+    const result = await prepareIdentityDevice(id, deps);
     if (result.ready) setIdentityState(db, id.id, 'idle', { lastError: null });
     else setIdentityState(db, id.id, 'offline', { lastError: result.details.join(' · ') || `sonda falhou (${result.failureClass})` });
     return result;

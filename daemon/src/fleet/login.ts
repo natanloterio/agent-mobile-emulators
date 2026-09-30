@@ -33,6 +33,25 @@ const find = (s: ScreenState, re: RegExp, editable?: boolean) =>
   nodes(s).find((n) => re.test(label(n)) && (editable === undefined || n.flags.has('edt') === editable)) ?? null;
 const inInstagram = (s: ScreenState) => !!focusedWindow(s)?.pkg.startsWith('com.instagram');
 
+/** Estado da sessão do Instagram lido na tela, sem modelo e sem tocar em nada (spec guia: "Entrei" conferido). */
+export interface SessionCheck { readonly state: 'logged-in' | 'logged-out' | 'blocked' | 'unknown'; readonly detail: string }
+
+/**
+ * Abre o Instagram e só lê a tela: verificação na frente → `blocked` (com o texto do app); formulário ou tela de
+ * entrada → `logged-out`; qualquer outra tela do Instagram → `logged-in`; outro app na frente → `unknown`.
+ */
+export async function checkSession(io: LoginIo): Promise<SessionCheck> {
+  await io.unlock();
+  await io.openApp(INSTAGRAM);
+  await io.sleep(2_500);
+  const s = await io.screen();
+  const block = detectPlatformBlock(s);
+  if (block) return { state: 'blocked', detail: block };
+  if (!inInstagram(s)) return { state: 'unknown', detail: focusedWindow(s)?.pkg ?? '' };
+  if (detectLoggedOut(s) || find(s, ENTRY_BUTTON, false)) return { state: 'logged-out', detail: '' };
+  return { state: 'logged-in', detail: '' };
+}
+
 /**
  * Login fixo do Instagram, sem modelo: uma tentativa por chamada. Qualquer desafio ou recusa → needs-human (spec §6: nunca
  * retry em bloqueio). A senha só vai para `io.type` — nunca para resultado, log ou erro.

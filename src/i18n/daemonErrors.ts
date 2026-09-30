@@ -40,6 +40,11 @@ const RULES: readonly Rule[] = [
   { re: /^sem credenciais salvas para esta identidade/, key: 'common.err.noCreds' },
   { re: /^identidade (\S+) já existe/, key: 'common.err.identityExists', params: (m) => ({ name: m[1] }) },
   { re: /^nome base é reservado/, key: 'common.err.reservedName' },
+  { re: /^Instagram deslogado \(tela de login\)/, key: 'common.err.loggedOut' },
+  { re: /^o Instagram ainda está na tela de login/, key: 'common.err.stillLoggedOut' },
+  { re: /^o Instagram pediu uma verificação: (.*)$/s, key: 'common.err.appCheck', params: (m) => ({ detail: m[1] }) },
+  { re: /^o Instagram não abriu no celular/, key: 'common.err.appNotOpen' },
+  { re: /^não deu para conferir o login no celular: (.*)$/s, key: 'common.err.cantCheck', params: (m) => ({ detail: m[1] }) },
 ];
 
 /** Tira o envelope que o main põe nas respostas de erro (`/rota → 409: {"error": …}`); lista de erros vira uma linha. */

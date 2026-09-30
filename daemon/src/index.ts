@@ -21,11 +21,11 @@ import { createVideoStreams } from './device/video.js';
 import { cloneAvd, deleteAvd } from './fleet/avd.js';
 import { createDiskUsage, startDiskCollector } from './fleet/disk.js';
 import { bootEmulator, createEmulatorSupervisor, saveSnapshot } from './fleet/emulator.js';
-import { ensureIdentityReady } from './fleet/identity.js';
+import { ensureIdentityReady, prepareIdentityDevice } from './fleet/identity.js';
 import { pickTestIdentity } from './fleet/pick.js';
 import { reconcileOnStart } from './fleet/reconcile.js';
 import { clearTargetAccount } from './fleet/account.js';
-import { loginIdentity } from './fleet/login-io.js';
+import { checkIdentitySession, loginIdentity } from './fleet/login-io.js';
 import { ensureUnlocked, isValidPin, setDevicePin } from './device/unlock.js';
 import { planGoal, type PlanDeps } from './leader/plan.js';
 import { leasePorts } from './fleet/ports.js';
@@ -140,7 +140,9 @@ const identityRoutes = createIdentityRoutes({
   // Boot/descarte mudam quem tem device: vídeo e miniatura recomeçam com a lista nova (serial pode ter mudado por lease).
   onIdentitiesChanged: () => { const t = liveTargets(); screen.start(t); video.start(t); },
   unlock: (identity) => ensureUnlocked(adb, identity.serial, identity.lockPin),
-  login: (identity, creds) => loginIdentity(db, identity, creds, { ensureReady: (d, i) => ensureIdentityReady(d, i, { adb }) }),
+  // Pedidos explícitos da pessoa: preparam o device sem a trava de needs-human e sem gravar estado (a rota decide o estado).
+  login: (identity, creds) => loginIdentity(db, identity, creds, { ensureReady: (_d, i) => prepareIdentityDevice(i, { adb }) }),
+  checkSession: (identity) => checkIdentitySession(db, identity, { ensureReady: (_d, i) => prepareIdentityDevice(i, { adb }) }),
   setPin: (identity, pin) => setDevicePin(adb, identity.serial, pin),
   defaultPin: defaultPinEnv && isValidPin(defaultPinEnv) ? defaultPinEnv : null,
   clearAccount: async (identity) => { await clearTargetAccount(adb, identity.serial, identity.appPackage); },

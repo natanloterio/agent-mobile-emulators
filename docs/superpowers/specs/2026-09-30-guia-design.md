@@ -135,9 +135,16 @@ deve estar mostrando agora. Idempotente: chamado a cada snapshot; só adiciona m
 | Marco 4 `todo` | `confirm` "Teste: ler os comentários das últimas 24 h, **sem responder nada**. Custo estimado: {custo}." | lança | `POST /goals/plan` → `POST /goals` | **sim** (custo) |
 | Teste rodando | `progress` + botão secundário "Ver ao vivo" (destaque no tile) | — | — | — |
 | Teste `done` | `say` "Pronto! {n} comentários lidos em {tempo}. Veja no Relatório." + [Criar minha primeira missão] (destaque `new-mission`) | — | — | — |
+| Conta com o Instagram deslogado (erro `Instagram deslogado…` do worker), ligada | `human` "O Instagram do {name} não está logado": entrar na janela e [Entrei] · [Prefiro que o Tapflock digite]; desligada, antes [Ligar o celular] | confere e marca logada | `POST /identities/:id/login-done` `{ handle }` (o @ que ela já tem) | não |
 | Identidade `needs-human` (a qualquer momento) | `human` com `error` traduzido + [Abrir o celular] (vai ao Device, destaca `take-control`) + [Resolvi] | resolve | `POST /identities/:id/resolve` | não |
 | Missão `awaiting-human` | idem, com `humanReason` | continua | `POST /missions/:id/continue` | não |
 | Versão do app mudou | `confirm` "O Instagram se atualizou sozinho neste celular. Aceitar a nova versão?" | aceita | `POST /identities/:id/accept-version` | sim |
+
+**"Entrei" é conferido.** Com o emulador ligado, o `login-done` abre o Instagram e só lê a tela (`checkSession`, sem modelo)
+antes de marcar a conta logada: tela de login ou de entrada → 409 "o Instagram ainda está na tela de login…";
+verificação na frente → 409 com o texto do app; outro app → 409; sem conseguir ler → 409 com o motivo. Vale também para o
+"Login feito" da tela Identidades. O login digitado pelo Tapflock e essa conferência preparam o device sem a trava de
+`needs-human` (`prepareIdentityDevice`), porque são pedidos explícitos da pessoa.
 
 **O teste do marco 4 usa o caminho de objetivo, não missão.** Objetivos passam pelo gate somente-leitura
 (`worker/gate.ts`); dentro de missão o worker pode tocar e digitar qualquer coisa. "Sem responder nada" só é verdade

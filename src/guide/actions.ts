@@ -119,6 +119,12 @@ export function createGuideActions(deps: GuideDeps) {
       case 'login.self': deps.setUi({ login: 'handle' }); return OK;
       case 'login.typeForMe': deps.setUi({ login: 'credentials' }); return OK;
       case 'login.back': deps.setUi({ login: 'ask' }); return OK;
+      case 'login.recheck': {
+        // Conta que já tinha @: o daemon confere a tela antes de aceitar (login-done), então "Entrei" cedo demais falha com o motivo.
+        const handle = ctx.account?.handle ?? '';
+        if (!HANDLE.test(handle.replace(/^@+/, ''))) { deps.setUi({ login: 'handle' }); return OK; }
+        return onAccount(ctx, 'login-done', { handle });
+      }
       case 'test.plan': return planTest(ctx);
       case 'test.start':
         if (!plan) return fail('guide.err.noPlan');

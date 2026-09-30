@@ -90,6 +90,13 @@ describe('createGuideActions', () => {
     expect(await actions.run('test.plan', ctx)).toEqual({ ok: false, error: 'guide.err.notReady', detail: 'versão mudou' });
   });
 
+  it('"Entrei" depois de o Instagram deslogar: confere de novo com o @ que a conta já tem', async () => {
+    const api = vi.fn().mockResolvedValue({});
+    const { actions } = setup({ api });
+    await actions.run('login.recheck', { snap: null, account: { ...account, handle: '@papaiame' } });
+    expect(api).toHaveBeenCalledWith('POST', '/identities/conta1/login-done', { handle: '@papaiame' });
+  });
+
   it('pausada e sob controle: devolve ao agente', async () => {
     const api = vi.fn().mockResolvedValue({});
     const { actions } = setup({ api });

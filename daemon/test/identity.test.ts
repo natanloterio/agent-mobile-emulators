@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Adb } from '../src/device/adb.js';
 import { openDb } from '../src/db/open.js';
 import { getIdentity, upsertIdentity } from '../src/db/identities.js';
-import { ensureIdentityReady } from '../src/fleet/identity.js';
+import { ensureIdentityReady, prepareIdentityDevice } from '../src/fleet/identity.js';
 
 const row = { id: 'conta1', name: 'conta1', handle: '@a', avdName: 'x', serial: 'emulator-5554', consolePort: 5554, mcpHostPort: 8080, mcpToken: 'tok', deviceSlug: 'conta1', appPackage: 'com.instagram.android', appVersionName: '448.0.0.52.84', state: 'logged-in' as const };
 const adbSpy = () => {
@@ -22,6 +22,17 @@ const adbSpy = () => {
 };
 const readyProbe = async () => ({ ready: true, signals: { bootCompleted: true, accessibility: true, mcpInitialize: true, toolsPresent: true, versionMatch: true }, details: [], failureClass: null });
 const versionProbe = async () => ({ ready: false, signals: { bootCompleted: true, accessibility: true, mcpInitialize: true, toolsPresent: true, versionMatch: false }, details: ['versionName 449 ≠ 448'], failureClass: 'version' as const });
+
+describe('prepareIdentityDevice', () => {
+  it('prepara o device mesmo em needs-human (pedido explícito da pessoa) e não grava estado', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, { ...row, state: 'needs-human' });
+    const { adb, calls } = adbSpy();
+    const r = await prepareIdentityDevice({ ...row, state: 'needs-human' }, { adb, probe: readyProbe, unlock: async () => 'already' });
+    expect(r.ready).toBe(true);
+    expect(calls[0]).toBe('forward emulator-5554 8080 tcp:8080');
+    expect(getIdentity(db, 'conta1')?.state).toBe('needs-human');
+  });
+});
 
 describe('ensureIdentityReady', () => {
   it('refaz forward, aplica slug e token por broadcast e marca idle quando pronta', async () => {

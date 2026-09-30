@@ -188,6 +188,43 @@ describe('ciclo de vida', () => {
     expect(getIdentity(h.db, 'conta1')).toMatchObject({ state: 'logged-in', handle: '@nova.conta', snapshotTakenAt: NOW.toISOString(), lastError: null });
     expect(h.log).toContain('emu emulator-5554 avd snapshot save tapflock');
   });
+  it('login-done confere a sessão antes: na tela de login → 409 e nada muda', async () => {
+    const h = harness({ checkSession: async () => ({ state: 'logged-out', detail: '' }) });
+    setIdentityState(h.db, 'conta1', 'needs-human', { lastError: 'Instagram deslogado (tela de login): x' });
+    const s = await serve(h.db, h.ops);
+    const r = await s.post('/identities/conta1/login-done', { handle: '@p1' });
+    expect(r.status).toBe(409);
+    expect(String(r.body?.error)).toMatch(/^o Instagram ainda está na tela de login/);
+    expect(getIdentity(h.db, 'conta1')).toMatchObject({ state: 'needs-human' });
+    expect(h.log).not.toContain('emu emulator-5554 avd snapshot save tapflock');
+  });
+  it('login-done com verificação do app na frente → 409 com o texto do app', async () => {
+    const h = harness({ checkSession: async () => ({ state: 'blocked', detail: 'Confirm it\'s you' }) });
+    const s = await serve(h.db, h.ops);
+    const r = await s.post('/identities/conta1/login-done', { handle: '@p1' });
+    expect(r.status).toBe(409);
+    expect(String(r.body?.error)).toBe("o Instagram pediu uma verificação: Confirm it's you");
+  });
+  it('login-done sem conseguir conferir (MCP fora) → 409, sem marcar logged-in', async () => {
+    const h = harness({ checkSession: async () => { throw new Error('device não pronto para o login: MCP: recusado'); } });
+    const s = await serve(h.db, h.ops);
+    const r = await s.post('/identities/conta1/login-done', { handle: '@p1' });
+    expect(r.status).toBe(409);
+    expect(String(r.body?.error)).toMatch(/^não deu para conferir o login no celular/);
+    expect(getIdentity(h.db, 'conta1')?.state).toBe('idle');
+  });
+  it('login-done com sessão de pé: segue, e sai de needs-human limpando o erro', async () => {
+    const h = harness({ checkSession: async () => ({ state: 'logged-in', detail: '' }) });
+    setIdentityState(h.db, 'conta1', 'needs-human', { lastError: 'Instagram deslogado (tela de login): x' });
+    const s = await serve(h.db, h.ops);
+    expect((await s.post('/identities/conta1/login-done', { handle: '@p1' })).status).toBe(200);
+    expect(getIdentity(h.db, 'conta1')).toMatchObject({ state: 'logged-in', lastError: null });
+  });
+  it('login-done com o emulador desligado não confere nada (não há o que ler) e segue como antes', async () => {
+    const h = harness({ checkSession: async () => { throw new Error('não devia chamar'); } }, []);
+    const s = await serve(h.db, h.ops);
+    expect((await s.post('/identities/conta1/login-done', { handle: '@p1' })).status).toBe(200);
+  });
   it('login-done com snapshot falhando: 200, erro em last_error, sem snapshot_taken_at', async () => {
     const h = harness(); h.ops.adb.emu = async () => { throw new Error('KO: sem espaço'); };
     const s = await serve(h.db, h.ops);

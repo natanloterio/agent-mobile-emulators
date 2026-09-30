@@ -15,7 +15,7 @@ export const INITIAL_UI: GuideUi = { login: 'ask', test: 'idle' };
 export type GuideActionId =
   | 'base.prepare' | 'base.continue' | 'base.recheck'
   | 'phone.create' | 'phone.boot' | 'phone.unpause' | 'phone.release'
-  | 'login.self' | 'login.typeForMe' | 'login.back'
+  | 'login.self' | 'login.typeForMe' | 'login.back' | 'login.recheck'
   | 'test.plan' | 'test.start' | 'test.decline' | 'test.again'
   | 'human.open' | 'human.resolve'
   | 'go.newMission' | 'go.setup';
@@ -95,10 +95,32 @@ function powerStep(a: LiveIdentity, m: MilestoneIndex): GuideStep | null {
   return null;
 }
 
-/** A conta conectada precisa estar livre para o teste: sem verificação pendente, ligada, sem pausa e sem a pessoa no controle. */
-function accountReadyStep(a: LiveIdentity): GuideStep | null {
+/** Erro que o daemon grava quando o worker acha o Instagram na tela de login (screen/checks.ts `detectLoggedOut`). */
+export const isLoggedOutError = (error: string | undefined) => /^Instagram deslogado/.test(error ?? '');
+
+/**
+ * O Instagram da conta deslogou (ou nunca logou: a pessoa clicou "Entrei" antes da hora). Entrar de novo na janela e
+ * "Entrei" (que o daemon confere lendo a tela), ou deixar o Tapflock digitar.
+ */
+function loggedOutStep(a: LiveIdentity, ui: GuideUi): GuideStep {
   const m = 3 as const;
   const params = { name: a.name };
+  const power = powerStep(a, m);
+  if (power) return power;
+  if (ui.login === 'credentials') {
+    return { id: `account.credentials:${a.id}`, kind: 'form', milestone: m, title: 'guide.login.credentials.title', body: 'guide.login.credentials.body', params, buttons: [btn('login.back', 'guide.back', 'ghost')], form: 'credentials' };
+  }
+  return {
+    id: `account.loggedOut:${a.id}`, kind: 'human', milestone: m, title: 'guide.account.loggedOut.title', body: 'guide.account.loggedOut.body', params, point: 'tile',
+    buttons: [btn('login.recheck', 'guide.login.ask.done'), btn('login.typeForMe', 'guide.login.ask.typeForMe', 'ghost')],
+  };
+}
+
+/** A conta conectada precisa estar livre para o teste: sem verificação pendente, ligada, sem pausa e sem a pessoa no controle. */
+function accountReadyStep(a: LiveIdentity, ui: GuideUi): GuideStep | null {
+  const m = 3 as const;
+  const params = { name: a.name };
+  if (lifecycleOf(a) === 'needs-human' && isLoggedOutError(a.error)) return loggedOutStep(a, ui);
   if (lifecycleOf(a) === 'needs-human') {
     return {
       id: `account.human:${a.id}`, kind: 'human', milestone: m, title: 'guide.test.human.title', body: 'guide.test.human.body', params, detail: a.error || null,
@@ -119,7 +141,10 @@ function humanReason(snap: FleetSnapshot | null, a: LiveIdentity | null): string
 
 function taskStep(p: GuideProgress, snap: FleetSnapshot | null, ui: GuideUi): GuideStep {
   const m = 3 as const;
-  const params = { name: p.account?.name ?? '' };
+  const a = p.account;
+  const params = { name: a?.name ?? '' };
+  // Deslogado vence qualquer outro cartão do teste: é a causa, e tem saída direta.
+  if (a && lifecycleOf(a) === 'needs-human' && isLoggedOutError(a.error)) return loggedOutStep(a, ui);
   switch (p.milestones[3]) {
     case 'doing':
       return { id: 'test.running', kind: 'progress', milestone: m, title: 'guide.test.running.title', body: 'guide.test.running.body', params, buttons: [], point: 'tile' };
@@ -128,10 +153,13 @@ function taskStep(p: GuideProgress, snap: FleetSnapshot | null, ui: GuideUi): Gu
         id: 'test.human', kind: 'human', milestone: m, title: 'guide.test.human.title', body: 'guide.test.human.body', params, detail: humanReason(snap, p.account),
         buttons: [btn('human.open', 'guide.test.human.open'), btn('human.resolve', 'guide.test.human.resolved', 'secondary')],
       };
-    case 'failed':
-      // Depois de "Tentar de novo" o cartão segue o plano novo; senão ficaria preso no "falhou".
+    case 'failed': {
+      // O que prende a conta vem antes do "falhou"; depois de "Tentar de novo" o cartão segue o plano novo.
+      const blocked = a ? accountReadyStep(a, ui) : null;
+      if (blocked) return blocked;
       if (ui.test === 'idle') return { id: 'test.failed', kind: 'action', milestone: m, title: 'guide.test.failed.title', body: 'guide.test.failed.body', buttons: [btn('test.plan', 'guide.retry')] };
       break;
+    }
     default:
       break;
   }
@@ -139,7 +167,7 @@ function taskStep(p: GuideProgress, snap: FleetSnapshot | null, ui: GuideUi): Gu
     return { id: 'test.declined', kind: 'action', milestone: m, title: 'guide.test.declined.title', body: 'guide.test.declined.body', buttons: [btn('test.again', 'guide.test.declined.again', 'secondary')] };
   }
   // Teste adiado não insiste; fora isso, a conta precisa estar livre antes de planejar.
-  const blocked = p.account ? accountReadyStep(p.account) : null;
+  const blocked = a ? accountReadyStep(a, ui) : null;
   if (blocked) return blocked;
   if (ui.test === 'planning') {
     return { id: 'test.planning', kind: 'progress', milestone: m, title: 'guide.test.planning.title', body: 'guide.test.planning.body', params, buttons: [] };
