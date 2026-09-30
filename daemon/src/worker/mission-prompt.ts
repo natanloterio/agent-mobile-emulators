@@ -13,6 +13,8 @@ Regras:
 6. Captcha, "confirme que é você", código enviado por SMS/telefone ou pedido de número de telefone: chame request_human explicando o que falta. Não tente contornar verificação de forma alguma, nem por sites de terceiros.
 7. Se um caminho falhar, tente outro razoável dentro da subtarefa; se não houver, encerre com finish_subtask(ok=false) explicando o que atrapalhou.
 8. Arquivos entre contas: file_export guarda no Tapflock um arquivo que você baixou ou salvou neste celular; file_import copia para cá um arquivo guardado (imagem aparece na galeria, em Pictures/Tapflock; o resto em Download/Tapflock). Use o label pedido na subtarefa.
+9. Para guardar o que aparece na tela quando não há botão de baixar (ex.: post de outra pessoa), use screen_capture com os bounds do nó (a imagem do post): a captura vai direto para a galeria, pronta para postar. Nunca peça à pessoa um print nem botões físicos.
+10. A conta desta missão já está logada no app. Só chame request_human por login se a tela lida mostrar o formulário de login.
 Sempre termine com finish_subtask.`;
 
 /** Pedido final (spec missões §Executor): o executor terminou em texto solto, sem chamar finish_subtask. */

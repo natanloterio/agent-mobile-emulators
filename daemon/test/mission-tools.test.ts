@@ -111,6 +111,20 @@ describe('ferramentas da missão', () => {
     expect(s.finished).toEqual([{ ok: true, did: 'criou a caixa', blockers: '' }]);
     expect(s.human).toEqual(['o provedor pediu número de telefone']);
   });
+  it('request_human recusado pela conferência não para a subtarefa e devolve o motivo ao modelo', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const missionId = createMission(db, 'conta2', 'missão', 'pt');
+    const human: string[] = [];
+    const tools = missionTools({
+      db, missionId, vault: memVault(), mask: createSecretMask(), typeText: async () => {}, onFinish: () => {},
+      onHuman: (r) => human.push(r), onVaultError: () => {},
+      checkHumanClaim: async (reason) => (reason.includes('login') ? 'conferido: está logado; continue' : null),
+    });
+    expect(await exec(tools, 'request_human', { reason: 'precisa de login' })).toEqual({ stopped: false, refused: 'conferido: está logado; continue' });
+    expect(human).toEqual([]);
+    expect(await exec(tools, 'request_human', { reason: 'código por SMS' })).toEqual({ stopped: true });
+    expect(human).toEqual(['código por SMS']);
+  });
   it('loadMissionSecrets devolve os valores dos segredos da missão', async () => {
     const s = setup();
     await exec(s.tools, 'secret_new', { key: 'a.password' });

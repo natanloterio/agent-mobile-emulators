@@ -20,6 +20,20 @@ export function invalidCallIds(step: StepLike): readonly string[] {
   return [...new Set([...schemaInvalid, ...paramErrors])];
 }
 
+/**
+ * O modelo escreveu a chamada como texto (`{"name": …, "arguments": …}`, às vezes num bloco ```json) em vez de chamar a
+ * tool: acontece com modelos locais e o passo termina sem ação. Medido no gpt-oss:20b numa missão de 2026-09-30.
+ */
+export function isTextToolCall(step: StepLike): boolean {
+  if (step.content.some((p) => p.type === 'tool-call')) return false;
+  const body = step.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  if (!body.startsWith('{')) return false;
+  try {
+    const v = JSON.parse(body) as { name?: unknown; arguments?: unknown };
+    return typeof v.name === 'string' && !!v.arguments && typeof v.arguments === 'object';
+  } catch { return false; }
+}
+
 export interface QualityFloor {
   readonly limit: number;
   observe(step: StepLike): number;
@@ -27,12 +41,16 @@ export interface QualityFloor {
   count(): number;
 }
 
-/** Spec §4.5: acumulado por tarefa; tool calls inválidas no schema e erros de parâmetro do servidor contam; negação do gate, erros de nó e de infra não. */
+/**
+ * Spec §4.5: acumulado por tarefa; tool calls inválidas no schema e erros de parâmetro do servidor contam; negação do
+ * gate, erros de nó e de infra não. Chamada escrita como texto dispara na hora: o passo acaba sem ação e o modelo
+ * repete o formato no pedido final, então só o escalonamento resolve.
+ */
 export function createQualityFloor(limit = 3): QualityFloor {
   let n = 0;
   return {
     limit,
-    observe: (step) => { n += invalidCallIds(step).length; return n; },
+    observe: (step) => { n = isTextToolCall(step) ? Math.max(n + 1, limit) : n + invalidCallIds(step).length; return n; },
     tripped: () => n >= limit,
     count: () => n,
   };

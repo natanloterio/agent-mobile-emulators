@@ -5,6 +5,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { deleteFileRow, getFile, insertFile, type FleetFile } from '../db/files.js';
 import type { IdentityRow } from '../db/identities.js';
 import { AdbError, type Adb } from '../device/adb.js';
+import { cropPng, type Bounds } from './png.js';
 import { deviceDirFor, existsOnDevice, listSharedFiles, mediaScan, normalizeDevicePath, shq, statFileSize, type DeviceFile } from './device-files.js';
 import { safeFileName, SNIFF_BYTES, sniffMime, withExtension } from './sniff.js';
 
@@ -24,10 +25,12 @@ export interface FileService {
   /** O arquivo mais novo das pastas compartilhadas modificado desde `sinceSec` (o que a missão acabou de baixar). */
   exportNewest(o: { identity: IdentityRow; sinceSec: number; label: string; missionId: string | null }): Promise<FleetFile>;
   importFile(o: { file: FleetFile; identity: IdentityRow }): Promise<{ devicePath: string }>;
+  /** Captura a tela pelo adb (não pela pessoa), recortada pelos bounds se vierem, e guarda como PNG com o label. */
+  captureScreen(o: { identity: IdentityRow; label: string; missionId: string | null; crop?: Bounds }): Promise<FleetFile>;
   remove(id: string): Promise<FleetFile | null>;
 }
 export interface FileServiceDeps {
-  readonly db: DatabaseSync; readonly adb: Pick<Adb, 'shell' | 'pull' | 'push'>;
+  readonly db: DatabaseSync; readonly adb: Pick<Adb, 'shell' | 'pull' | 'push'> & Partial<Pick<Adb, 'screencap'>>;
   readonly dir: string; readonly maxBytes: number; readonly recentLimit: number;
   /** Destrava a tela com o PIN da identidade: com o armazenamento criptografado travado, `/sdcard` nem existe. */
   readonly unlock?: (identity: IdentityRow) => Promise<unknown>;
@@ -117,6 +120,28 @@ export function createFileService(d: FileServiceDeps): FileService {
         return target;
       });
       return { devicePath };
+    },
+    captureScreen: async ({ identity, label, missionId, crop }) => {
+      if (!FILE_LABEL.test(label)) throw new FileError('bad-label', 'label: letras, dígitos, ponto, _ e -, até 80');
+      const screencap = d.adb.screencap;
+      if (!screencap) throw new FileError('device', 'captura de tela indisponível neste daemon');
+      await ready(identity);
+      const full = await onDevice(() => screencap(identity.serial));
+      let bytes: Buffer;
+      try { bytes = crop ? cropPng(full, crop) : full; }
+      catch (e) { throw new FileError('bad-path', `não deu para recortar a captura: ${(e as Error).message}`); }
+      if (bytes.length > d.maxBytes) throw new FileError('too-large', `captura de ${mb(bytes.length)} passa do limite de ${mb(d.maxBytes)}`);
+      const id = randomUUID();
+      const folder = path.join(d.dir, id);
+      const hostPath = path.join(folder, `${label}.png`);
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(hostPath, bytes);
+      const sha256 = createHash('sha256').update(bytes).digest('hex');
+      insertFile(d.db, {
+        label, name: path.basename(hostPath), mime: sniffMime(bytes.subarray(0, SNIFF_BYTES), hostPath), sizeBytes: bytes.length, sha256, hostPath,
+        sourceIdentityId: identity.id, sourceMissionId: missionId, sourcePath: 'screencap',
+      }, id);
+      return getFile(d.db, id) as FleetFile;
     },
     remove: async (id) => {
       const f = deleteFileRow(d.db, id);
