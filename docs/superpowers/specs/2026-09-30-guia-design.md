@@ -38,11 +38,20 @@ Quatro marcos, derivados por uma função pura `guideProgress(snap, setup): Guid
 |---|---|---|---|---|
 | 1 | Computador pronto | `setup.completed` (ou sem ponte de setup) | — (o onboarding cobre) | — |
 | 2 | Celular-base pronto | `baseAvd.found && baseStage(baseAvd) === null` | `baseAvd.prep.state === 'running'` | `prep.state ∈ {needs-google, needs-human}`; `failed` → **Falhou** |
-| 3 | Primeira conta conectada | existe identidade com `lifecycle ∈ {logged-in, running, restored}`, `bannedReason === null` e os 5 sinais de `signals` verdadeiros | identidade `provisioned`/`blank` com `booting` ou `online` | identidade `provisioned` online esperando login (`handle` = sem conta) |
+| 3 | Primeira conta conectada | existe identidade com login feito (estado fora de `blank`/`provisioned`, `handle` ≠ sem conta), não banida nem descartada | identidade esperando login, ligando ou desligada | identidade esperando login e online |
 | 4 | Primeira tarefa concluída | algum `goal` ou missão com estado `done` | goal/missão `running` | missão `awaiting-human` ou identidade `needs-human` |
+
+Os 5 sinais de prontidão **não** entram no marco 3: o daemon só os grava na sonda da frota (ao planejar um objetivo) e
+no aceitar-versão, então ficariam vazios logo depois do login. Eles são checados no marco 4, pelo `ready` de cada
+tarefa do plano; conta fora da frota volta com o `readyLabel` da sonda como motivo.
 
 Estados de cada marco: `todo · doing · needs-you · done · failed`. Um marco só fica `doing`/`needs-you` quando todos
 os anteriores estão `done`. O marco atual é o primeiro que não está `done`.
+
+Concluído uma vez, o checklist fica concluído (chave `tapflock.guide.completed` no armazenamento do app): um objetivo
+novo que falhou, a base ligada por fora ou uma conta banida depois não o reabrem. No marco 4, antes de oferecer o teste,
+o Guia resolve o que prende a conta conectada: verificação pendente, celular desligado, pausa ou a pessoa no controle.
+O plano do teste leva só a conta do Guia, mesmo com outras prontas.
 
 O checklist aparece no topo do painel e, enquanto não estiver completo, também no topo do Cockpit (cartão
 `card--white`, 4 linhas, barra de progresso 4 passos). Completo, some do Cockpit e fica só em Ajuda → "Configuração".
@@ -60,6 +69,8 @@ O checklist aparece no topo do painel e, enquanto não estiver completo, também
 ### 3.2 Quando abre sozinho
 
 1. No fim do onboarding (substitui o "Criar identidade" do passo Pronto: o botão vira "Começar com o Guia").
+   Na mesma sessão, também abre no primeiro snapshot em que o checklist está incompleto: quem fechou o app no meio
+   da configuração volta direto para o passo em que parou.
 2. Quando um marco passa para `needs-you` ou `failed`.
 3. Quando uma identidade ou missão entra em `needs-human`/`awaiting-human` depois do checklist completo.
 
@@ -120,7 +131,6 @@ deve estar mostrando agora. Idempotente: chamado a cada snapshot; só adiciona m
 | Online, sem conta | `action` "Entre no Instagram na janela que abriu, como no seu celular." [Entrei] · secundário [Prefiro que o Tapflock digite] | pede @handle | — | não |
 | "Prefiro que o Tapflock digite" | `secret` usuário + senha do Instagram → login | — | ponte de credenciais + `POST /identities/:id/login` | não |
 | [Entrei] | `secret`-leve: campo "Seu @ no Instagram" (não é segredo, mas usa o mesmo cartão) | grava | `POST /identities/:id/login-done` `{ handle }` | não |
-| Conectada, sinais incompletos | `progress` "Conferindo se está tudo certo…" com os 5 sinais como ✓/… | — | — | — |
 | Marco 4 `todo` | `confirm` "Teste: ler os comentários das últimas 24 h, **sem responder nada**. Custo estimado: {custo}." | lança | `POST /goals/plan` → `POST /goals` | **sim** (custo) |
 | Teste rodando | `progress` + botão secundário "Ver ao vivo" (destaque no tile) | — | — | — |
 | Teste `done` | `say` "Pronto! {n} comentários lidos em {tempo}. Veja no Relatório." + [Criar minha primeira missão] (destaque `new-mission`) | — | — | — |
@@ -175,6 +185,10 @@ Rota nova no daemon: **`POST /guide/ask`** `{ question, lang }` → `{ answer, p
 | `daemon/src/db/settings.ts` | chave `guide.log` (últimas 200 mensagens, sem segredo) e `guide.dismissed` |
 
 O registro fica no daemon para sobreviver a reinícios e aparecer igual em qualquer janela.
+
+**Na F1** o registro vive só na memória da UI (sessão atual) e `routes-guide.ts` fica para a F3. Retomar depois de um
+reinício não depende dele: o cartão sai do snapshot. Também não há botão "Parar" na F1: o Guia não dispara nada
+sozinho, toda ação sai de um clique (a única encadeada é criar o celular → ligá-lo, no mesmo clique).
 
 ## 7. Fases
 

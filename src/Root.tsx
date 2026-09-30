@@ -7,7 +7,7 @@ import type { Screen } from './types/fleet';
 type Phase =
   | { readonly kind: 'loading' }
   | { readonly kind: 'onboarding'; readonly reopened: boolean }
-  | { readonly kind: 'app'; readonly startScreen: Screen | null };
+  | { readonly kind: 'app'; readonly startScreen: Screen | null; readonly openGuide?: boolean };
 
 /**
  * Decide entre o onboarding (primeira execução, spec onboarding) e o app. Sem a ponte de setup (navegador, preload
@@ -36,7 +36,7 @@ export function Root() {
     return (
       <Onboarding
         bridge={setup}
-        onDone={(screen) => setPhase({ kind: 'app', startScreen: screen })}
+        onDone={(next) => setPhase(next === 'guide' ? { kind: 'app', startScreen: 'cockpit', openGuide: true } : { kind: 'app', startScreen: next })}
         onClose={phase.reopened ? () => setPhase({ kind: 'app', startScreen: 'prov' }) : undefined}
       />
     );
@@ -44,6 +44,7 @@ export function Root() {
   return (
     <App
       startScreen={phase.kind === 'app' ? phase.startScreen : null}
+      openGuide={phase.kind === 'app' && !!phase.openGuide}
       onReopenSetup={setup && supported ? () => setPhase({ kind: 'onboarding', reopened: true }) : undefined}
     />
   );

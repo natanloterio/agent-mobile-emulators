@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { byAttention } from '../state/selectors';
 import { Bar } from '../components/Bar';
 import { Button } from '../components/Button';
@@ -33,6 +33,10 @@ interface CockpitProps {
   readonly baseMissing?: boolean;
   /** Kill switch já acionado: o botão fica travado (o banner tem o "Retomar"). */
   readonly killed?: boolean;
+  /** Checklist do Guia enquanto a configuração não termina (spec guia §2); substitui o cartão de frota vazia. */
+  readonly checklist?: ReactNode;
+  /** Identidade que o Guia acompanha: o tile dela recebe o alvo de destaque `tile`. */
+  readonly guideTileId?: string | null;
 }
 
 function EmptyFleet({ connecting, baseMissing, onProvision }: { readonly connecting: boolean; readonly baseMissing: boolean; readonly onProvision: () => void }) {
@@ -47,11 +51,11 @@ function EmptyFleet({ connecting, baseMissing, onProvision }: { readonly connect
   );
 }
 
-function Tile({ t, fullTiles, showCost, bus, onOpen }: { readonly t: TileVM; readonly fullTiles: boolean; readonly showCost: boolean; readonly bus?: VideoBus | null; readonly onOpen: (i: number) => void }) {
+function Tile({ t, fullTiles, showCost, bus, guided, onOpen }: { readonly t: TileVM; readonly fullTiles: boolean; readonly showCost: boolean; readonly bus?: VideoBus | null; readonly guided: boolean; readonly onOpen: (i: number) => void }) {
   const { t: tr } = useI18n();
   const te = useDaemonError();
   return (
-    <button type="button" className={`tile tile--${t.cardTone}`} onClick={() => onOpen(t.index)}>
+    <button type="button" className={`tile tile--${t.cardTone}`} data-guide={guided ? 'tile' : undefined} onClick={() => onOpen(t.index)}>
       <PhoneMock
         variant="tile"
         handle={t.handle}
@@ -98,7 +102,7 @@ export function Cockpit(p: CockpitProps) {
         {!empty && (
           <div className="screen__actions">
             <Button variant="secondary" disabled={!!p.killed || confirming} aria-expanded={confirming} onClick={() => setConfirming(true)}>Kill switch</Button>
-            <Button onClick={p.onNew}>{t('cockpit.newGoal')}</Button>
+            <Button data-guide="new-mission" onClick={p.onNew}>{t('cockpit.newGoal')}</Button>
           </div>
         )}
       </header>
@@ -112,6 +116,7 @@ export function Cockpit(p: CockpitProps) {
           </div>
         </div>
       )}
+      {p.checklist}
       {killError && <Notice>{t('cockpit.killFailed', { error: te(killError) })}</Notice>}
 
       {!empty && <section className="card card--grey card--shadow goal">
@@ -128,12 +133,12 @@ export function Cockpit(p: CockpitProps) {
         ))}
       </section>}
 
-      {empty === 'down' ? null : empty ? (
+      {empty === 'down' || (empty === 'empty' && p.checklist) ? null : empty ? (
         <EmptyFleet connecting={empty === 'connecting'} baseMissing={!!p.baseMissing} onProvision={p.onProvision} />
       ) : (
         <section className="tiles">
           {byAttention(tiles).map((t) => (
-            <Tile key={t.id ?? t.name} t={t} fullTiles={p.fullTiles} showCost={p.showCost} bus={p.bus} onOpen={p.onOpen} />
+            <Tile key={t.id ?? t.name} t={t} fullTiles={p.fullTiles} showCost={p.showCost} bus={p.bus} guided={!!t.id && t.id === p.guideTileId} onOpen={p.onOpen} />
           ))}
         </section>
       )}

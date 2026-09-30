@@ -4,6 +4,10 @@ import { DaemonBanner } from './components/DaemonBanner';
 import { KillBanner } from './components/KillBanner';
 import { MobileBottomNav, MobileTopbar } from './components/MobileChrome';
 import { Sidebar } from './components/Sidebar';
+import { GuideChecklist, HelpButton } from './guide/GuideChecklist';
+import { GuidePanel } from './guide/GuidePanel';
+import { useGuide } from './guide/useGuide';
+import { useGuidePanel } from './guide/useGuidePanel';
 import { demoMission } from './data/missions';
 import { currentGoalText, DEFAULT_GOAL_TEXT, PAST_GOALS } from './data/goals';
 import { useI18n } from './i18n/I18nProvider';
@@ -45,10 +49,12 @@ const SHOW_COST = true;
 const DEMO_PAST = PAST_GOALS.map((g) => ({ ...g, key: g.text }));
 
 export interface AppProps {
-  /** Tela para abrir ao sair do onboarding ("Criar identidade" → Identidades). */
+  /** Tela para abrir ao sair do onboarding. */
   readonly startScreen?: Screen | null;
   /** Provedores → Verificar dependências (reabre o onboarding). */
   readonly onReopenSetup?: () => void;
+  /** Fim do onboarding: abre com o Guia aberto (spec guia §3.2). */
+  readonly openGuide?: boolean;
 }
 
 /** Com o kill switch acionado, o cabeçalho não pode seguir dizendo "em execução". */
@@ -61,7 +67,7 @@ function demoMissionOptions(tiles: readonly { readonly name: string; readonly ha
   return tiles.map((d) => ({ id: d.name, name: d.name, handle: d.handle, disabled: d.state === 'running', note: d.stateLabel }));
 }
 
-export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
+export function App({ startScreen = null, onReopenSetup, openGuide = false }: AppProps = {}) {
   const { state, actions, bridged, goal, identity, credentials, mission, settings, files } = useFleet();
   // Só na montagem: a tela escolhida no fim do onboarding.
   useEffect(() => { if (startScreen) actions.go(startScreen); }, [startScreen]);
@@ -83,6 +89,18 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
     forget: (id, name) => void credentials.forget(id, name),
     login: (id) => void credentials.login(id),
   }), [credentials]);
+
+  // Guia (spec guia): só no modo vivo; o App só abre aqui depois do onboarding, então o marco 1 está feito.
+  const guide = useGuide({
+    snap: isLive ? live : null,
+    setupCompleted: true,
+    go: (target) => (target === 'new' ? actions.go('new') : onReopenSetup?.()),
+    openAccount: (id) => { const i = tiles.findIndex((x) => x.id === id); if (i >= 0) actions.openDevice(tiles[i]!.index); },
+  });
+  // Sem snapshot ainda, o checklist não sabe nada: melhor não mostrar um passo que pode já estar feito.
+  const guideOn = isLive && live ? guide : null;
+  const panel = useGuidePanel(guideOn, openGuide);
+  const help = guideOn && <HelpButton open={panel.open} unread={panel.unread} compact={isMobile} onToggle={panel.toggle} />;
 
   const onRowAction = (r: IdRow, a: RowAction) => {
     if (a.kind === 'open' && a.index !== undefined && a.index >= 0) { actions.openDevice(a.index); return; }
@@ -116,6 +134,8 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
       onProvision={() => actions.go('ids')}
       baseMissing={isLive && baseBlocksProvision(baseStage(live?.baseAvd))}
       killed={view.killed}
+      checklist={guideOn && guideOn.progress.current !== null ? <GuideChecklist progress={guideOn.progress} onOpen={panel.show} /> : null}
+      guideTileId={guideOn?.progress.account?.id ?? null}
     />
   );
 
@@ -254,9 +274,9 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
   return (
     <div className={`shell${isMobile ? ' shell--mobile' : ''}`}>
       {isMobile ? (
-        <MobileTopbar meters={view.meters} />
+        <MobileTopbar meters={view.meters} help={help} />
       ) : (
-        <Sidebar screen={state.screen} needsCount={view.needsCount} meters={view.meters} host={view.host} onNavigate={actions.go} />
+        <Sidebar screen={state.screen} needsCount={view.needsCount} meters={view.meters} host={view.host} onNavigate={actions.go} help={help} />
       )}
       <main className="main">
         {daemon.status?.state === 'failed' && <DaemonBanner status={daemon.status} retrying={daemon.retrying} onRetry={daemon.retry} />}
@@ -265,6 +285,7 @@ export function App({ startScreen = null, onReopenSetup }: AppProps = {}) {
         )}
         {screen}
       </main>
+      {guideOn && panel.open && <GuidePanel guide={guideOn} isMobile={isMobile} onClose={panel.close} />}
       {isMobile && <MobileBottomNav screen={state.screen} needsCount={view.needsCount} onNavigate={actions.go} />}
     </div>
   );
