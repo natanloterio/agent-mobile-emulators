@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { openDb } from '../src/db/open.js';
-import { readLocalParallel, readStepBudgets, writeLocalParallel, writeStepBudgets } from '../src/db/settings.js';
+import { readGuideCompleted, readLocalParallel, readStepBudgets, writeGuideCompleted, writeLocalParallel, writeStepBudgets } from '../src/db/settings.js';
 
 describe('limites configuráveis (settings.stepBudget.*)', () => {
   it('sem linha gravada, cai no default do CONFIG', () => {
@@ -47,5 +47,22 @@ describe('paralelismo local configurável (settings.local.parallel)', () => {
     expect(readLocalParallel(db)).toBe(1);
     db.prepare("update settings set value='não é json' where key='local.parallel'").run();
     expect(readLocalParallel(db)).toBe(1);
+  });
+});
+
+describe('configuração concluída no Guia (settings.guide.completed)', () => {
+  it('sem linha, não concluída; gravar true e false reflete na leitura', () => {
+    const db = openDb(':memory:');
+    expect(readGuideCompleted(db)).toBe(false);
+    expect(writeGuideCompleted(db, true)).toBe(true);
+    expect(readGuideCompleted(db)).toBe(true);
+    expect(writeGuideCompleted(db, false)).toBe(false);
+  });
+  it('linha ilegível conta como não concluída', () => {
+    const db = openDb(':memory:');
+    db.prepare("insert into settings (key, value) values ('guide.completed', 'não é json')").run();
+    expect(readGuideCompleted(db)).toBe(false);
+    db.prepare("update settings set value='1' where key='guide.completed'").run();
+    expect(readGuideCompleted(db)).toBe(false);
   });
 });

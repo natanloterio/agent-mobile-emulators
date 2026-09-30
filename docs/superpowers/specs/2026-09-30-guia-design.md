@@ -48,7 +48,8 @@ tarefa do plano; conta fora da frota volta com o `readyLabel` da sonda como moti
 Estados de cada marco: `todo · doing · needs-you · done · failed`. Um marco só fica `doing`/`needs-you` quando todos
 os anteriores estão `done`. O marco atual é o primeiro que não está `done`.
 
-Concluído uma vez, o checklist fica concluído (chave `tapflock.guide.completed` no armazenamento do app): um objetivo
+Concluído uma vez, o checklist fica concluído (chave `guide.completed` na tabela `settings` do daemon, gravada pela UI
+com `PUT /settings/guide` e lida no snapshot em `guide.completed`; outro `TAPFLOCK_DATA_DIR` começa do zero): um objetivo
 novo que falhou, a base ligada por fora ou uma conta banida depois não o reabrem. No marco 4, antes de oferecer o teste,
 o Guia resolve o que prende a conta conectada: verificação pendente, celular desligado, pausa ou a pessoa no controle.
 O plano do teste leva só a conta do Guia, mesmo com outras prontas.
@@ -182,7 +183,7 @@ Rota nova no daemon: **`POST /guide/ask`** `{ question, lang }` → `{ answer, p
 | `src/guide/point.ts` | destaque §3.4 |
 | `src/i18n/messages/guide.ts` | namespace `guide` nos 6 idiomas |
 | `daemon/src/server/routes-guide.ts` | `POST /guide/ask` (fase 3), `GET/PUT /guide/log` |
-| `daemon/src/db/settings.ts` | chave `guide.log` (últimas 200 mensagens, sem segredo) e `guide.dismissed` |
+| `daemon/src/db/settings.ts` | chaves `guide.completed` (F1), `guide.log` (últimas 200 mensagens, sem segredo) e `guide.dismissed` |
 
 O registro fica no daemon para sobreviver a reinícios e aparecer igual em qualquer janela.
 

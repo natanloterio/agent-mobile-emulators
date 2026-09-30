@@ -59,3 +59,21 @@ export function writeLocalParallel(db: DatabaseSync, n: number): number {
     .run(LOCAL_PARALLEL_KEY, JSON.stringify(n));
   return readLocalParallel(db);
 }
+
+const GUIDE_COMPLETED_KEY = 'guide.completed';
+
+/**
+ * Configuração do Guia concluída (spec guia §2): fica no banco, junto com os dados que a tornaram concluída; outro
+ * `TAPFLOCK_DATA_DIR` começa do zero. Ausente ou ilegível = não concluída.
+ */
+export function readGuideCompleted(db: DatabaseSync): boolean {
+  const row = db.prepare('select value from settings where key=?').get(GUIDE_COMPLETED_KEY) as { value: string } | undefined;
+  if (!row) return false;
+  try { return JSON.parse(row.value) === true; } catch { return false; }
+}
+
+export function writeGuideCompleted(db: DatabaseSync, completed: boolean): boolean {
+  db.prepare("insert into settings (key, value, updated_at) values (?, ?, datetime('now')) on conflict(key) do update set value=excluded.value, updated_at=excluded.updated_at")
+    .run(GUIDE_COMPLETED_KEY, JSON.stringify(completed));
+  return readGuideCompleted(db);
+}

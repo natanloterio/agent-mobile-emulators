@@ -4,6 +4,7 @@ import { CONFIG } from '../src/config.js';
 import { openDb } from '../src/db/open.js';
 import { startServer } from '../src/server/api.js';
 import { settingsRoutes } from '../src/server/routes-settings.js';
+import { readGuideCompleted } from '../src/db/settings.js';
 
 let stop: (() => Promise<void>) | null = null;
 afterEach(async () => { await stop?.(); stop = null; });
@@ -61,5 +62,20 @@ describe('rota de limites (GET/PUT /settings/budgets)', () => {
     expect(msgs.length).toBe(2);
     expect((JSON.parse(msgs[1]).data as { stepBudgets: { goal: number } }).stepBudgets.goal).toBe(12);
     ws.close();
+  });
+});
+
+describe('rota do Guia (PUT /settings/guide)', () => {
+  it('grava a configuração concluída e avisa pelo snapshot', async () => {
+    const { db, call } = await mk();
+    const r = await call('PUT', '/settings/guide', { completed: true });
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ completed: true });
+    expect(readGuideCompleted(db)).toBe(true);
+  });
+  it('recusa corpo fora do formato', async () => {
+    const { call } = await mk();
+    expect((await call('PUT', '/settings/guide', { completed: 'sim' })).status).toBe(400);
+    expect((await call('PUT', '/settings/guide', { completed: true, extra: 1 })).status).toBe(400);
   });
 });

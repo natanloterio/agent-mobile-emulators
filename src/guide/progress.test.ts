@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BasePrep, FleetSnapshot, LiveIdentity, MissionView } from '../live/types';
-import { guideProgress } from './progress';
+import { guideProgress, shouldMarkCompleted } from './progress';
 
 const prep = (state: BasePrep['state']): BasePrep => ({ state, phase: null, error: null, missionId: null, humanReason: null, progress: null });
 const baseReady = { name: 'tapflock_golden', found: true, running: false, prep: prep('done') };
@@ -109,5 +109,22 @@ describe('guideProgress', () => {
 
   it('tudo feito: current nulo', () => {
     expect(guideProgress({ setupCompleted: true, snap: snap({ identities: [connected], goal: goal('done') }) }).current).toBeNull();
+  });
+});
+
+describe('shouldMarkCompleted', () => {
+  const done = { identities: [connected], goal: goal('done') };
+  it('checklist completo num daemon que ainda não sabe: marca', () => {
+    const s = snap({ ...done, guide: { completed: false } });
+    expect(shouldMarkCompleted(s, guideProgress({ setupCompleted: true, snap: s }))).toBe(true);
+  });
+  it('já marcado, incompleto ou daemon antigo sem o campo: não marca', () => {
+    const marked = snap({ ...done, guide: { completed: true } });
+    expect(shouldMarkCompleted(marked, guideProgress({ setupCompleted: true, snap: marked }))).toBe(false);
+    const open = snap({ guide: { completed: false } });
+    expect(shouldMarkCompleted(open, guideProgress({ setupCompleted: true, snap: open }))).toBe(false);
+    const old = snap(done);
+    expect(shouldMarkCompleted(old, guideProgress({ setupCompleted: true, snap: old }))).toBe(false);
+    expect(shouldMarkCompleted(null, guideProgress({ setupCompleted: true, snap: null }))).toBe(false);
   });
 });

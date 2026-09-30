@@ -127,6 +127,8 @@ export interface FleetSnapshot {
   readonly localParallel?: LocalParallelStatus;
   /** AVD-base do provisionamento; ausente em daemon antigo. */
   readonly baseAvd?: BaseAvdStatus | null;
+  /** Configuração do Guia concluída (spec guia §2); ausente em daemon antigo. */
+  readonly guide?: { readonly completed: boolean };
 }
 /** `running` e `prep` ausentes em daemon de versão anterior. */
 export interface BaseAvdStatus { readonly name: string; readonly found: boolean; readonly running?: boolean; readonly prep?: BasePrep }

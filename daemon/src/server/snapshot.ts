@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { CONFIG, type BaseAvdLive } from '../config.js';
 import { getIdentity, isBaseRow, listFleet, type IdentityRow, type ProbeSignalsRow } from '../db/identities.js';
 import { openMissionFor } from '../db/missions.js';
-import { readStepBudgets, type StepBudgets } from '../db/settings.js';
+import { readGuideCompleted, readStepBudgets, type StepBudgets } from '../db/settings.js';
 import { readProviderConfig, type ProviderRow, type RoleKey } from '../provider/config.js';
 import type { LocalParallelStatus } from '../provider/local-parallel.js';
 import { lastProviderTests, type ProviderTest } from '../provider/probe.js';
@@ -63,6 +63,8 @@ export interface FleetSnapshot {
   readonly files: readonly FleetFileView[];
   /** Limites de passos configuráveis (spec limites §UI): valor atual do banco, lido a cada snapshot. */
   readonly stepBudgets: StepBudgets;
+  /** Configuração do Guia concluída (spec guia §2): quando true, o checklist não volta a aparecer. */
+  readonly guide: { readonly completed: boolean };
   /** Paralelismo local configurável (spec paralelismo §UI): pedido, o que cada runtime confirma e se falta aplicar. */
   readonly localParallel: LocalParallelStatus;
   /** AVD-base do provisionamento (nome e se existe); null quando o servidor não recebeu a fonte (testes). */
@@ -166,5 +168,5 @@ export function buildSnapshot(db: DatabaseSync, killed: boolean, sources?: Snaps
   try { localParallel = src.localParallel?.() ?? DEFAULT_LOCAL_PARALLEL; } catch { localParallel = DEFAULT_LOCAL_PARALLEL; }
   let baseAvd: BaseAvdLive | null = null;
   try { baseAvd = src.baseAvd?.() ?? null; } catch { baseAvd = null; }
-  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db).filter((m) => { const i = getIdentity(db, m.identityId); return !i || !isBaseRow(i); }), files: fileViews(db), stepBudgets, localParallel, baseAvd };
+  return { identities, providers, killed, updatedAt: new Date().toISOString(), goal: currentGoal(db), host, missions: missionViews(db).filter((m) => { const i = getIdentity(db, m.identityId); return !i || !isBaseRow(i); }), files: fileViews(db), stepBudgets, localParallel, baseAvd, guide: { completed: readGuideCompleted(db) } };
 }
