@@ -222,6 +222,24 @@ describe('runTask — incremento 2: provedor, piso e escalonamento', () => {
     expect(provs.map((p) => p.provider)).toEqual(['local:qwen3.5:27b', 'local:qwen3.5:27b', 'local:qwen3.5:27b', 'local:qwen3.5:27b', 'nuvem:claude-haiku-4-5']);
     expect(provs.filter((p) => p.invalid_call === 1)).toHaveLength(3);
   });
+  it('Ollama recusa a chamada do modelo ("error parsing tool call") → escala para o esc em vez de falhar a tarefa', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const parse = Object.assign(new Error("error parsing tool call: raw='We need open the post…'"), { name: 'AI_APICallError', isRetryable: false });
+    const worker = new MockLanguageModelV4({ doGenerate: async () => { throw parse; } });
+    const esc = new MockLanguageModelV4({ doGenerate: [text('resumo do escalonamento')] as never });
+    const r = await runTask({ ...opts(db), providers: providers(), stepBudget: 10 }, { connect: mkMcp(tools()), model: worker, escModel: esc, ollama: okOllama });
+    expect(r.outcome).toBe('done'); expect(r.summary).toBe('resumo do escalonamento');
+    expect(r.degraded).toBe(true); expect(esc.doGenerateCalls).toHaveLength(1);
+    const lastUser = esc.doGenerateCalls[0].prompt[esc.doGenerateCalls[0].prompt.length - 1] as { content: { text?: string }[] };
+    expect(JSON.stringify(lastUser.content)).toMatch(/falhou/);
+  });
+  it('mesma recusa sem esc na nuvem → quality-floor (como as inválidas), não "failed" com o erro cru', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const parse = Object.assign(new Error("error parsing tool call: raw='x'"), { name: 'AI_APICallError', isRetryable: false });
+    const worker = new MockLanguageModelV4({ doGenerate: async () => { throw parse; } });
+    const r = await runTask({ ...opts(db), providers: providers({ ...ESC, mode: 'local', endpoint: LOCAL.endpoint }) }, { connect: mkMcp(tools()), model: worker, ollama: okOllama });
+    expect(r.outcome).toBe('quality-floor');
+  });
   it('sem esc na nuvem (esc local) → outcome quality-floor, task failed, identidade idle, sem segundo modelo', async () => {
     const db = openDb(':memory:'); upsertIdentity(db, row);
     const worker = new MockLanguageModelV4({ doGenerate: [invalid('c1'), invalid('c2'), invalid('c3'), text('nunca')] as never });
