@@ -23,6 +23,11 @@ export function bindMissionFiles(svc: FileService, db: DatabaseSync, identity: I
     exportFile: (label, devicePath) => (devicePath
       ? svc.exportFile({ identity, devicePath, label, missionId })
       : svc.exportNewest({ identity, sinceSec: missionSince(getMission(db, missionId)), label, missionId })),
+    capture: async (label, crop) => {
+      const file = await svc.captureScreen({ identity, label, missionId, crop });
+      const { devicePath } = await svc.importFile({ file, identity });
+      return { file, devicePath };
+    },
     importFile: async (label) => {
       const file = latestByLabel(db, label);
       if (!file) throw new FileError('not-found', `nenhum arquivo guardado com o label ${label} (veja file_list)`);

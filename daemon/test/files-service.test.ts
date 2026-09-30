@@ -7,6 +7,7 @@ import { getFile, listFiles } from '../src/db/files.js';
 import { openDb } from '../src/db/open.js';
 import { AdbError } from '../src/device/adb.js';
 import { createFileService, FileError } from '../src/files/service.js';
+import { readPng, writePng } from '../src/files/png.js';
 
 const row = (id: string, serial: string) => ({ id, name: id, handle: `@${id}`, avdName: id, serial, consolePort: 5554, mcpHostPort: 8080, mcpToken: 't', deviceSlug: id, appPackage: 'com.instagram.android', appVersionName: '1', state: 'idle' as const });
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(60, 7)]);
@@ -148,5 +149,23 @@ describe('importar e apagar', () => {
   it('recent lista o device mais novo primeiro', async () => {
     const s = setup({ 'emulator-5554': { '/sdcard/Download/a': Buffer.from('1'), '/sdcard/Download/b': Buffer.from('22') } });
     expect((await s.svc.recent(s.id('conta1'))).map((f) => f.name)).toEqual(['b', 'a']);
+  });
+});
+
+describe('captura de tela (screen_capture)', () => {
+  const png = (w: number, h: number) => writePng({ width: w, height: h, bpp: 4, colorType: 6, pixels: Buffer.alloc(w * h * 4, 9) });
+  it('captura pelo adb, recorta pelos bounds e guarda como image/png com o label', async () => {
+    const s = setup({ 'emulator-5554': {} }, 1024 * 1024);
+    const svc = createFileService({ db: s.db, adb: { ...s.adb, screencap: async () => png(40, 60) }, dir: s.dir, maxBytes: 1024 * 1024, recentLimit: 10 });
+    const f = await svc.captureScreen({ identity: s.id('conta1'), label: 'post.natan', missionId: null, crop: { left: 0, top: 10, right: 20, bottom: 40 } });
+    expect(f).toMatchObject({ label: 'post.natan', name: 'post.natan.png', mime: 'image/png', sourceIdentityId: 'conta1', sourcePath: 'screencap' });
+    const img = readPng(fs.readFileSync(f.hostPath));
+    expect([img.width, img.height]).toEqual([20, 30]);
+  });
+  it('sem screencap no adb ou label inválido: FileError', async () => {
+    const s = setup({ 'emulator-5554': {} });
+    await expect(s.svc.captureScreen({ identity: s.id('conta1'), label: 'x', missionId: null })).rejects.toThrow(FileError);
+    const svc = createFileService({ db: s.db, adb: { ...s.adb, screencap: async () => png(4, 4) }, dir: s.dir, maxBytes: 1024, recentLimit: 10 });
+    await expect(svc.captureScreen({ identity: s.id('conta1'), label: 'a b', missionId: null })).rejects.toThrow(/label/);
   });
 });

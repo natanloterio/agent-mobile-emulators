@@ -18,6 +18,19 @@ function setup(files?: MissionFiles) {
   return missionTools({ db, missionId, vault: memVault(), mask: createSecretMask(), files, typeText: async () => {}, onFinish: () => {}, onHuman: () => {}, onVaultError: () => {} });
 }
 
+describe('screen_capture', () => {
+  it('só existe com captura no serviço; recorta pelos bounds da tela e devolve onde ficou na galeria', async () => {
+    expect(Object.keys(setup({ list: () => [], exportFile: async () => file(), importFile: async () => ({ devicePath: '' }) }))).not.toContain('screen_capture');
+    const calls: unknown[] = [];
+    const t = setup({ list: () => [], exportFile: async () => file(), importFile: async () => ({ devicePath: '' }),
+      capture: async (label, crop) => { calls.push([label, crop]); return { file: file({ label, mime: 'image/png', name: `${label}.png` }), devicePath: `/sdcard/Pictures/Tapflock/${label}.png` }; } });
+    expect(await exec(t, 'screen_capture', { label: 'post', bounds: '0,210,1080,1290' })).toEqual({ label: 'post', device_path: '/sdcard/Pictures/Tapflock/post.png', in_gallery: true });
+    await exec(t, 'screen_capture', { label: 'tela' });
+    expect(calls).toEqual([['post', { left: 0, top: 210, right: 1080, bottom: 1290 }], ['tela', undefined]]);
+    await expect(exec(t, 'screen_capture', { label: 'x', bounds: 'metade de cima' })).rejects.toThrow(/bounds/);
+  });
+});
+
 describe('tools de arquivo da missão', () => {
   it('sem serviço de arquivos, as tools não existem', () => {
     const t = setup();

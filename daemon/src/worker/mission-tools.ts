@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 import type { FleetFile } from '../db/files.js';
+import { parseBounds, type Bounds } from '../files/png.js';
 import { listMemory, memoryGet, memoryPut, type SubtaskReport } from '../db/missions.js';
 import { VaultError, type Vault } from '../vault/vault.js';
 
@@ -84,6 +85,8 @@ export interface MissionFiles {
   /** Sem `devicePath`: o arquivo mais novo das pastas compartilhadas desde o início da missão. */
   exportFile(label: string, devicePath?: string): Promise<FleetFile>;
   importFile(label: string): Promise<{ devicePath: string }>;
+  /** Captura a tela (recortada pelos bounds) e já a põe na galeria do celular; ausente = sem screen_capture. */
+  capture?(label: string, crop?: Bounds): Promise<{ file: FleetFile; devicePath: string }>;
 }
 
 export interface MissionRunCtx {
@@ -94,6 +97,8 @@ export interface MissionRunCtx {
   readonly takeNotes?: () => readonly string[];
   /** Arquivos entre aparelhos; ausente = sem as tools file_*. */
   readonly files?: MissionFiles;
+  /** Confere o motivo de um request_human antes de parar (worker/human-claims.ts); string = recusa, volta ao modelo. */
+  readonly checkHumanClaim?: (reason: string) => Promise<string | null>;
 }
 export interface MissionToolCtx extends MissionRunCtx {
   readonly db: DatabaseSync;
@@ -120,7 +125,21 @@ const fileOut = (f: FleetFile) => ({ label: f.label, name: f.name, mime: f.mime,
 
 /** Tools de arquivo (spec arquivos): o daemon faz a cópia, o modelo só escolhe o label e, se quiser, o caminho. */
 function fileTools(files: MissionFiles): ToolSet {
+  const capture = files.capture?.bind(files);
   return {
+    ...(capture ? {
+      screen_capture: tool({
+        description:
+          'Tira uma captura da tela atual (quem tira é o Tapflock, não a pessoa), guarda no Tapflock com o label e já coloca na galeria deste celular (Pictures/Tapflock), pronta para postar ou anexar. Para guardar só uma parte (ex.: a imagem de um post), passe bounds = "left,top,right,bottom" do nó, copiado da última tela lida.',
+        inputSchema: z.object({ label: KEY, bounds: z.string().max(40).optional() }),
+        execute: async ({ label, bounds }) => {
+          const crop = bounds === undefined ? undefined : parseBounds(bounds);
+          if (crop === null) throw new Error('bounds: use "left,top,right,bottom" em pixels, como na tela lida');
+          const r = await capture(label, crop);
+          return { label: r.file.label, device_path: r.devicePath, in_gallery: true };
+        },
+      }),
+    } : {}),
     file_export: tool({
       description:
         'Guarda no Tapflock um arquivo deste celular para outra conta usar. Sem device_path, pega o arquivo mais novo baixado ou salvo nesta missão (Download, DCIM, Pictures, Movies, Documents). label = nome curto (ex.: foto.post, boleto.pdf).',
@@ -188,6 +207,8 @@ export function missionTools(ctx: MissionToolCtx): ToolSet {
         'Pare e peça um humano: captcha, "confirme que é você", código enviado por SMS/telefone, ou qualquer verificação que você não pode resolver. Explique em uma frase o que o humano precisa fazer.',
       inputSchema: z.object({ reason: z.string().min(3).max(300) }),
       execute: async ({ reason }) => {
+        const refused = await ctx.checkHumanClaim?.(reason);
+        if (refused) return { stopped: false, refused };
         ctx.onHuman(ctx.mask.mask(reason));
         return { stopped: true };
       },

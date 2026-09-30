@@ -26,6 +26,7 @@ import { pickTestIdentity } from './fleet/pick.js';
 import { reconcileOnStart } from './fleet/reconcile.js';
 import { clearTargetAccount } from './fleet/account.js';
 import { checkIdentitySession, loginIdentity } from './fleet/login-io.js';
+import { createHumanClaimCheck } from './worker/human-claims.js';
 import { ensureUnlocked, isValidPin, setDevicePin } from './device/unlock.js';
 import { planGoal, type PlanDeps } from './leader/plan.js';
 import { leasePorts } from './fleet/ports.js';
@@ -199,7 +200,14 @@ const missions = createMissionRunner({
     const r = await runTask({
       db, identity: j.identity, goalText: j.instruction, goalId: j.missionId, taskId: j.taskId, instruction: j.instruction,
       apiKey: apiKeys.current(), isKilled: j.shouldStop, onStep: () => server.broadcast(),
-      stepBudget: readStepBudgets(db).mission, pacing: CONFIG.swarm, mission: { missionId: j.missionId, vault, mask, takeNotes, files: bindMissionFiles(fileService, db, j.identity, j.missionId) },
+      stepBudget: readStepBudgets(db).mission, pacing: CONFIG.swarm, mission: {
+        missionId: j.missionId, vault, mask, takeNotes, files: bindMissionFiles(fileService, db, j.identity, j.missionId),
+        // Pedido de pessoa conferido antes de parar a missão: "não está logado" com a sessão de pé e "tire um print" são recusados.
+        checkHumanClaim: createHumanClaimCheck({
+          canCapture: true,
+          session: async () => (await checkIdentitySession(db, j.identity, { ensureReady: (_d, i) => prepareIdentityDevice(i, { adb }) })).state,
+        }),
+      },
     }, { ollama });
     return { humanReason: r.humanReason, summary: r.platformBlock ?? r.summary };
   },

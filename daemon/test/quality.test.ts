@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createQualityFloor, invalidCallIds, isParamError } from '../src/provider/quality.js';
+import { createQualityFloor, invalidCallIds, isParamError, isTextToolCall } from '../src/provider/quality.js';
 import type { StepLike } from '../src/worker/record.js';
 
 const usage = { inputTokens: 1, outputTokens: 1 };
@@ -52,5 +52,20 @@ describe('erro de parâmetro do MCP (incremento 3, spec §4.1)', () => {
   });
   it('tool-error com string (não Error) também conta', () => {
     expect(invalidCallIds(step([{ type: 'tool-error', toolCallId: 's1', toolName: 't', error: "Parameter 'amount' must be one of: a, b" }]))).toEqual(['s1']);
+  });
+  it('chamada escrita como texto (sem tool call de verdade) dispara o piso na hora: o modelo não se recupera sozinho', () => {
+    const f = createQualityFloor(3);
+    const text = (t: string): StepLike => ({ stepNumber: 1, text: t, content: [{ type: 'text' }], usage });
+    f.observe(text('{"name":"finish_subtask","arguments":{"ok":true,"did":"x","blockers":""}}'));
+    expect(f.tripped()).toBe(true);
+    expect(f.count()).toBe(3);
+  });
+  it('isTextToolCall: só JSON com name + arguments, e só sem tool call real no passo', () => {
+    const t = (text: string, content: StepLike['content'] = [{ type: 'text' }]): StepLike => ({ stepNumber: 1, text, content, usage });
+    expect(isTextToolCall(t('{"name":"finish_subtask","arguments":{}}'))).toBe(true);
+    expect(isTextToolCall(t('```json\n{"name": "android_conta1_tap_node", "arguments": {"node_id": "x"}}\n```'))).toBe(true);
+    expect(isTextToolCall(t('Não consegui concluir a subtarefa.'))).toBe(false);
+    expect(isTextToolCall(t('{"?":"?"}'))).toBe(false);
+    expect(isTextToolCall(t('{"name":"finish_subtask","arguments":{}}', [ok]))).toBe(false);
   });
 });
