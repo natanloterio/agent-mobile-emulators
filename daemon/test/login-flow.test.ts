@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runLogin, type LoginIo } from '../src/fleet/login.js';
+import { checkSession, runLogin, type LoginIo } from '../src/fleet/login.js';
 import { parseScreen } from '../src/screen/parse.js';
 
 const screen = (rows: readonly (readonly [string, string, string, string])[], pkg = 'com.instagram.android') =>
@@ -84,5 +84,25 @@ describe('telas depois do Log in (integrador)', () => {
     const OTHER = screen([['node_z', 'TextView', 'Home', '-']], 'com.google.android.apps.nexuslauncher');
     const f = fakeIo([LOGIN, OTHER, OTHER]);
     expect((await runLogin(f.io, creds, { timeoutMs: 3000, pollMs: 1000 })).outcome).toBe('needs-human');
+  });
+});
+
+describe('checkSession', () => {
+  it('feed do Instagram: logada, sem digitar nem tocar em nada', async () => {
+    const f = fakeIo([FEED]);
+    expect((await checkSession(f.io)).state).toBe('logged-in');
+    expect(f.log).toEqual(['unlock', 'open com.instagram.android']);
+  });
+  it('tela de login ou de entrada: deslogada', async () => {
+    expect((await checkSession(fakeIo([LOGIN]).io)).state).toBe('logged-out');
+    expect((await checkSession(fakeIo([LANDING]).io)).state).toBe('logged-out');
+  });
+  it('verificação do Instagram na frente: bloqueada, com o texto do app', async () => {
+    const r = await checkSession(fakeIo([CHALLENGE]).io);
+    expect(r.state).toBe('blocked');
+    expect(r.detail).toContain('Enter the code we sent');
+  });
+  it('outro app na frente: desconhecido', async () => {
+    expect((await checkSession(fakeIo([screen([['node_x', 'TextView', 'Chrome', '-']], 'com.android.chrome')]).io)).state).toBe('unknown');
   });
 });

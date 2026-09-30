@@ -142,6 +142,35 @@ describe('nextGuideStep: primeira tarefa', () => {
     expect(s.detail).toBe('checkpoint');
     expect(ids(s)).toEqual(['human.open', 'human.resolve']);
   });
+  describe('Instagram deslogado (o teste parou na tela de login)', () => {
+    const LOGGED_OUT = 'Instagram deslogado (tela de login): faça login à mão no device e depois marque como resolvido';
+    const out = { ...connected, state: 'needs-human', lifecycle: 'needs-human', error: LOGGED_OUT };
+    it('teste que falhou por isso: cartão de entrar de novo, não o "não deu certo" genérico', () => {
+      const s = step(ready({ identities: [out], goal: goal('failed') }));
+      expect(s.id).toBe('account.loggedOut:conta1');
+      expect(s.kind).toBe('human');
+      expect(s.title).toBe('guide.account.loggedOut.title');
+      expect(ids(s)).toEqual(['login.recheck', 'login.typeForMe']);
+      expect(s.point).toBe('tile');
+    });
+    it('também com o objetivo ainda aberto e sem objetivo nenhum', () => {
+      expect(step(ready({ identities: [out], goal: goal('running') })).id).toBe('account.loggedOut:conta1');
+      expect(step(ready({ identities: [out] })).id).toBe('account.loggedOut:conta1');
+    });
+    it('deslogado e desligado: liga o celular primeiro (não há janela onde entrar)', () => {
+      const s = step(ready({ identities: [{ ...out, online: false }], goal: goal('failed') }));
+      expect(ids(s)).toEqual(['phone.boot']);
+      expect(step(ready({ identities: [{ ...out, online: false, booting: true }] })).kind).toBe('progress');
+    });
+    it('"Tapflock digita" aqui abre o formulário de login', () => {
+      const s = step(ready({ identities: [out], goal: goal('failed') }), { ...INITIAL_UI, login: 'credentials' });
+      expect(s.form).toBe('credentials');
+      expect(s.milestone).toBe(3);
+    });
+    it('depois de entrar de novo, o teste que falhou pode ser refeito', () => {
+      expect(ids(step(ready({ goal: goal('failed') })))).toEqual(['test.plan']);
+    });
+  });
   it('conta pausada ou sob controle da pessoa: devolve ao agente antes do teste', () => {
     expect(ids(step(ready({ identities: [{ ...connected, paused: true }] })))).toEqual(['phone.unpause']);
     expect(ids(step(ready({ identities: [{ ...connected, controlled: true }] })))).toEqual(['phone.release']);

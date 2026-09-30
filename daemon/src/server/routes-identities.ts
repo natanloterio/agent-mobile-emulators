@@ -42,6 +42,8 @@ export interface IdentityOps {
   readonly defaultPin?: string | null;
   /** Login fixo do Instagram (fleet/login.ts) com as credenciais que o main do Electron decifrou. */
   readonly login?: (identity: IdentityRow, creds: { username: string; password: string }) => Promise<{ outcome: 'logged-in' | 'already-logged-in' | 'needs-human'; detail: string }>;
+  /** Lê a tela do Instagram antes do login-done: "Login feito" só vale com a sessão de pé (spec guia). */
+  readonly checkSession?: (identity: IdentityRow) => Promise<{ state: 'logged-in' | 'logged-out' | 'blocked' | 'unknown'; detail: string }>;
   /** Credencial do app alvo guardada no cofre do daemon; usada quando o login chega sem corpo. */
   readonly credentials?: (id: string) => Promise<{ username: string; password: string } | null>;
   readonly now?: () => Date; readonly uuid?: () => string;
@@ -178,6 +180,16 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     const handle = normalizeHandle(body.handle);
     if (!handle) return ctx.send(400, { error: 'handle inválido' });
     if (id.state === 'running' || id.state === 'banned' || id.discardedAt) return ctx.send(409, { error: `login-done indisponível em ${id.state}` });
+    // Com o emulador de pé, confere a tela antes de acreditar: marcar logado com o Instagram na tela de login fazia o
+    // primeiro objetivo parar em needs-human. Desligado não há o que ler, e segue como antes.
+    if (ops.checkSession && (await online(id))) {
+      let session: Awaited<ReturnType<NonNullable<IdentityOps['checkSession']>>>;
+      try { session = await ops.checkSession(id); }
+      catch (e) { return ctx.send(409, { error: `não deu para conferir o login no celular: ${errMsg(e)}` }); }
+      if (session.state === 'logged-out') return ctx.send(409, { error: 'o Instagram ainda está na tela de login: entre na conta no celular e tente de novo' });
+      if (session.state === 'blocked') return ctx.send(409, { error: `o Instagram pediu uma verificação: ${session.detail}` });
+      if (session.state === 'unknown') return ctx.send(409, { error: 'o Instagram não abriu no celular: abra o app, entre na conta e tente de novo' });
+    }
     setIdentityFlags(ctx.db, id.id, { handle });
     try {
       await saveSnapshot(ops.adb, id.serial, snap);

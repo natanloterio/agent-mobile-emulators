@@ -29,4 +29,12 @@ describe('daemonErrorText', () => {
     expect(daemonErrorText('/x → 500: {"error":"algo novo"}', en)).toBe('algo novo');
     expect(daemonErrorText('identidade pausada', pt)).toBe('Esta identidade está pausada.');
   });
+  it('mensagens do login conferido (spec guia) saem no idioma da tela', () => {
+    const en = createI18n('en');
+    expect(daemonErrorText('Instagram deslogado (tela de login): faça login à mão no device e depois marque como resolvido', en.t)).toBe(en.t('common.err.loggedOut'));
+    expect(daemonErrorText('/identities/conta1/login-done → 409: {"error":"o Instagram ainda está na tela de login: entre na conta no celular e tente de novo"}', en.t)).toBe(en.t('common.err.stillLoggedOut'));
+    expect(daemonErrorText("o Instagram pediu uma verificação: Confirm it's you", en.t)).toBe("Instagram asked for a verification: Confirm it's you");
+    expect(daemonErrorText('o Instagram não abriu no celular: abra o app, entre na conta e tente de novo', en.t)).toBe(en.t('common.err.appNotOpen'));
+    expect(daemonErrorText('não deu para conferir o login no celular: MCP recusou', en.t)).toBe('Couldn’t check the login on the phone: MCP recusou');
+  });
 });
