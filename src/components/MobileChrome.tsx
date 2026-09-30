@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Meter } from '../lib/resources';
 import type { Screen } from '../types/fleet';
 import { useI18n } from '../i18n/I18nProvider';
@@ -12,7 +13,7 @@ interface MobileChromeProps {
   readonly onNavigate: (screen: Screen) => void;
 }
 
-export function MobileTopbar({ meters }: Pick<MobileChromeProps, 'meters'>) {
+export function MobileTopbar({ meters, help }: Pick<MobileChromeProps, 'meters'> & { readonly help?: ReactNode }) {
   return (
     <header className="topbar">
       <div className="topbar__brand"><Logo size={30} /><span className="topbar__wordmark">TapFlock</span></div>
@@ -21,7 +22,7 @@ export function MobileTopbar({ meters }: Pick<MobileChromeProps, 'meters'>) {
           <span className="topbar__meter" key={m.label}><span>{m.label}</span><span>{m.value === '—' ? '—' : m.pct}</span></span>
         ))}
       </div>
-      <LanguageSelect compact />
+      <div className="topbar__end">{help}<LanguageSelect compact /></div>
     </header>
   );
 }

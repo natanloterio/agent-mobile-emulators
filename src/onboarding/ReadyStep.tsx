@@ -1,4 +1,3 @@
-import { BasePrepCard } from '../components/BasePrepCard';
 import { baseBlocksProvision, baseStage } from '../components/baseAvdStage';
 import { Heading } from '../components/Heading';
 import { useI18n } from '../i18n/I18nProvider';
@@ -9,7 +8,7 @@ import { needsLocal } from './view';
 
 export function ReadyStep({ state, onCreate }: { readonly state: OnboardingState; readonly onCreate: () => void }) {
   const { t } = useI18n();
-  // Sem o celular-base o botão "Criar identidade" levaria a um erro: o próximo passo real é o preparo automático.
+  // Sem o celular-base o título avisa que ainda falta um passo; quem o prepara é o Guia.
   const base = useBaseAvd();
   const stage = baseStage(base);
   const baseMissing = baseBlocksProvision(stage);
@@ -33,13 +32,12 @@ export function ReadyStep({ state, onCreate }: { readonly state: OnboardingState
         </div>
         <div className="card card--dark card--shadow onb-next">
           <span className="onb-label onb-label--green">{t('onboarding.ready.next')}</span>
-          <h3>{t(baseMissing ? 'identities.prep.title' : 'onboarding.ready.nextTitle')}</h3>
-          <p>{t(baseMissing ? 'onboarding.ready.nextBase2' : 'onboarding.ready.nextText')}</p>
-          {/* Com a base faltando, o botão que importa é o do cartão de preparo logo abaixo. */}
-          {!baseMissing && <div><button type="button" className="btn btn--tertiary" onClick={onCreate}>{t('onboarding.ready.create')}</button></div>}
+          {/* O Guia (spec guia) leva do celular-base até a primeira tarefa; aqui só se passa a vez para ele. */}
+          <h3>{t('guide.onboarding.title')}</h3>
+          <p>{t('guide.onboarding.body')}</p>
+          <div><button type="button" className="btn btn--tertiary" onClick={onCreate}>{t('guide.onboarding.go')}</button></div>
         </div>
       </div>
-      {base && stage && <BasePrepCard base={base} stage={stage} />}
     </>
   );
 }

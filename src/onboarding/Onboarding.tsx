@@ -24,7 +24,7 @@ const STEPS: readonly { readonly title: MessageKey; readonly sub: MessageKey }[]
 
 export interface OnboardingProps {
   readonly bridge: SetupBridge;
-  readonly onDone: (screen: 'cockpit' | 'ids') => void;
+  readonly onDone: (screen: 'cockpit' | 'guide') => void;
   /** Presente só quando reaberto em Provedores: volta ao app sem aplicar nada. */
   readonly onClose?: () => void;
 }
@@ -74,7 +74,7 @@ export function Onboarding({ bridge, onDone, onClose }: OnboardingProps) {
           {state.step === 0 && <CheckStep state={state} onRecheck={() => void actions.check()} />}
           {state.step === 1 && <ModelsStep state={state} onMode={actions.pickMode} onModel={actions.pickModel} onKey={actions.setKey} onTestKey={() => void actions.testKey()} />}
           {state.step === 2 && <InstallStep state={state} onRetry={() => void actions.install()} onOtherModel={() => actions.go(1)} />}
-          {state.step === 3 && <ReadyStep state={state} onCreate={() => onDone('ids')} />}
+          {state.step === 3 && <ReadyStep state={state} onCreate={() => onDone('guide')} />}
         </div>
         <footer className="onb__footer">
           <span className={`onb__hint${footer.error ? ' onb__hint--error' : ''}`} role={footer.error ? 'alert' : 'status'}>{footer.hint}</span>

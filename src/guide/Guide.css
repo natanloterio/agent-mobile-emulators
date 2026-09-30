@@ -1,0 +1,113 @@
+/* Guia de configuração (spec guia §3). Tokens do design system; texto sobre verde sempre escuro. */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.guide {
+  width: 400px; flex-shrink: 0; position: sticky; top: 0; height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--color-white); border-left: 1px solid var(--color-dark);
+}
+.guide--sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 20; width: auto; height: 90vh;
+  border-left: none; border-top: 1px solid var(--color-dark); border-radius: 24px 24px 0 0;
+  box-shadow: 0 -8px 30px rgb(0 0 0 / 0.2);
+}
+.guide__grab { display: block; width: 48px; height: 5px; border-radius: 3px; background: var(--color-grey-2); margin: 10px auto 0; }
+.guide__head { display: flex; align-items: center; gap: 8px; padding: 18px 16px 12px 24px; border-bottom: 1px solid var(--color-grey); }
+.guide__title {
+  margin: 0 auto 0 0; font-size: var(--type-h4); font-weight: var(--weight-medium);
+  background: var(--color-green); border-radius: var(--radius-heading); padding: 0 6px;
+}
+.guide__close { min-width: 44px; min-height: 44px; border: 1px solid transparent; border-radius: 12px; background: none; font-size: 16px; }
+.guide__close:hover { border-color: var(--color-dark); }
+.guide__progress { display: flex; align-items: center; gap: 12px; padding: 12px 24px; border-bottom: 1px solid var(--color-grey); font-size: 14px; }
+.guide__dots { display: inline-flex; gap: 6px; }
+.guide__dots i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--color-dark); }
+.guide__dots i.is-done { background: var(--color-dark); }
+.guide__dots i.is-now { background: var(--color-green); }
+.guide__dots i.is-failed { background: var(--color-danger); border-color: var(--color-danger); }
+.guide__body { flex: 1; overflow-y: auto; padding: 16px 24px 24px; display: flex; flex-direction: column; gap: 14px; }
+.guide__log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.guide__log li { display: flex; gap: 8px; font-weight: var(--weight-medium); }
+
+.guide-card {
+  border: 1px solid var(--color-dark); border-radius: 22px; padding: 18px;
+  display: flex; flex-direction: column; gap: 12px; background: var(--color-grey); outline: none;
+}
+.guide-card:focus-visible { box-shadow: 0 0 0 3px var(--color-green); }
+.guide-card--human { background: var(--color-dark); color: var(--color-white); }
+.guide-card--confirm, .guide-card--done { background: var(--color-white); box-shadow: var(--shadow-card); }
+.guide-card__kicker { font-size: 12px; font-weight: var(--weight-bold); letter-spacing: 0.06em; text-transform: uppercase; }
+.guide-card--human .guide-card__kicker { color: var(--color-green); }
+.guide-card__title { margin: 0; font-size: 18px; line-height: 1.3; font-weight: var(--weight-medium); }
+.guide-card__body { margin: 0; font-size: 15px; line-height: 1.45; }
+.guide-card__detail { margin: 0; font-size: 14px; padding: 10px 12px; border-radius: 12px; background: rgb(0 0 0 / 0.06); }
+.guide-card--human .guide-card__detail { background: var(--color-dark-2); }
+.guide-card__error { font-size: 14px; color: var(--color-danger); font-weight: var(--weight-medium); display: flex; flex-direction: column; gap: 4px; }
+.guide-card__error p { margin: 0; }
+.guide-card__errdetail { font-weight: var(--weight-regular); }
+.guide-card--human .guide-card__error { color: #ffb4ab; }
+.guide-card__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.guide-card__actions .btn { min-height: 44px; }
+.guide-card--human .btn--primary { background: var(--color-green); color: var(--color-black); border-color: var(--color-green); }
+.guide-card__spinner {
+  height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--color-dark) 0 30%, var(--color-grey-2) 30%);
+  background-size: 200% 100%; animation: guide-slide 1.4s linear infinite;
+}
+@keyframes guide-slide { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+.guide-phases { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.guide-phases li { display: flex; gap: 8px; align-items: baseline; }
+.guide-phases li.is-now { font-weight: var(--weight-bold); }
+.guide-phases__mark { width: 16px; text-align: center; flex-shrink: 0; }
+
+.guide-form { display: flex; flex-direction: column; gap: 12px; }
+.guide-form__field { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.guide-form__input {
+  font: inherit; font-size: 16px; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--color-dark); border-radius: 12px; background: var(--color-white); color: var(--color-black);
+}
+.guide-form__lock { margin: 0; display: flex; gap: 6px; font-size: 13px; }
+
+/* Checklist no Cockpit. */
+.guide-checklist { display: flex; flex-direction: column; gap: 16px; }
+.guide-checklist__head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.guide-checklist__title { margin: 0; font-size: 22px; font-weight: var(--weight-medium); }
+.guide-checklist__count { color: var(--color-dark-2); margin-right: auto; }
+.guide-checklist__bar { height: 10px; border: 1px solid var(--color-dark); border-radius: 5px; overflow: hidden; }
+.guide-checklist__bar i { display: block; height: 100%; background: var(--color-dark); transition: width 0.4s ease; }
+.guide-checklist__steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.guide-checklist__step { display: flex; gap: 10px; align-items: flex-start; padding: 10px; min-width: 0; border-radius: var(--radius-control); border: 1px solid transparent; }
+.guide-checklist__step.is-current { border-color: var(--color-dark); }
+.guide-checklist__icon {
+  flex: 0 0 28px; height: 28px; border-radius: 50%; border: 2px solid var(--color-dark);
+  display: grid; place-items: center; font-size: 14px; font-weight: var(--weight-bold);
+}
+.guide-checklist__step.is-done .guide-checklist__icon { background: var(--color-green); }
+.guide-checklist__step.is-needs-you .guide-checklist__icon { background: var(--color-dark); color: var(--color-green); }
+.guide-checklist__step.is-failed .guide-checklist__icon { background: var(--color-danger); border-color: var(--color-danger); color: var(--color-white); }
+.guide-checklist__label { display: block; font-weight: var(--weight-medium); line-height: 1.25; }
+.guide-checklist__state { display: block; font-size: 13px; }
+.guide-checklist__step.is-needs-you .guide-checklist__state { font-weight: var(--weight-bold); }
+@media (max-width: 759px) { .guide-checklist__steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Botão Ajuda. */
+.helpbtn {
+  position: relative; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 10px 16px;
+  border-radius: var(--radius-control); border: 1px solid var(--color-dark-2); background: var(--color-dark-2);
+  color: var(--color-white); font-size: 16px; text-align: left;
+}
+.helpbtn:hover { outline: 1px solid var(--color-green); }
+.helpbtn[aria-expanded='true'] { background: var(--color-green); color: var(--color-black); }
+.helpbtn--compact { min-height: 44px; min-width: 44px; padding: 8px; justify-content: center; }
+.helpbtn__icon { width: 26px; height: 26px; border-radius: 50%; border: 2px solid currentColor; display: grid; place-items: center; font-weight: var(--weight-bold); font-size: 14px; }
+.helpbtn__dot { position: absolute; top: 8px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: var(--color-green); box-shadow: 0 0 0 3px var(--color-dark-2); }
+
+/* Destaque (spec guia §3.4). */
+.guide-pointed { outline: 3px solid var(--color-green) !important; outline-offset: 3px; box-shadow: 0 0 0 9px rgb(25 26 35 / 0.18); animation: guide-pulse 1.6s ease-in-out infinite; }
+@keyframes guide-pulse { 50% { box-shadow: 0 0 0 13px rgb(25 26 35 / 0.06); } }
+@media (prefers-reduced-motion: reduce) {
+  .guide-pointed, .guide-card__spinner { animation: none; }
+  .guide-checklist__bar i { transition: none; }
+}
+.helpbtn--compact .helpbtn__dot { top: 3px; right: 3px; box-shadow: 0 0 0 2px var(--color-dark); }
+.guide-checklist__label { font-size: 15px; hyphens: auto; }

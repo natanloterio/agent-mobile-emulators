@@ -4,6 +4,7 @@ import { common } from './common';
 import { device } from './device';
 import { files } from './files';
 import { goal } from './goal';
+import { guide } from './guide';
 import { identities } from './identities';
 import { mission } from './mission';
 import { onboarding } from './onboarding';
@@ -12,7 +13,7 @@ import { report } from './report';
 import { shell } from './shell';
 
 /** Um arquivo por namespace, cada um com os seis idiomas: frentes paralelas não disputam o mesmo arquivo. */
-const NAMESPACES = { shell, common, cockpit, device, goal, report, identities, providers, mission, onboarding, files } as const;
+const NAMESPACES = { shell, common, cockpit, device, goal, report, identities, providers, mission, onboarding, files, guide } as const;
 type Namespaces = typeof NAMESPACES;
 type KeysOf<N extends keyof Namespaces> = Extract<keyof Namespaces[N]['pt'], string>;
 
