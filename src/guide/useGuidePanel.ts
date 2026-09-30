@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { pointAt } from './point';
+import { closesPanel } from './script';
 import type { UseGuide } from './useGuide';
 
 export const HELP_BUTTON_ID = 'guide-help';
@@ -35,7 +36,9 @@ export function useGuidePanel(guide: UseGuide | null, initialOpen: boolean): Gui
   useEffect(() => {
     if (!guide || !stepId || lastStep.current === stepId) return;
     const firstCard = lastStep.current === null;
+    const prevStep = lastStep.current;
     lastStep.current = stepId;
+    if (closesPanel(prevStep, stepId)) { setOpen(false); return; }
     const first = !sawIncomplete.current && guide.progress.current !== null;
     if (first) sawIncomplete.current = true;
     const ask = asksForPerson(guide) && !autoOpened.current.has(stepId);
@@ -45,7 +48,8 @@ export function useGuidePanel(guide: UseGuide | null, initialOpen: boolean): Gui
       return;
     }
     // Só a troca de cartão decide; abrir/fechar à mão não reabre nada.
-    if (!firstCard && !openRef.current) setUnread(true);
+    // O estado quieto não é novidade: não acende o ponto.
+    if (!firstCard && !openRef.current && guide.step.kind !== 'idle') setUnread(true);
   }, [stepId]);
 
   // Destaque do alvo do cartão, depois de a tela ter desenhado o elemento.

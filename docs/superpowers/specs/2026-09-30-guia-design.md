@@ -136,6 +136,7 @@ deve estar mostrando agora. Idempotente: chamado a cada snapshot; só adiciona m
 | Teste rodando | `progress` + botão secundário "Ver ao vivo" (destaque no tile) | — | — | — |
 | Teste `done` | `say` "Pronto! {n} comentários lidos em {tempo}. Veja no Relatório." + [Criar minha primeira missão] (destaque `new-mission`) | — | — | — |
 | Conta com o Instagram deslogado (erro `Instagram deslogado…` do worker), ligada | `human` "O Instagram do {name} não está logado": entrar na janela e [Entrei] · [Prefiro que o Tapflock digite]; desligada, antes [Ligar o celular] | confere e marca logada | `POST /identities/:id/login-done` `{ handle }` (o @ que ela já tem) | não |
+| Tudo feito e a primeira missão criada | `idle` "Tudo certo por aqui" (sem botão); o painel fecha sozinho nessa passagem e o ponto do Ajuda não acende | — | — | — |
 | Identidade `needs-human` (a qualquer momento) | `human` com `error` traduzido + [Abrir o celular] (vai ao Device, destaca `take-control`) + [Resolvi] | resolve | `POST /identities/:id/resolve` | não |
 | Missão `awaiting-human` | idem, com `humanReason` | continua | `POST /missions/:id/continue` | não |
 | Versão do app mudou | `confirm` "O Instagram se atualizou sozinho neste celular. Aceitar a nova versão?" | aceita | `POST /identities/:id/accept-version` | sim |

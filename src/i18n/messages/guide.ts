@@ -4,6 +4,8 @@ import { defineMessages } from '../define';
 export const guide = defineMessages({
   'title': 'Guia',
   'open': 'Ajuda',
+  'idle.title': 'Tudo certo por aqui',
+  'idle.body': 'Quando um celular precisar de você, eu aviso aqui e acendo o botão Ajuda.',
   'account.loggedOut.title': 'O Instagram do {name} não está logado',
   'account.loggedOut.body': 'O teste parou porque o Instagram está na tela de login. Entre na conta na janela do celular (usuário, senha e o código, se pedir) e clique em "Entrei". O Tapflock confere a tela antes de seguir.',
   'phone.paused.title': '{name} está pausado',
@@ -127,6 +129,8 @@ export const guide = defineMessages({
   en: {
     'title': 'Guide',
     'open': 'Help',
+    'idle.title': 'All good here',
+    'idle.body': 'When a phone needs you, I’ll tell you here and light up the Help button.',
     'account.loggedOut.title': 'Instagram on {name} isn’t signed in',
     'account.loggedOut.body': 'The test stopped because Instagram is on its login screen. Sign in in the phone window (username, password and the code if asked), then click "I’m signed in". Tapflock checks the screen before carrying on.',
     'phone.paused.title': '{name} is paused',
@@ -250,6 +254,8 @@ export const guide = defineMessages({
   es: {
     'title': 'Guía',
     'open': 'Ayuda',
+    'idle.title': 'Todo en orden',
+    'idle.body': 'Cuando un teléfono te necesite, te aviso aquí y enciendo el botón Ayuda.',
     'account.loggedOut.title': 'Instagram en {name} no tiene la sesión iniciada',
     'account.loggedOut.body': 'La prueba se detuvo porque Instagram está en la pantalla de inicio de sesión. Entra en la cuenta en la ventana del teléfono (usuario, contraseña y el código si lo pide) y pulsa "Ya entré". Tapflock comprueba la pantalla antes de seguir.',
     'phone.paused.title': '{name} está en pausa',
@@ -373,6 +379,8 @@ export const guide = defineMessages({
   fr: {
     'title': 'Guide',
     'open': 'Aide',
+    'idle.title': 'Tout va bien',
+    'idle.body': 'Quand un téléphone aura besoin de vous, je vous le dirai ici et le bouton Aide s’allumera.',
     'account.loggedOut.title': 'Instagram n’est pas connecté sur {name}',
     'account.loggedOut.body': 'Le test s’est arrêté parce qu’Instagram est sur l’écran de connexion. Connectez-vous dans la fenêtre du téléphone (identifiant, mot de passe et code si demandé), puis cliquez sur « Je suis connecté ». Tapflock vérifie l’écran avant de continuer.',
     'phone.paused.title': '{name} est en pause',
@@ -496,6 +504,8 @@ export const guide = defineMessages({
   de: {
     'title': 'Guide',
     'open': 'Hilfe',
+    'idle.title': 'Alles in Ordnung',
+    'idle.body': 'Wenn ein Handy dich braucht, sage ich es hier und der Hilfe-Knopf leuchtet auf.',
     'account.loggedOut.title': 'Instagram auf {name} ist nicht angemeldet',
     'account.loggedOut.body': 'Der Test wurde angehalten, weil Instagram den Login-Bildschirm zeigt. Melde dich im Handy-Fenster an (Benutzername, Passwort und Code, falls verlangt) und klicke auf „Ich bin angemeldet“. Tapflock prüft den Bildschirm, bevor es weitergeht.',
     'phone.paused.title': '{name} ist pausiert',
@@ -619,6 +629,8 @@ export const guide = defineMessages({
   zh: {
     'title': '向导',
     'open': '帮助',
+    'idle.title': '一切正常',
+    'idle.body': '当某台手机需要你时，我会在这里提醒你，并点亮帮助按钮。',
     'account.loggedOut.title': '{name} 上的 Instagram 没有登录',
     'account.loggedOut.body': '测试停止了，因为 Instagram 停在登录页面。请在手机窗口中登录（用户名、密码，如有要求再输入验证码），然后点击"我登录好了"。Tapflock 会先检查屏幕再继续。',
     'phone.paused.title': '{name} 已暂停',

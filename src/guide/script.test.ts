@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BasePrep, FleetSnapshot, LiveIdentity, LiveProvider, MissionView } from '../live/types';
 import { guideProgress } from './progress';
-import { INITIAL_UI, nextGuideStep, type GuideUi } from './script';
+import { closesPanel, INITIAL_UI, nextGuideStep, type GuideUi } from './script';
 
 const prep = (state: BasePrep['state'], extra: Partial<BasePrep> = {}): BasePrep => ({ state, phase: null, error: null, missionId: null, humanReason: null, progress: null, ...extra });
 const baseReady = { name: 'tapflock_golden', found: true, running: false, prep: prep('done') };
@@ -174,6 +174,18 @@ describe('nextGuideStep: primeira tarefa', () => {
   it('conta pausada ou sob controle da pessoa: devolve ao agente antes do teste', () => {
     expect(ids(step(ready({ identities: [{ ...connected, paused: true }] })))).toEqual(['phone.unpause']);
     expect(ids(step(ready({ identities: [{ ...connected, controlled: true }] })))).toEqual(['phone.release']);
+  });
+  it('primeira missão criada: o "tudo configurado" dá lugar a um estado quieto, sem botão', () => {
+    const s = step(ready({ goal: goal('done'), missions: [mission('running')] }));
+    expect(s.id).toBe('idle');
+    expect(s.buttons).toEqual([]);
+    expect(s.point).toBeUndefined();
+  });
+  it('o painel fecha sozinho só na passagem de "tudo configurado" para o estado quieto', () => {
+    expect(closesPanel('done', 'idle')).toBe(true);
+    expect(closesPanel('test.running', 'idle')).toBe(false);
+    expect(closesPanel('done', 'done')).toBe(false);
+    expect(closesPanel(null, 'idle')).toBe(false);
   });
   it('tudo feito: leva para a primeira missão', () => {
     const s = step(ready({ goal: goal('done') }));
