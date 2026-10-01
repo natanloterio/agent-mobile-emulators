@@ -17,12 +17,32 @@ export async function packageInstalled(adb: Pick<Adb, 'shell'>, serial: string, 
  */
 export async function setupMcpApp(adb: SetupAdb, serial: string, o: { readonly pkg: string; readonly apk: () => Promise<string> }): Promise<void> {
   if (!(await packageInstalled(adb, serial, o.pkg))) await adb.install(serial, await o.apk());
+  await enableMcpApp(adb, serial, o.pkg);
+}
+
+/** Liga o serviço de acessibilidade e o início automático no boot (idempotente). */
+async function enableMcpApp(adb: SetupAdb, serial: string, pkg: string): Promise<void> {
+  const o = { pkg };
   const current = (await adb.shell(serial, ['settings', 'get', 'secure', 'enabled_accessibility_services']).catch(() => '')).trim();
   const component = ACCESSIBILITY_COMPONENT(o.pkg);
   const others = current && current !== 'null' ? current.split(':').filter((c) => c && c !== component) : [];
   await adb.shell(serial, ['settings', 'put', 'secure', 'enabled_accessibility_services', [...others, component].join(':')]);
   await adb.shell(serial, ['settings', 'put', 'secure', 'accessibility_enabled', '1']);
   await adb.broadcastConfigure(serial, { auto_start_on_boot: true });
+}
+
+/**
+ * Conserto do app MCP numa identidade: se o processo não fica de pé (medido em 2026-10-01 num clone cujo base.apk veio
+ * com "Bad checksum" no dex, e o Android se recusava a carregá-lo), reinstala por cima o APK conferido por sha256 e
+ * religa acessibilidade e início automático. Com o processo vivo o problema é outro e nada é reinstalado (são ~200 MB).
+ * Devolve se consertou; quem chama reinicia o servidor e sonda de novo.
+ */
+export async function repairMcpApp(adb: SetupAdb, serial: string, o: { readonly pkg: string; readonly apk: () => Promise<string> }): Promise<boolean> {
+  const pid = (await adb.shell(serial, ['pidof', o.pkg]).catch(() => '')).trim();
+  if (pid) return false;
+  await adb.install(serial, await o.apk());
+  await enableMcpApp(adb, serial, o.pkg);
+  return true;
 }
 
 /**

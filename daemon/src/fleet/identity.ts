@@ -14,10 +14,12 @@ const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 /**
  * Slug e token são lidos na subida do servidor MCP: tools sem o prefixo do slug, ou 401 com o token desta identidade
  * (clone que herdou o token da base; o broadcast já gravou o novo), só se resolvem reiniciando o servidor.
+ * Boot completo e MCP sem resposta nenhuma (ex.: "fetch failed") também: o app não auto-inicia quando o device sobe
+ * travado por PIN, e depois do desbloqueio ninguém o iniciava (medido em 2026-10-01 num clone com PIN herdado).
  */
 const needsServerRestart = (r: ProbeResult) => !r.ready && (
   (r.signals.mcpInitialize && !r.signals.toolsPresent)
-  || (r.signals.bootCompleted && !r.signals.mcpInitialize && r.details.some((d) => /\b401\b|unauthorized/i.test(d))));
+  || (r.signals.bootCompleted && !r.signals.mcpInitialize));
 
 async function restartMcpServer(
   id: IdentityRow, adb: Adb, probe: typeof probeIdentity, sleep: (ms: number) => Promise<void>,
@@ -37,7 +39,11 @@ async function restartMcpServer(
 }
 const ALL_FALSE = { bootCompleted: false, accessibility: false, mcpInitialize: false, toolsPresent: false, versionMatch: false } as const;
 
-type ReadyDeps = { adb: Adb; probe?: typeof probeIdentity; sleep?: (ms: number) => Promise<void>; unlock?: (id: IdentityRow) => Promise<unknown> };
+type ReadyDeps = {
+  adb: Adb; probe?: typeof probeIdentity; sleep?: (ms: number) => Promise<void>; unlock?: (id: IdentityRow) => Promise<unknown>;
+  /** Conserta o app MCP que não fica de pé (base/device-setup.ts `repairMcpApp`); true = consertou, vale tentar de novo. */
+  repairMcp?: (id: IdentityRow) => Promise<boolean>;
+};
 
 /**
  * Destrava com o PIN, refaz forward, aplica slug e token e roda a sonda (reiniciando o servidor MCP se preciso).
@@ -53,8 +59,12 @@ export async function prepareIdentityDevice(id: IdentityRow, deps: ReadyDeps): P
   if (unlocked === 'unlocked') await sleep(UNLOCK_SETTLE_MS);
   await deps.adb.forward(id.serial, id.mcpHostPort, `tcp:${MCP_DEVICE_PORT}`);
   await deps.adb.broadcastConfigure(id.serial, configureExtras(id));
-  const result = await probe(id, { adb: deps.adb });
-  return needsServerRestart(result) ? restartMcpServer(id, deps.adb, probe, sleep) : result;
+  const first = await probe(id, { adb: deps.adb });
+  const result = needsServerRestart(first) ? await restartMcpServer(id, deps.adb, probe, sleep) : first;
+  // Reiniciar não bastou e o MCP segue mudo: o app pode nem estar conseguindo subir. Conserta uma vez e tenta de novo.
+  const mute = result.signals.bootCompleted && !result.signals.mcpInitialize;
+  if (mute && deps.repairMcp && (await deps.repairMcp(id))) return restartMcpServer(id, deps.adb, probe, sleep);
+  return result;
 }
 
 /**

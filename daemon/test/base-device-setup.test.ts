@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { freezeTargetApp, googleAccountOnDevice, setupMcpApp } from '../src/base/device-setup.js';
+import { freezeTargetApp, googleAccountOnDevice, repairMcpApp, setupMcpApp } from '../src/base/device-setup.js';
 
 const PKG = 'com.x.mcp';
 function fakeAdb(o: { installed?: boolean; accessibility?: string } = {}) {
@@ -62,5 +62,28 @@ describe('googleAccountOnDevice', () => {
     const without = { shell: async () => 'Accounts: 1\n  Account {name=x, type=com.whatsapp}' };
     expect(await googleAccountOnDevice(with_, 's')).toBe(true);
     expect(await googleAccountOnDevice(without, 's')).toBe(false);
+  });
+});
+
+describe('repairMcpApp', () => {
+  const dev = (pid: string) => {
+    const log: string[] = [];
+    return { log, adb: {
+      shell: async (_s: string, cmd: readonly string[]) => { log.push(cmd.join(' ')); return cmd[0] === 'pidof' ? pid : cmd[1] === 'get' ? 'null' : ''; },
+      install: async (_s: string, apk: string) => { log.push(`install ${apk}`); },
+      broadcastConfigure: async (_s: string, extras: Record<string, unknown>) => { log.push(`configure ${JSON.stringify(extras)}`); },
+    } };
+  };
+  it('app que não fica de pé (APK corrompido no clone): reinstala por cima, religa acessibilidade e início automático', async () => {
+    const { adb, log } = dev('');
+    expect(await repairMcpApp(adb, 's', { pkg: PKG, apk: async () => '/c/mcp.apk' })).toBe(true);
+    expect(log).toContain('install /c/mcp.apk');
+    expect(log).toContain('settings put secure accessibility_enabled 1');
+    expect(log).toContain('configure {"auto_start_on_boot":true}');
+  });
+  it('app rodando: não reinstala (o problema é outro)', async () => {
+    const { adb, log } = dev('7653');
+    expect(await repairMcpApp(adb, 's', { pkg: PKG, apk: async () => '/c/mcp.apk' })).toBe(false);
+    expect(log.some((l) => l.startsWith('install'))).toBe(false);
   });
 });

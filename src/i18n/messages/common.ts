@@ -95,6 +95,7 @@ export const common = defineMessages({
   'err.appCheck': 'O Instagram pediu uma verificação: {detail}',
   'err.appNotOpen': 'O Instagram não abriu no celular. Abra o app, entre na conta e tente de novo.',
   'err.cantCheck': 'Não deu para conferir o login no celular: {detail}',
+  'err.controlAppDown': 'O Tapflock ainda não conseguiu falar com este celular. Espere uns segundos e tente de novo; se continuar, desligue e ligue o celular.',
   'err.reservedName': 'O nome base é reservado ao celular-base.',
 }, {
   en: {
@@ -162,6 +163,7 @@ export const common = defineMessages({
     'err.appCheck': 'Instagram asked for a verification: {detail}',
     'err.appNotOpen': 'Instagram didn’t open on the phone. Open the app, sign in and try again.',
     'err.cantCheck': 'Couldn’t check the login on the phone: {detail}',
+    'err.controlAppDown': 'Tapflock couldn’t reach this phone yet. Wait a few seconds and try again; if it keeps happening, turn the phone off and on.',
     'err.reservedName': 'The name base is reserved for the base phone.',
   },
   es: {
@@ -229,6 +231,7 @@ export const common = defineMessages({
     'err.appCheck': 'Instagram pidió una verificación: {detail}',
     'err.appNotOpen': 'Instagram no se abrió en el teléfono. Abre la app, entra en la cuenta e inténtalo de nuevo.',
     'err.cantCheck': 'No se pudo comprobar el inicio de sesión en el teléfono: {detail}',
+    'err.controlAppDown': 'Tapflock todavía no pudo comunicarse con este teléfono. Espera unos segundos e inténtalo de nuevo; si sigue igual, apaga y enciende el teléfono.',
     'err.reservedName': 'El nombre base está reservado al teléfono base.',
   },
   fr: {
@@ -296,6 +299,7 @@ export const common = defineMessages({
     'err.appCheck': 'Instagram a demandé une vérification : {detail}',
     'err.appNotOpen': 'Instagram ne s’est pas ouvert sur le téléphone. Ouvrez l’app, connectez-vous et réessayez.',
     'err.cantCheck': 'Impossible de vérifier la connexion sur le téléphone : {detail}',
+    'err.controlAppDown': 'Tapflock n’a pas encore pu joindre ce téléphone. Attendez quelques secondes et réessayez ; si cela continue, éteignez puis rallumez le téléphone.',
     'err.reservedName': 'Le nom base est réservé au téléphone de base.',
   },
   de: {
@@ -363,6 +367,7 @@ export const common = defineMessages({
     'err.appCheck': 'Instagram hat eine Bestätigung verlangt: {detail}',
     'err.appNotOpen': 'Instagram hat sich auf dem Handy nicht geöffnet. Öffne die App, melde dich an und versuch es erneut.',
     'err.cantCheck': 'Der Login auf dem Handy ließ sich nicht prüfen: {detail}',
+    'err.controlAppDown': 'Tapflock konnte dieses Handy noch nicht erreichen. Warte ein paar Sekunden und versuch es erneut; wenn es so bleibt, schalte das Handy aus und wieder ein.',
     'err.reservedName': 'Der Name base ist für das Basis-Telefon reserviert.',
   },
   zh: {
@@ -430,6 +435,7 @@ export const common = defineMessages({
     'err.appCheck': 'Instagram 要求验证：{detail}',
     'err.appNotOpen': 'Instagram 没有在手机上打开。请打开应用、登录后重试。',
     'err.cantCheck': '无法在手机上确认登录：{detail}',
+    'err.controlAppDown': 'Tapflock 还无法连接这台手机。请等几秒钟再试；如果仍然不行，请将手机关机后重新开机。',
     'err.reservedName': '名称 base 保留给基础手机。',
   },
 });

@@ -44,6 +44,7 @@ const RULES: readonly Rule[] = [
   { re: /^o Instagram ainda está na tela de login/, key: 'common.err.stillLoggedOut' },
   { re: /^o Instagram pediu uma verificação: (.*)$/s, key: 'common.err.appCheck', params: (m) => ({ detail: m[1] }) },
   { re: /^o Instagram não abriu no celular/, key: 'common.err.appNotOpen' },
+  { re: /^(?:não deu para conferir o login no celular: )?device não pronto para o login/, key: 'common.err.controlAppDown' },
   { re: /^não deu para conferir o login no celular: (.*)$/s, key: 'common.err.cantCheck', params: (m) => ({ detail: m[1] }) },
 ];
 
