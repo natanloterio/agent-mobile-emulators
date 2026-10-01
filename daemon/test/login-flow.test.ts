@@ -105,4 +105,22 @@ describe('checkSession', () => {
   it('outro app na frente: desconhecido', async () => {
     expect((await checkSession(fakeIo([screen([['node_x', 'TextView', 'Chrome', '-']], 'com.android.chrome')]).io)).state).toBe('unknown');
   });
+  it('tela de carregamento (sem campos de login e sem as abas do app) NÃO conta como logada: espera a tela assentar', async () => {
+    const SPLASH = screen([['node_logo', 'ImageView', '-', 'Instagram']]);
+    const f = fakeIo([SPLASH, SPLASH, LOGIN]);
+    expect((await checkSession(f.io, { tries: 5 })).state).toBe('logged-out');
+    const g = fakeIo([SPLASH, FEED]);
+    expect((await checkSession(g.io, { tries: 5 })).state).toBe('logged-in');
+  });
+  it('sem as abas, só conta como logada depois de várias leituras seguidas fora da tela de login (carregamento não dura isso)', async () => {
+    const OTHER = screen([['node_logo', 'ImageView', '-', 'Instagram']]);
+    expect((await checkSession(fakeIo([OTHER]).io, { tries: 6, stable: 4 })).state).toBe('logged-in');
+    expect((await checkSession(fakeIo([OTHER]).io, { tries: 3, stable: 4 })).state).toBe('unknown');
+    // A tela de login que aparece no meio zera a contagem e decide.
+    expect((await checkSession(fakeIo([OTHER, OTHER, OTHER, LOGIN]).io, { tries: 6, stable: 4 })).state).toBe('logged-out');
+  });
+  it('abas em português também contam como logada', async () => {
+    const PT = screen([['node_h', 'Button', '-', 'Página inicial'], ['node_p', 'Button', '-', 'Perfil']]);
+    expect((await checkSession(fakeIo([PT]).io, { tries: 2 })).state).toBe('logged-in');
+  });
 });

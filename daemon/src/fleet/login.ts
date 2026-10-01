@@ -37,19 +37,40 @@ const inInstagram = (s: ScreenState) => !!focusedWindow(s)?.pkg.startsWith('com.
 export interface SessionCheck { readonly state: 'logged-in' | 'logged-out' | 'blocked' | 'unknown'; readonly detail: string }
 
 /**
- * Abre o Instagram e só lê a tela: verificação na frente → `blocked` (com o texto do app); formulário ou tela de
- * entrada → `logged-out`; qualquer outra tela do Instagram → `logged-in`; outro app na frente → `unknown`.
+ * Sinais positivos da conta aberta: as abas de baixo do Instagram, pelo id do recurso (independe do idioma) ou pelo
+ * rótulo (en/pt/es). Ausência de formulário de login não basta: lida cedo demais, a tela de carregamento do app não tem
+ * campo nenhum e passava por logada (medido em 2026-10-01: "Entrei" aceito e, segundos depois, recusado no mesmo device).
  */
-export async function checkSession(io: LoginIo): Promise<SessionCheck> {
+const TAB_ID = /:id\/(?:tab_bar|feed_tab|search_tab|clips_tab|direct_tab|creation_tab|profile_tab)$/;
+const TAB_LABEL = /^(?:home|search and explore|reels|profile|create|p[aá]gina inicial|pesquisar e explorar|perfil|criar|inicio|buscar y explorar|crear)$/i;
+function showsTabs(s: ScreenState): boolean {
+  const ns = nodes(s);
+  if (ns.some((n) => TAB_ID.test(n.resId))) return true;
+  return new Set(ns.map((n) => label(n).toLowerCase()).filter((t) => TAB_LABEL.test(t))).size >= 2;
+}
+
+/**
+ * Abre o Instagram e só lê a tela, esperando ela assentar: verificação na frente → `blocked` (com o texto do app);
+ * formulário ou tela de entrada → `logged-out`; abas do app visíveis, ou o app firme fora da tela de login por várias
+ * leituras → `logged-in`; nada disso até o fim das tentativas (outro app na frente) → `unknown`. Nunca toca em nada.
+ */
+export async function checkSession(io: LoginIo, opts: { tries?: number; pollMs?: number; stable?: number } = {}): Promise<SessionCheck> {
   await io.unlock();
   await io.openApp(INSTAGRAM);
-  await io.sleep(2_500);
-  const s = await io.screen();
-  const block = detectPlatformBlock(s);
-  if (block) return { state: 'blocked', detail: block };
-  if (!inInstagram(s)) return { state: 'unknown', detail: focusedWindow(s)?.pkg ?? '' };
-  if (detectLoggedOut(s) || find(s, ENTRY_BUTTON, false)) return { state: 'logged-out', detail: '' };
-  return { state: 'logged-in', detail: '' };
+  let last: ScreenState | null = null; let calm = 0;
+  for (let i = 0; i < (opts.tries ?? 6); i++) {
+    await io.sleep(i === 0 ? 2_500 : opts.pollMs ?? 2_000);
+    const s = await io.screen(); last = s;
+    const block = detectPlatformBlock(s);
+    if (block) return { state: 'blocked', detail: block };
+    if (!inInstagram(s)) { calm = 0; continue; }
+    if (detectLoggedOut(s) || find(s, ENTRY_BUTTON, false)) return { state: 'logged-out', detail: '' };
+    if (showsTabs(s)) return { state: 'logged-in', detail: '' };
+    // Sem as abas (rótulos/ids não conferidos num Instagram logado de verdade): várias leituras seguidas no app, fora da
+    // tela de login, também valem. Uma tela de carregamento não dura tanto; uma leitura só, cedo demais, não vale mais.
+    if (++calm >= (opts.stable ?? 4)) return { state: 'logged-in', detail: '' };
+  }
+  return { state: 'unknown', detail: last && !inInstagram(last) ? focusedWindow(last)?.pkg ?? '' : 'carregando' };
 }
 
 /**

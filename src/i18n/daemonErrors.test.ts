@@ -34,7 +34,7 @@ describe('daemonErrorText', () => {
     expect(daemonErrorText('Instagram deslogado (tela de login): faça login à mão no device e depois marque como resolvido', en.t)).toBe(en.t('common.err.loggedOut'));
     expect(daemonErrorText('/identities/conta1/login-done → 409: {"error":"o Instagram ainda está na tela de login: entre na conta no celular e tente de novo"}', en.t)).toBe(en.t('common.err.stillLoggedOut'));
     expect(daemonErrorText("o Instagram pediu uma verificação: Confirm it's you", en.t)).toBe("Instagram asked for a verification: Confirm it's you");
-    expect(daemonErrorText('o Instagram não abriu no celular: abra o app, entre na conta e tente de novo', en.t)).toBe(en.t('common.err.appNotOpen'));
+    expect(daemonErrorText('não deu para ver o Instagram logado no celular: abra o app, entre na conta até aparecer o seu feed e tente de novo', en.t)).toBe(en.t('common.err.appNotOpen'));
     expect(daemonErrorText('não deu para conferir o login no celular: MCP recusou', en.t)).toBe('Couldn’t check the login on the phone: MCP recusou');
   });
   it('app de controle do celular sem resposta vira uma frase clara, sem "MCP" nem texto cru', () => {
