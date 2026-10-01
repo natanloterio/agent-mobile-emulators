@@ -10,6 +10,7 @@ interface FieldSpec { readonly name: string; readonly label: MessageKey; readonl
 const FIELDS: Readonly<Record<GuideForm, readonly FieldSpec[]>> = {
   google: [{ name: 'email', label: 'guide.form.email', type: 'email', placeholder: 'voce@gmail.com' }, { name: 'password', label: 'guide.form.password', type: 'password' }],
   handle: [{ name: 'handle', label: 'guide.form.handle', type: 'text', placeholder: '@nuvem.cafe' }],
+  pin: [{ name: 'pin', label: 'guide.form.pin', type: 'password' }],
   credentials: [{ name: 'username', label: 'guide.form.username', type: 'text', placeholder: 'nuvem.cafe' }, { name: 'password', label: 'guide.form.password', type: 'password' }],
 };
 
@@ -25,7 +26,8 @@ export function GuideFormCard({ form, busy, onSubmit, children }: {
   const { t } = useI18n();
   const fields = FIELDS[form];
   const [values, setValues] = useState<Record<string, string>>({});
-  const secret = fields.some((f) => f.type === 'password');
+  // O PIN não vai para o cofre: o daemon o guarda para destravar o celular sozinho depois de um reinício.
+  const note: MessageKey | null = form === 'pin' ? 'guide.form.pinNote' : fields.some((f) => f.type === 'password') ? 'guide.form.lock' : null;
   const filled = fields.every((f) => (values[f.name] ?? '').trim());
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,12 +45,13 @@ export function GuideFormCard({ form, busy, onSubmit, children }: {
           {t(f.label)}
           <input
             className="guide-form__input" type={f.type} autoComplete="off" spellCheck={false} placeholder={f.placeholder}
+            inputMode={form === 'pin' ? 'numeric' : undefined}
             value={values[f.name] ?? ''} disabled={busy}
             onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
           />
         </label>
       ))}
-      {secret && <p className="guide-form__lock"><span aria-hidden="true">🔒</span>{t('guide.form.lock')}</p>}
+      {note && <p className="guide-form__lock"><span aria-hidden="true">🔒</span>{t(note)}</p>}
       <div className="guide-card__actions">
         <Button type="submit" size="sm" disabled={busy || !filled}>{t(busy ? 'guide.busy' : 'guide.form.save')}</Button>
         {children}

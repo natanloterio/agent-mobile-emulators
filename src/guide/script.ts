@@ -19,7 +19,7 @@ export type GuideActionId =
   | 'test.plan' | 'test.start' | 'test.decline' | 'test.again'
   | 'human.open' | 'human.resolve'
   | 'go.newMission' | 'go.setup';
-export type GuideForm = 'google' | 'handle' | 'credentials';
+export type GuideForm = 'google' | 'handle' | 'credentials' | 'pin';
 /** Alvos de destaque (spec guia §3.4): `data-guide` nas telas. */
 export type GuideTarget = 'tile' | 'new-mission';
 
@@ -69,6 +69,7 @@ function accountStep(p: GuideProgress, ui: GuideUi): GuideStep {
     return { id: 'phone.create', kind: 'action', milestone: m, title: 'guide.phone.create.title', body: 'guide.phone.create.body', buttons: [btn('phone.create', 'guide.phone.create.go')] };
   }
   const params = { name: a.name };
+  if (isLockError(a.error)) return lockedStep(a, m);
   const power = powerStep(a, m);
   if (power) return power;
   if (ui.login === 'handle') {
@@ -93,6 +94,16 @@ function powerStep(a: LiveIdentity, m: MilestoneIndex): GuideStep | null {
     return { id: `phone.off:${a.id}`, kind: 'action', milestone: m, title: 'guide.phone.off.title', body: 'guide.phone.off.body', params, detail: a.error || null, buttons: [btn('phone.boot', 'guide.phone.off.go')] };
   }
   return null;
+}
+
+/** Erros do desbloqueio (device/unlock.ts): o celular está na tela de bloqueio e o Tapflock não tem o PIN, ou o PIN falhou. */
+export const isLockError = (error: string | undefined) => /^(?:device bloqueado|PIN recusado|PIN inválido)/.test(error ?? '');
+
+/** Celular travado: ligar primeiro (sem janela não há onde digitar), depois pedir o PIN num formulário. */
+function lockedStep(a: LiveIdentity, m: MilestoneIndex): GuideStep {
+  return powerStep(a, m) ?? {
+    id: `phone.locked:${a.id}`, kind: 'form', milestone: m, title: 'guide.phone.locked.title', body: 'guide.phone.locked.body', params: { name: a.name }, buttons: [], form: 'pin', point: 'tile',
+  };
 }
 
 /** Erro que o daemon grava quando o worker acha o Instagram na tela de login (screen/checks.ts `detectLoggedOut`). */
@@ -120,6 +131,7 @@ function loggedOutStep(a: LiveIdentity, ui: GuideUi): GuideStep {
 function accountReadyStep(a: LiveIdentity, ui: GuideUi): GuideStep | null {
   const m = 3 as const;
   const params = { name: a.name };
+  if (isLockError(a.error)) return lockedStep(a, m);
   if (lifecycleOf(a) === 'needs-human' && isLoggedOutError(a.error)) return loggedOutStep(a, ui);
   if (lifecycleOf(a) === 'needs-human') {
     return {

@@ -2,7 +2,7 @@ import { IDLE_PREP, writeBasePrep } from '../src/db/base-settings.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../src/db/open.js';
-import { getIdentity, setIdentityState, upsertIdentity, type IdentityRow } from '../src/db/identities.js';
+import { getIdentity, setIdentityFlags, setIdentityState, upsertIdentity, type IdentityRow } from '../src/db/identities.js';
 import { createMission } from '../src/db/missions.js';
 import type { ProbeResult } from '../src/device/probe.js';
 import { startServer } from '../src/server/api.js';
@@ -401,6 +401,36 @@ describe('PIN por identidade (integrador)', () => {
     const ok = await s.post('/identities/conta1/pin', { pin: '1234' });
     expect(ok.status).toBe(200); expect(ok.body).toMatchObject({ hasPin: true }); expect(JSON.stringify(ok.body)).not.toMatch(/1234/);
     expect(getIdentity(h.db, 'conta1')?.lockPin).toBe('1234');
+  });
+});
+
+describe('POST /pin destrava um celular que ficou travado no primeiro boot', () => {
+  const LOCKED = 'device bloqueado e identidade sem PIN registrado: registre o PIN da identidade';
+  it('sem login ainda: termina o primeiro boot (limpa a conta herdada), volta a provisioned e some o erro', async () => {
+    const cleared: string[] = [];
+    const h = harness({ unlock: async () => 'unlocked', clearAccount: async (id) => { cleared.push(id.id); } });
+    setIdentityFlags(h.db, 'conta1', { handle: 'sem conta' });
+    setIdentityState(h.db, 'conta1', 'offline', { lastError: LOCKED });
+    const s = await serve(h.db, h.ops);
+    expect((await s.post('/identities/conta1/pin', { pin: '1234' })).status).toBe(200);
+    expect(getIdentity(h.db, 'conta1')).toMatchObject({ state: 'provisioned', lastError: null, lockPin: '1234' });
+    expect(cleared).toEqual(['conta1']);
+    expect(getIdentity(h.db, 'conta1')?.accountClearedAt).toBeTruthy();
+  });
+  it('já com conta: sonda de novo em vez de ficar offline com o erro de trava', async () => {
+    const h = harness({ unlock: async () => 'unlocked' });
+    setIdentityState(h.db, 'conta1', 'offline', { lastError: LOCKED });
+    const s = await serve(h.db, h.ops);
+    await s.post('/identities/conta1/pin', { pin: '1234' });
+    expect(h.log).toContain('probe conta1');
+    expect(getIdentity(h.db, 'conta1')).toMatchObject({ state: 'idle', lastError: null });
+  });
+  it('sem erro de trava, registrar o PIN não mexe no estado', async () => {
+    const h = harness({ unlock: async () => 'already' });
+    const s = await serve(h.db, h.ops);
+    await s.post('/identities/conta1/pin', { pin: '1234' });
+    expect(h.log).not.toContain('probe conta1');
+    expect(getIdentity(h.db, 'conta1')?.state).toBe('idle');
   });
 });
 

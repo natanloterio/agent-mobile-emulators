@@ -33,6 +33,7 @@ export type FormValues = Readonly<Record<string, string>>;
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const HANDLE = /^[A-Za-z0-9._]{1,30}$/;
+const PIN = /^\d{4,16}$/;
 const OK: GuideOutcome = { ok: true };
 const fail = (error: string, detail?: string): GuideOutcome => (detail ? { ok: false, error, detail } : { ok: false, error });
 /** Erro com detalhe do daemon: a mensagem do Guia explica o que fazer, o detalhe diz o que aconteceu. */
@@ -159,6 +160,12 @@ export function createGuideActions(deps: GuideDeps) {
     }
     const id = idOf(ctx);
     if (!id) return fail('guide.err.noAccount');
+    if (form === 'pin') {
+      // O daemon só grava o PIN se ele destravar o celular (uma tentativa por envio); aqui só o formato.
+      const pin = (values.pin ?? '').trim();
+      if (!PIN.test(pin)) return fail('guide.err.pin');
+      return attempt(async () => { await api('POST', `/identities/${id}/pin`, { pin }); deps.log({ ok: true, key: 'guide.log.unlocked', params: { name: ctx.account?.name ?? id } }); });
+    }
     if (form === 'handle') {
       const h = (values.handle ?? '').trim().replace(/^@+/, '');
       if (!HANDLE.test(h)) return fail('guide.err.handle');

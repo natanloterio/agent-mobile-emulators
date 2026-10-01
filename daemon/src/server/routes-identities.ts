@@ -149,6 +149,23 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     await job;
   }
 
+  /**
+   * Depois de destravado. Sem login ainda (inclusive após um boot que falhou e deixou 'offline'): limpa a conta herdada
+   * da base no primeiro boot e volta a 'provisioned' sem sonda — a sonda não olha sessão e marcaria 'idle' uma identidade
+   * sem conta. As demais são sondadas a cada subida (spec §4.1).
+   */
+  const afterUnlock = async (ctx: RouteCtx, cur: IdentityRow): Promise<void> => {
+    if (awaitingLogin(cur) && ops.clearAccount && !cur.accountClearedAt) {
+      await ops.clearAccount(cur);
+      if (cur.lockPin && ops.setPin) await ops.setPin(cur, cur.lockPin);
+      setIdentityFlags(ctx.db, cur.id, { accountClearedAt: now() });
+    }
+    if (awaitingLogin(cur)) setIdentityState(ctx.db, cur.id, 'provisioned', { lastError: null });
+    else await ops.ensureReady(ctx.db, cur);
+  };
+  /** Erros que o desbloqueio grava quando o boot para na tela de bloqueio (device/unlock.ts). */
+  const LOCK_ERROR = /^(?:device bloqueado|PIN recusado|PIN inválido)/;
+
   const boot: Action = async (ctx, id) => {
     const body = await parse(ctx, BootBody); if (!body) return;
     if (id.state === 'banned' || id.discardedAt) return ctx.send(409, { error: `identidade ${id.state}${id.discardedAt ? ' e descartada' : ''}` });
@@ -163,15 +180,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
         const cur = getIdentity(ctx.db, id.id) ?? booted;
         // Reboot com credencial deixa o armazenamento travado (Direct Boot): destrava com o PIN da identidade.
         await ops.unlock?.(cur);
-        // Sem login ainda (inclusive após um boot que falhou e deixou 'offline'): volta a 'provisioned' sem sonda — a sonda não
-        // olha sessão e marcaria 'idle' uma identidade sem conta. As demais são sondadas a cada subida (spec §4.1).
-        if (awaitingLogin(cur) && ops.clearAccount && !cur.accountClearedAt) {
-          await ops.clearAccount(cur);
-          if (cur.lockPin && ops.setPin) await ops.setPin(cur, cur.lockPin);
-          setIdentityFlags(ctx.db, id.id, { accountClearedAt: now() });
-        }
-        if (awaitingLogin(cur)) setIdentityState(ctx.db, id.id, 'provisioned', { lastError: null });
-        else await ops.ensureReady(ctx.db, cur);
+        await afterUnlock(ctx, cur);
         ops.onIdentitiesChanged?.();
       } catch (e) {
         setIdentityState(ctx.db, id.id, 'offline', { lastError: errMsg(e) });
@@ -330,6 +339,11 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
       catch (e) { return ctx.send(409, { error: errMsg(e) }); }
     }
     setIdentityFlags(ctx.db, id.id, { lockPin: body.pin });
+    // O boot tinha parado na tela de bloqueio: com o PIN certo, termina o que ele deixou por fazer e tira o erro.
+    if (LOCK_ERROR.test(id.lastError ?? '') && (await online(id))) {
+      try { await afterUnlock(ctx, getIdentity(ctx.db, id.id) ?? id); }
+      catch (e) { setIdentityState(ctx.db, id.id, 'offline', { lastError: errMsg(e) }); }
+    }
     done(ctx, id.id);
   };
 
