@@ -70,6 +70,14 @@ describe('POST /identities', () => {
     expect(getIdentity(h.db, 'conta2')).toMatchObject({ mcpToken: 'uuid-novo', deviceSlug: 'conta2', appPackage: 'com.instagram.android', state: 'provisioned' });
     expect(h.log).toContain('clone tapflock_conta2');
   });
+  it('pula nomes cujo AVD já existe no disco (outra instalação ou outro TAPFLOCK_DATA_DIR)', async () => {
+    const h = harness({ avdExists: async (name) => name === 'tapflock_conta2' || name === 'tapflock_conta3' });
+    const s = await serve(h.db, h.ops);
+    const r = await s.post('/identities', {});
+    expect(r.status).toBe(201);
+    expect(r.body).toMatchObject({ id: 'conta4', avdName: 'tapflock_conta4' });
+    expect(h.log).toContain('clone tapflock_conta4');
+  });
   it('nome e handle informados; nome repetido → 409; nome inválido → 400', async () => {
     const h = harness(); const s = await serve(h.db, h.ops);
     const r = await s.post('/identities', { name: 'loja_sp', handle: 'loja.sp' });

@@ -42,6 +42,8 @@ export interface IdentityOps {
   readonly defaultPin?: string | null;
   /** Login fixo do Instagram (fleet/login.ts) com as credenciais que o main do Electron decifrou. */
   readonly login?: (identity: IdentityRow, creds: { username: string; password: string }) => Promise<{ outcome: 'logged-in' | 'already-logged-in' | 'needs-human'; detail: string }>;
+  /** AVD com esse nome já existe no disco (fora do banco); ausente = só o banco decide o nome livre. */
+  readonly avdExists?: (avdName: string) => Promise<boolean>;
   /** Lê a tela do Instagram antes do login-done: "Login feito" só vale com a sessão de pé (spec guia). */
   readonly checkSession?: (identity: IdentityRow) => Promise<{ state: 'logged-in' | 'logged-out' | 'blocked' | 'unknown'; detail: string }>;
   /** Credencial do app alvo guardada no cofre do daemon; usada quando o login chega sem corpo. */
@@ -105,9 +107,12 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     ctx.send(500, { error: errMsg(e) }); ctx.broadcast();
   };
 
-  const freeName = (db: DatabaseSync) => {
+  // Livre no banco E no disco: um AVD tapflock_contaN deixado por outra instalação faria o clone falhar com
+  // "já existe", sem saída para quem não é técnico.
+  const freeName = async (db: DatabaseSync) => {
     const taken = new Set(listIdentities(db).flatMap((i) => [i.id, i.name]));
-    let n = 1; while (taken.has(`conta${n}`)) n += 1;
+    let n = 1;
+    while (taken.has(`conta${n}`) || (await ops.avdExists?.(`${AVD_PREFIX}conta${n}`))) n += 1;
     return `conta${n}`;
   };
 
@@ -120,7 +125,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
     // Base sendo montada (avdmanager escrevendo, emulador subindo, missão rodando): clonar agora copiaria disco pela metade.
     if (['running', 'needs-google', 'needs-human'].includes(readBasePrep(ctx.db).state)) return ctx.send(409, { error: 'o celular-base ainda está sendo preparado' });
     const job = provisioning.then(async () => {
-      const name = body.name ?? freeName(ctx.db);
+      const name = body.name ?? await freeName(ctx.db);
       if (getIdentity(ctx.db, name)) return ctx.send(409, { error: `identidade ${name} já existe` });
       const avdName = `${AVD_PREFIX}${name}`;
       // Copiar o qcow2 de um emulador vivo gera clone inconsistente: o AVD-base precisa estar parado.

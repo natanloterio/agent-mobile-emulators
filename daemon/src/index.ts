@@ -18,7 +18,7 @@ import { isFleetIdle } from './db/tasks.js';
 import { readLocalParallel, readStepBudgets } from './db/settings.js';
 import { createScreenCapture } from './device/screen.js';
 import { createVideoStreams } from './device/video.js';
-import { cloneAvd, deleteAvd } from './fleet/avd.js';
+import { avdExists, cloneAvd, deleteAvd } from './fleet/avd.js';
 import { createDiskUsage, startDiskCollector } from './fleet/disk.js';
 import { bootEmulator, createEmulatorSupervisor, saveSnapshot } from './fleet/emulator.js';
 import { ensureIdentityReady, prepareIdentityDevice } from './fleet/identity.js';
@@ -135,6 +135,7 @@ const identityRoutes = createIdentityRoutes({
   adb, disk, supervisor: emulators,
   clone: (avdName) => cloneAvd(currentBaseAvd().name, avdName),
   deleteAvd: (avdName) => deleteAvd(avdName),
+  avdExists: (avdName) => avdExists(avdName),
   boot: (identity, opts) => bootEmulator(db, identity, opts, { adb, supervisor: emulators }),
   leasePorts: (d) => leasePorts(d),
   ensureReady: (d, identity) => ensureIdentityReady(d, identity, { adb }),

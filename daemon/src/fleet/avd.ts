@@ -21,6 +21,12 @@ function assertName(name: string): void {
   if (!isValidAvdName(name)) throw new Error(`nome de AVD inválido: "${name}" (use [A-Za-z0-9_], até 40)`);
 }
 
+/** Já existe um AVD com esse nome no disco (de outra instalação ou outro TAPFLOCK_DATA_DIR, que não está no banco)? */
+export async function avdExists(name: string, deps: AvdDeps = {}): Promise<boolean> {
+  const home = deps.home ?? CONFIG.avd.home;
+  return (await exists(avdDir(home, name))) || (await exists(iniPath(home, name)));
+}
+
 export async function cloneAvd(base: string, newName: string, deps: AvdDeps = {}): Promise<{ avdDir: string; iniPath: string }> {
   const home = deps.home ?? CONFIG.avd.home;
   assertName(base); assertName(newName);
