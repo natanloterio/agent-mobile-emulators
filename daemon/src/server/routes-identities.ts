@@ -202,7 +202,7 @@ export function createIdentityRoutes(ops: IdentityOps): { route: Route; settle()
       catch (e) { return ctx.send(409, { error: `não deu para conferir o login no celular: ${errMsg(e)}` }); }
       if (session.state === 'logged-out') return ctx.send(409, { error: 'o Instagram ainda está na tela de login: entre na conta no celular e tente de novo' });
       if (session.state === 'blocked') return ctx.send(409, { error: `o Instagram pediu uma verificação: ${session.detail}` });
-      if (session.state === 'unknown') return ctx.send(409, { error: 'o Instagram não abriu no celular: abra o app, entre na conta e tente de novo' });
+      if (session.state === 'unknown') return ctx.send(409, { error: 'não deu para ver o Instagram logado no celular: abra o app, entre na conta até aparecer o seu feed e tente de novo' });
     }
     setIdentityFlags(ctx.db, id.id, { handle });
     try {
