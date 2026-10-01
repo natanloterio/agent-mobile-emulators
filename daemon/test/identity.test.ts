@@ -133,4 +133,40 @@ describe('token velho no servidor MCP (integrador: clone herda o token da base)'
     expect(r.ready).toBe(true);
     expect(calls.filter((c) => c.startsWith('trampoline') || c.startsWith('configure'))).toEqual(['configure bearer_token,bearer_token_enabled,device_slug', 'configure bearer_token,bearer_token_enabled,device_slug', 'trampoline stop', 'trampoline start']);
   });
+  it('servidor MCP que nem subiu (boot travado por PIN: o app não auto-inicia) → inicia pelo trampoline e a sonda passa', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { adb, calls } = adbSpy(); let n = 0;
+    const down = { ready: false, signals: { bootCompleted: true, accessibility: true, mcpInitialize: false, toolsPresent: false, versionMatch: true },
+      details: ['MCP: fetch failed'], failureClass: 'infra' as const };
+    const probe = async () => (++n === 1 ? down : readyProbe());
+    const r = await ensureIdentityReady(db, row, { adb, probe, sleep: async () => {}, unlock: async () => {} });
+    expect(r.ready).toBe(true);
+    expect(calls).toContain('trampoline start');
+  });
+  it('device que nem terminou o boot não tenta iniciar o servidor', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { adb, calls } = adbSpy();
+    const booting = { ready: false, signals: { bootCompleted: false, accessibility: false, mcpInitialize: false, toolsPresent: false, versionMatch: false }, details: ['boot incompleto'], failureClass: 'infra' as const };
+    await ensureIdentityReady(db, row, { adb, probe: async () => booting, sleep: async () => {}, unlock: async () => {} });
+    expect(calls.some((c) => c.startsWith('trampoline'))).toBe(false);
+  });
+  it('servidor que não sobe nem reiniciando → conserta o app (reinstala) e tenta de novo; a sonda passa', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const { adb, calls } = adbSpy(); let repaired = 0;
+    const down = { ready: false, signals: { bootCompleted: true, accessibility: true, mcpInitialize: false, toolsPresent: false, versionMatch: true }, details: ['MCP: fetch failed'], failureClass: 'infra' as const };
+    const probe = async () => (repaired ? readyProbe() : down);
+    const r = await ensureIdentityReady(db, row, { adb, probe, sleep: async () => {}, unlock: async () => {}, repairMcp: async () => { repaired += 1; return true; } });
+    expect(r.ready).toBe(true); expect(repaired).toBe(1);
+    expect(calls.filter((c) => c === 'trampoline start')).toHaveLength(2);
+  });
+  it('conserto que não se aplica (app rodando) não reinicia de novo; servidor de pé nunca chama o conserto', async () => {
+    const db = openDb(':memory:'); upsertIdentity(db, row);
+    const a = adbSpy(); let asked = 0;
+    const down = { ready: false, signals: { bootCompleted: true, accessibility: true, mcpInitialize: false, toolsPresent: false, versionMatch: true }, details: ['MCP: fetch failed'], failureClass: 'infra' as const };
+    await ensureIdentityReady(db, row, { adb: a.adb, probe: async () => down, sleep: async () => {}, unlock: async () => {}, repairMcp: async () => { asked += 1; return false; } });
+    expect(asked).toBe(1); expect(a.calls.filter((c) => c === 'trampoline start')).toHaveLength(1);
+    const b = adbSpy(); let never = 0;
+    await ensureIdentityReady(db, { ...row, state: 'idle' }, { adb: b.adb, probe: readyProbe, sleep: async () => {}, unlock: async () => {}, repairMcp: async () => { never += 1; return true; } });
+    expect(never).toBe(0);
+  });
 });

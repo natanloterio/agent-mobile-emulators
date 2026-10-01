@@ -37,4 +37,10 @@ describe('daemonErrorText', () => {
     expect(daemonErrorText('o Instagram não abriu no celular: abra o app, entre na conta e tente de novo', en.t)).toBe(en.t('common.err.appNotOpen'));
     expect(daemonErrorText('não deu para conferir o login no celular: MCP recusou', en.t)).toBe('Couldn’t check the login on the phone: MCP recusou');
   });
+  it('app de controle do celular sem resposta vira uma frase clara, sem "MCP" nem texto cru', () => {
+    const en = createI18n('en');
+    const raw = '/identities/conta2/login-done → 409: {"error":"não deu para conferir o login no celular: device não pronto para o login: MCP: fetch failed"}';
+    expect(daemonErrorText(raw, en.t)).toBe(en.t('common.err.controlAppDown'));
+    expect(daemonErrorText(raw, en.t)).not.toMatch(/MCP|fetch|pronto/);
+  });
 });

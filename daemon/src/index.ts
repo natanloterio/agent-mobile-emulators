@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { repairMcpApp } from './base/device-setup.js';
+import { ensureMcpApk, MCP_APK } from './base/mcp-apk.js';
 import { brandEnv } from './brand.js';
 import { CONFIG, currentBaseAvd, loadEnv } from './config.js';
 import { findRunningAvd } from './device/running-avd.js';
@@ -131,6 +133,14 @@ const shutdown = () => { video.stop(); screen.stop(); ollama.stop(); host.stop()
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { shutdown(); process.exit(0); });
 process.on('exit', shutdown);
 
+// Preparar um device inclui consertar o app MCP que não fica de pé (APK corrompido num clone): reinstala o APK conferido.
+const readyDeps = {
+  adb,
+  repairMcp: (i: IdentityRow) => repairMcpApp(adb, i.serial, {
+    pkg: CONFIG.mcpAppPackage,
+    apk: () => ensureMcpApk(path.join(CONFIG.dataDir, 'cache'), { fetch: (url, init) => fetch(url, init) as never }, MCP_APK),
+  }),
+};
 const identityRoutes = createIdentityRoutes({
   adb, disk, supervisor: emulators,
   clone: (avdName) => cloneAvd(currentBaseAvd().name, avdName),
@@ -138,13 +148,13 @@ const identityRoutes = createIdentityRoutes({
   avdExists: (avdName) => avdExists(avdName),
   boot: (identity, opts) => bootEmulator(db, identity, opts, { adb, supervisor: emulators }),
   leasePorts: (d) => leasePorts(d),
-  ensureReady: (d, identity) => ensureIdentityReady(d, identity, { adb }),
+  ensureReady: (d, identity) => ensureIdentityReady(d, identity, readyDeps),
   // Boot/descarte mudam quem tem device: vídeo e miniatura recomeçam com a lista nova (serial pode ter mudado por lease).
   onIdentitiesChanged: () => { const t = liveTargets(); screen.start(t); video.start(t); },
   unlock: (identity) => ensureUnlocked(adb, identity.serial, identity.lockPin),
   // Pedidos explícitos da pessoa: preparam o device sem a trava de needs-human e sem gravar estado (a rota decide o estado).
-  login: (identity, creds) => loginIdentity(db, identity, creds, { ensureReady: (_d, i) => prepareIdentityDevice(i, { adb }) }),
-  checkSession: (identity) => checkIdentitySession(db, identity, { ensureReady: (_d, i) => prepareIdentityDevice(i, { adb }) }),
+  login: (identity, creds) => loginIdentity(db, identity, creds, { ensureReady: (_d, i) => prepareIdentityDevice(i, readyDeps) }),
+  checkSession: (identity) => checkIdentitySession(db, identity, { ensureReady: (_d, i) => prepareIdentityDevice(i, readyDeps) }),
   setPin: (identity, pin) => setDevicePin(adb, identity.serial, pin),
   defaultPin: defaultPinEnv && isValidPin(defaultPinEnv) ? defaultPinEnv : null,
   clearAccount: async (identity) => { await clearTargetAccount(adb, identity.serial, identity.appPackage); },
@@ -165,7 +175,7 @@ const onFleetChange = () => {
 };
 
 // Enxame de identidades (spec inc. 5 §3.2): líder planeja sobre a frota; scheduler roda um worker por identidade pronta, com pacing.
-const ensureReady = (id: IdentityRow) => ensureIdentityReady(db, id, { adb });
+const ensureReady = (id: IdentityRow) => ensureIdentityReady(db, id, readyDeps);
 const planDeps = (): PlanDeps => ({ db, ensureReady, apiKey: apiKeys.current(), ollama });
 // Limite lido do banco no início de cada tarefa (spec limites §UI): a tela muda o valor sem reiniciar o daemon.
 const runWorker = (j: WorkerJob) => runTask({
@@ -186,7 +196,7 @@ const missionMask = async (missionId: string) => createSecretMask(await loadMiss
 const missions = createMissionRunner({
   db, isKilled: () => server.isKilled(), onChange: onFleetChange, files: fileService,
   plan: (input) => planNext(input, { providers: readProviderConfig(db), apiKey: apiKeys.current(), ollama }),
-  readScreen: (identity) => readScreenOnce(db, identity, { ensureReady: (d, i) => ensureIdentityReady(d, i, { adb }) }),
+  readScreen: (identity) => readScreenOnce(db, identity, { ensureReady: (d, i) => ensureIdentityReady(d, i, readyDeps) }),
   mask: missionMask,
   runSubtask: async (j) => {
     const mask = createSecretMask(await loadMissionSecrets(db, vault, j.missionId));
@@ -206,7 +216,7 @@ const missions = createMissionRunner({
         // Pedido de pessoa conferido antes de parar a missão: "não está logado" com a sessão de pé e "tire um print" são recusados.
         checkHumanClaim: createHumanClaimCheck({
           canCapture: true,
-          session: async () => (await checkIdentitySession(db, j.identity, { ensureReady: (_d, i) => prepareIdentityDevice(i, { adb }) })).state,
+          session: async () => (await checkIdentitySession(db, j.identity, { ensureReady: (_d, i) => prepareIdentityDevice(i, readyDeps) })).state,
         }),
       },
     }, { ollama });
@@ -278,7 +288,7 @@ const server = await startServer({
     const fail = (error: string) => recordProviderTest(db, { role, model, latencyMs: 0, tokensPerSec: null, argsValid: false, warning: null, error, at: new Date().toISOString() });
     const id = pickTestIdentity(listFleet(db));
     if (!id) return fail('nenhuma identidade livre para o tool-call canônico (todas rodando, pausadas, controladas ou sem conta)');
-    const probe = await ensureIdentityReady(db, id, { adb }); server.broadcast();
+    const probe = await ensureIdentityReady(db, id, readyDeps); server.broadcast();
     if (!probe.ready) return fail(`${id.name} não pronta: ${probe.details.join('; ')}`);
     const t = await testProvider(db, readProviderConfig(db)[role], getIdentity(db, id.id)!, { anthropicApiKey: apiKeys.current() }, { ollama });
     server.broadcast(); return t;
