@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ensureUnlocked, isValidPin, lockState } from '../src/device/unlock.js';
+import { ensureUnlocked, isValidPin, lockState, setDevicePin } from '../src/device/unlock.js';
 
 function fakeDevice(opts: { pin: string; userLocked?: boolean; keyguard?: boolean; wrongStays?: boolean }) {
   let userLocked = opts.userLocked ?? false; let keyguard = opts.keyguard ?? userLocked; let typed = '';
@@ -52,5 +52,23 @@ describe('ensureUnlocked', () => {
     const d = fakeDevice({ pin: '1234', userLocked: true });
     await expect(ensureUnlocked(d.adb, 's', '12;rm', fast)).rejects.toThrow(/PIN inválido/);
     expect(d.calls.some((c) => c.startsWith('input text'))).toBe(false);
+  });
+});
+
+describe('setDevicePin', () => {
+  const dev = (verify: string, set = 'Pin set to 1234') => {
+    const calls: string[] = [];
+    const shell = async (_s: string, cmd: readonly string[]) => { const k = cmd.join(' '); calls.push(k); return k.startsWith('locksettings verify') ? verify : k.startsWith('locksettings set-pin') ? set : ''; };
+    return { adb: { shell }, calls };
+  };
+  it('clone sem credencial: define o PIN', async () => {
+    const d = dev("Old password '1234' didn't match");
+    await setDevicePin(d.adb, 's', '1234');
+    expect(d.calls).toContain('locksettings set-pin 1234');
+  });
+  it('clone que herdou esse mesmo PIN da base: não tenta definir de novo (falharia pedindo o PIN antigo)', async () => {
+    const d = dev('Lock credential verified successfully');
+    await setDevicePin(d.adb, 's', '1234');
+    expect(d.calls.some((c) => c.startsWith('locksettings set-pin'))).toBe(false);
   });
 });

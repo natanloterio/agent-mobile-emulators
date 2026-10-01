@@ -45,6 +45,10 @@ export async function ensureUnlocked(adb: ShellAdb, serial: string, pin: string 
 /** Define o PIN no device (clone recém-provisionado, que herda a base sem credencial). */
 export async function setDevicePin(adb: ShellAdb, serial: string, pin: string): Promise<void> {
   if (!isValidPin(pin)) throw new Error('PIN inválido (só dígitos, 4 a 16)');
+  // Clone que herdou este mesmo PIN da base: definir de novo falharia pedindo o PIN antigo, e não há o que mudar.
+  // Só é chamado com um PIN que acabou de destravar o device (ou num clone sem credencial), então não gasta tentativa.
+  const current = await adb.shell(serial, ['locksettings', 'verify', '--old', pin]).catch(() => '');
+  if (/verified successfully/i.test(current)) return;
   const out = await adb.shell(serial, ['locksettings', 'set-pin', pin]);
   if (!/Pin set/i.test(out)) throw new Error(`locksettings set-pin: ${out.trim() || 'sem resposta'}`);
 }

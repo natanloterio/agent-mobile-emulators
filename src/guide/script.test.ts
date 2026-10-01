@@ -69,6 +69,25 @@ describe('nextGuideStep: primeira conta', () => {
     expect(ids(s)).toEqual(['phone.boot']);
     expect(s.detail).toBe('boot falhou');
   });
+  it('celular travado por PIN que o Tapflock não conhece: pede o PIN, não o login', () => {
+    const LOCKED = 'device bloqueado e identidade sem PIN registrado: registre o PIN da identidade';
+    const s = step(snap({ identities: [ident({ online: true, state: 'offline', lifecycle: 'offline', error: LOCKED })] }));
+    expect(s.id).toBe('phone.locked:conta1');
+    expect(s.form).toBe('pin');
+    expect(s.kind).toBe('form');
+    expect(s.buttons).toEqual([]);
+  });
+  it('PIN recusado: continua pedindo o PIN; a conta já conectada também (antes do teste)', () => {
+    const REFUSED = 'PIN recusado ou teclado de desbloqueio não apareceu: confira o PIN registrado da identidade';
+    expect(step(snap({ identities: [ident({ online: true, state: 'needs-human', lifecycle: 'needs-human', error: REFUSED })] })).form).toBe('pin');
+    const s = step(snap({ identities: [{ ...connected, state: 'offline', lifecycle: 'offline', error: REFUSED }] }));
+    expect(s.form).toBe('pin');
+    expect(s.milestone).toBe(3);
+  });
+  it('travado e desligado: liga primeiro', () => {
+    const s = step(snap({ identities: [ident({ online: false, state: 'offline', lifecycle: 'offline', error: 'device bloqueado e identidade sem PIN registrado' })] }));
+    expect(ids(s)).toEqual(['phone.boot']);
+  });
   it('online sem login: a pessoa entra, ou pede para o Tapflock digitar', () => {
     const s = step(snap({ identities: [ident({ online: true })] }));
     expect(s.kind).toBe('human');

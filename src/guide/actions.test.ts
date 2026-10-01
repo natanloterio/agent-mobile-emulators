@@ -175,6 +175,16 @@ describe('createGuideActions', () => {
     expect(JSON.stringify(log)).not.toContain('pw-secreta');
   });
 
+  it('PIN do celular: só dígitos chegam ao daemon, e o registro não leva o PIN', async () => {
+    const api = vi.fn().mockResolvedValue({});
+    const { actions, log } = setup({ api });
+    expect(await actions.submit('pin', { pin: '12ab' }, ctx)).toEqual({ ok: false, error: 'guide.err.pin' });
+    expect(api).not.toHaveBeenCalled();
+    expect((await actions.submit('pin', { pin: ' 4821 ' }, ctx)).ok).toBe(true);
+    expect(api).toHaveBeenCalledWith('POST', '/identities/conta1/pin', { pin: '4821' });
+    expect(JSON.stringify(log)).not.toContain('4821');
+  });
+
   it('sem cofre na ponte: recusa antes de pedir a senha à ponte', async () => {
     const { actions } = setup({ api: vi.fn() });
     expect(await actions.submit('credentials', { username: 'a', password: 'b' }, ctx)).toEqual({ ok: false, error: 'guide.err.noVault' });
